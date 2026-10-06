@@ -1,0 +1,50 @@
+# Гейт фирменного стиля: dist собран из tokens.json, пары цветов проходят порог контраста,
+# тесты сборки зелёные. Скрипты используют только стандартную библиотеку Python.
+name: brand
+
+on:
+  push:
+    branches: [master]
+    paths: ["brand/**", ".github/workflows/brand.yml", ".github/actions/**"]
+  pull_request:
+    paths: ["brand/**", ".github/workflows/brand.yml", ".github/actions/**"]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: brand
+
+env:
+  # У brand нет своего проекта uv, поэтому версия Python закреплена здесь. uv берёт свою
+  # сборку Python, а не ту, что есть в образе раннера.
+  UV_PYTHON: "3.12"
+  UV_PYTHON_PREFERENCE: only-managed
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/setup-uv
+        with:
+          working-directory: brand
+          enable-cache: "false"
+      - run: uv run --no-project python --version
+      - name: dist собран из tokens.json
+        run: uv run --no-project python build.py --check
+      - name: Контраст пар из contrast-pairs.json
+        run: uv run --no-project python check_contrast.py
+      - name: Тесты сборки
+        run: uv run --no-project python -m unittest discover -p 'test_*.py'

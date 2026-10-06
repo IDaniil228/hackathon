@@ -1,15 +1,16 @@
 # Гейт сервиса taskgen: только проверки, которые зависят от одного репозитория.
 # Интеграционные тесты (метка integration) сюда не входят: им нужны Postgres и Piston с
 # пакетами, которые скачиваются из сети, и смоук-тесты с настоящей LLM. Их красный цвет
-# зависел бы от внешних сервисов, а не от изменения в pull request.
+# зависел бы от внешних сервисов, а не от изменения в pull request. Их запускает
+# taskgen-integration.yml.
 name: taskgen
 
 on:
   push:
     branches: [master]
-    paths: ["taskgen/**", "docs/taskgen/**", ".github/workflows/taskgen.yml"]
+    paths: ["taskgen/**", "docs/taskgen/**", ".github/workflows/taskgen.yml", ".github/actions/**"]
   pull_request:
-    paths: ["taskgen/**", "docs/taskgen/**", ".github/workflows/taskgen.yml"]
+    paths: ["taskgen/**", "docs/taskgen/**", ".github/workflows/taskgen.yml", ".github/actions/**"]
   workflow_dispatch:
   # Автоматизация проверяет ветку вызовом этого же workflow с ref, а не копией его команд.
   workflow_call:
@@ -34,11 +35,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
-      # Версия uv закреплена здесь; Python и все пакеты, включая ruff, берутся из
-      # taskgen/.python-version и taskgen/uv.lock.
-      - uses: astral-sh/setup-uv@v10.2.0
+      # Python и все пакеты, включая ruff, берутся из taskgen/.python-version и taskgen/uv.lock.
+      - uses: ./.github/actions/setup-uv
         with:
-          version: "0.12.17"
           working-directory: taskgen
       - run: uv sync --locked
       - run: uv run --locked ruff check .
@@ -51,9 +50,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: ./.github/actions/setup-uv
         with:
-          version: "0.12.17"
           working-directory: taskgen
       - run: uv sync --locked
       - name: docs/taskgen/generated собрана из текущего кода

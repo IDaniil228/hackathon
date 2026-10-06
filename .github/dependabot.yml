@@ -2,6 +2,7 @@
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: /
+    # Каталог / покрывает только .github/workflows; составные действия перечисляются отдельно.
+    directories: ["/", "/.github/actions/*"]
     schedule:
       interval: weekly
