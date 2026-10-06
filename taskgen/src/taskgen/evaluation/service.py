@@ -51,6 +51,7 @@ from taskgen.evaluation.grading import (
 from taskgen.evaluation.judge import JudgeError, LLMJudge
 from taskgen.evaluation.languages import canonical_language
 from taskgen.evaluation.metrics import MetricScore, compute_quality, judge_facts, load_rubric
+from taskgen.evaluation.quotes import QuoteRelevance, state_embedding_cache
 from taskgen.evaluation.scoring import (
     Components,
     SessionScore,
@@ -61,7 +62,7 @@ from taskgen.evaluation.scoring import (
     session_score,
 )
 from taskgen.evaluation.summary import SessionFacts, fallback_text, summary_data, write_summary
-from taskgen.llm import limited_llm
+from taskgen.llm import limited_llm, state_embedder
 
 logger = logging.getLogger(__name__)
 
@@ -346,12 +347,23 @@ class Evaluator:
         """
         settings: Settings = state.settings
         llm = limited_llm(state)
+        threshold = settings.scoring.judge_quote_threshold
+        relevance = (
+            None
+            if threshold is None
+            else QuoteRelevance(
+                threshold=threshold,
+                embedder=state_embedder(state),
+                cache=state_embedding_cache(state),
+            )
+        )
         judge = getattr(state, "judge", None) or LLMJudge(
             llm,
             model=settings.llm.judge_model,
             samples=settings.scoring.judge_samples,
             temperature=settings.scoring.judge_temperature,
             reasoning_effort=settings.llm.judge_reasoning_effort,
+            relevance=relevance,
         )
         detector = None
         if settings.ai_detector_enabled:

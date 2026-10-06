@@ -37,8 +37,8 @@ from taskgen.contracts import (
     TaskStatus,
 )
 from taskgen.db import AreaSkill, Skill, Task, Template, TestSession
+from taskgen.evaluation.quotes import EmbeddingCache, state_embedding_cache
 from taskgen.generation import pool
-from taskgen.generation.essay import EmbeddingCache
 from taskgen.generation.instance import (
     SEED_BITS,
     GenerationError,
@@ -50,7 +50,7 @@ from taskgen.generation.instance import (
     generate_instance,
 )
 from taskgen.generation.profile import CandidateProfile, profile_hash
-from taskgen.llm import limited_llm
+from taskgen.llm import limited_llm, state_embedder
 
 logger = logging.getLogger(__name__)
 
@@ -119,24 +119,15 @@ class Generator:
     def from_state(cls, state: Any) -> Generator:
         """Собирает зависимости из app.state так же, как Evaluator.from_state."""
         settings: Settings = state.settings
-        # Без отдельного эмбеддера эмбеддинги считает LLM-клиент, как в API банка. Клиент без
-        # embed не эмбеддер: отбор тогда сразу идёт по доле общих навыков.
-        embedder = getattr(state, "embedder", None) or state.llm
-        if not (hasattr(embedder, "embed") and hasattr(embedder, "model_name")):
-            embedder = None
-        # Генератор собирается на каждый запрос, поэтому кэш векторов шаблонов эссе живёт
-        # в app.state, иначе он пустел бы после каждого запроса.
-        cache = getattr(state, "essay_embedding_cache", None)
-        if cache is None:
-            cache = state.essay_embedding_cache = EmbeddingCache()
         return cls(
             settings=settings,
             options=settings.generation,
             sessionmaker=state.sessionmaker,
             llm=limited_llm(state),
-            embedder=embedder,
+            # Без эмбеддера отбор шаблонов сразу идёт по доле общих навыков.
+            embedder=state_embedder(state),
             sandbox=getattr(state, "sandbox", None),
-            embedding_cache=cache,
+            embedding_cache=state_embedding_cache(state),
         )
 
     def instance_deps(self) -> InstanceDeps:

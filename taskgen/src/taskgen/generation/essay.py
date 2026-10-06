@@ -9,7 +9,8 @@
 Факты и пересказ запрещённых фраз проверяет один из трёх способов (EssayCheckOptions.method):
 
 - llm: проверяльщик для каждого факта и фразы отвечает, есть ли они, и цитирует ситуацию.
-  Код сверяет цитату с текстом: вердикт без цитаты или с выдуманной цитатой не засчитывается
+  Код сверяет цитату с текстом: вердикт без цитаты или с выдуманной цитатой не засчитывается.
+  С quote_threshold факт засчитывается, только если цитаты по смыслу похожи на него
 - embeddings: ситуация режется на предложения (split_sentences), и для факта или фразы
   берётся наибольшее косинусное сходство с предложением; оно сравнивается с порогом
 - both: решают эмбеддинги, а то, что попало в серую зону около порога, решает LLM
@@ -19,7 +20,6 @@ from __future__ import annotations
 
 import logging
 import re
-from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -37,7 +37,12 @@ from taskgen.contracts import (
     TemplateSpec,
 )
 from taskgen.evaluation.jsonout import EmptyReplyError, StructuredOutputError, complete_structured
-from taskgen.evaluation.judge import quote_in_answer
+from taskgen.evaluation.quotes import (
+    EmbeddingCache,
+    QuoteRelevance,
+    RelevanceUnavailableError,
+    quote_in_answer,
+)
 from taskgen.generation.params import fill_placeholders
 from taskgen.generation.textcheck import text_problems
 from taskgen.markers import markers, new_nonce
@@ -134,6 +139,8 @@ class EssayCheckOptions:
     forbidden_threshold: float
     # Полуширина серой зоны вокруг порога в режиме both: такие факты и фразы решает LLM.
     grey_zone: float
+    # Порог сходства цитат проверяльщика с фактом; None — смысл цитат не проверяется.
+    quote_threshold: float | None = None
 
 
 @dataclass(frozen=True)
@@ -202,36 +209,6 @@ def _line_sentences(line: str) -> list[str]:
         else:
             sentences.append(carry)
     return sentences
-
-
-class EmbeddingCache:
-    """Векторы фактов и запрещённых фраз шаблона: они одинаковы во всех экземплярах.
-
-    Ключ — модель эмбеддера и текст, поэтому смена модели не отдаёт чужие векторы.
-    Старые записи вытесняются, когда их больше max_items.
-    """
-
-    def __init__(self, max_items: int = 4096) -> None:
-        self.max_items = max_items
-        self._vectors: OrderedDict[tuple[str, str], list[float]] = OrderedDict()
-
-    async def vectors(self, embedder: Embedder, texts: list[str]) -> list[list[float]]:
-        model = embedder.model_name
-        found: dict[str, list[float]] = {}
-        for text in texts:
-            vector = self._vectors.get((model, text))
-            if vector is not None:
-                self._vectors.move_to_end((model, text))
-                found[text] = vector
-        missing = [text for text in dict.fromkeys(texts) if text not in found]
-        if missing:
-            fresh = await embedder.embed(missing)
-            for text, vector in zip(missing, fresh, strict=True):
-                found[text] = vector
-                self._vectors[(model, text)] = vector
-            while len(self._vectors) > self.max_items:
-                self._vectors.popitem(last=False)
-        return [found[text] for text in texts]
 
 
 @dataclass(frozen=True)
@@ -390,8 +367,8 @@ def _checker_messages(
 
 @dataclass(frozen=True)
 class _LLMVerdicts:
-    facts: dict[str, str]
-    phrases: dict[str, str]
+    facts: dict[str, list[str]]
+    phrases: dict[str, list[str]]
 
 
 async def _llm_verdicts(
@@ -422,16 +399,41 @@ async def _llm_verdicts(
     asked_facts = {fact.id for fact in facts}
     return _LLMVerdicts(
         facts={
-            v.fact_id: " … ".join(v.quotes)
+            v.fact_id: v.quotes
             for v in reply.facts
             if v.fact_id in asked_facts and quoted(v.present, v.quotes)
         },
         phrases={
-            v.phrase: " … ".join(v.quotes)
+            v.phrase: v.quotes
             for v in reply.phrases
             if v.phrase in phrases and quoted(v.present, v.quotes)
         },
     )
+
+
+async def _relevant_facts(
+    quoted: dict[str, list[str]],
+    facts: list[ScenarioFact],
+    relevance: QuoteRelevance,
+    notes: list[str],
+) -> dict[str, list[str]]:
+    """Факты, чьи цитаты по смыслу относятся к факту; без эмбеддера — все и замечание.
+
+    Запрещённые фразы так не проверяются: найденная фраза отклоняет ситуацию, и снять
+    её значило бы ослабить проверку.
+    """
+    texts = {fact.id: fact.text for fact in facts}
+    ids = list(quoted)
+    try:
+        scores = await relevance.similarities([(texts[fid], quoted[fid]) for fid in ids])
+    except RelevanceUnavailableError as error:
+        notes.append(f"проверка смысла цитат пропущена: {error}")
+        return quoted
+    return {
+        fid: quoted[fid]
+        for fid, score in zip(ids, scores, strict=True)
+        if score >= relevance.threshold
+    }
 
 
 async def check_essay_scenario(
@@ -513,8 +515,16 @@ async def check_essay_scenario(
         if verdicts is None:
             reasons.append("проверяльщик фактов не ответил по схеме")
         else:
-            evidence |= verdicts.facts
-            forbidden_evidence |= verdicts.phrases
+            confirmed = verdicts.facts
+            if options is not None and options.quote_threshold is not None and confirmed:
+                relevance = QuoteRelevance(
+                    threshold=options.quote_threshold,
+                    embedder=embedder,
+                    cache=cache if cache is not None else EmbeddingCache(),
+                )
+                confirmed = await _relevant_facts(confirmed, facts, relevance, notes)
+            evidence |= {fid: " … ".join(quotes) for fid, quotes in confirmed.items()}
+            forbidden_evidence |= {p: " … ".join(q) for p, q in verdicts.phrases.items()}
 
     if forbidden_evidence:
         listed = "; ".join(f"«{p}» — {unit}" for p, unit in forbidden_evidence.items())

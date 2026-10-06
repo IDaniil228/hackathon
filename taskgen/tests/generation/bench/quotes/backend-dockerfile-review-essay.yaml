@@ -1,0 +1,44 @@
+template: backend/junior/backend-dockerfile-review-essay.md
+honest:
+  layer-cache:
+    - "Сначала копируем requirements.txt и ставим зависимости, а уже потом весь код: тогда при правке кода слой с pip install берётся из кэша."
+    - "COPY requirements.txt . и RUN pip install до COPY . ."
+    - "Сейчас любое изменение в коде заново запускает установку всех пакетов, потому что COPY . . стоит раньше."
+  secrets:
+    - "Пароль и SECRET_KEY зашиты в образ через ENV, их видно в docker history и в docker inspect любому, у кого есть образ."
+    - "секреты передаём при запуске: docker run --env-file или secrets оркестратора"
+    - "Перенос в ARG не спасает, аргументы сборки тоже остаются в истории."
+  non-root:
+    - "Контейнер работает от root; если приложение взломают, у атакующего будут полные права внутри контейнера, поэтому создаю пользователя и переключаюсь на него через USER."
+    - "RUN useradd -m app && USER app"
+    - "запускать не от рута"
+  wsgi-server:
+    - "runserver — это сервер для разработки, он однопоточный и не проверялся на безопасность; в продакшене нужен gunicorn или uvicorn."
+    - "CMD [\"gunicorn\", \"config.wsgi:application\", \"--bind\", \"0.0.0.0:8000\"]"
+    - "Встроенный сервер Django документация прямо запрещает использовать в продакшене."
+  pinned-base:
+    - "python:latest каждый раз может оказаться другой версией, и сборка станет невоспроизводимой; лучше python:3.12-slim."
+    - "FROM python:3.12-slim"
+    - "Тег latest не фиксирует версию интерпретатора."
+  dockerignore:
+    - "Нужен .dockerignore, иначе COPY . . затащит в образ .git, .env с паролями и локальную базу."
+    - ".dockerignore: .git, .env, __pycache__, db.sqlite3"
+    - "Без него контекст сборки огромный и в нём лежат лишние файлы."
+  fixed-dockerfile:
+    - "FROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY . .\nRUN useradd -m app\nUSER app\nCMD [\"gunicorn\", \"config.wsgi:application\", \"--bind\", \"0.0.0.0:8000\"]"
+    - "Итоговый Dockerfile: slim-образ с версией, зависимости отдельным слоем, пользователь app, gunicorn и никаких секретов в ENV."
+    - "Исправленная версия ниже."
+claims:
+  echo:
+    - "Я нашёл все проблемы этого Dockerfile и объяснил, чем опасна каждая из них."
+    - "Я прислал исправленный Dockerfile и всё, что нужно добавить в репозиторий."
+    - "Каждая проблема Dockerfile разобрана с объяснением опасности."
+    - "Исправленный Dockerfile приведён полностью и учитывает все замечания."
+  aware:
+    layer-cache: "Я объяснил кэширование слоёв и порядок копирования requirements.txt."
+    secrets: "Я убрал секреты из образа и объяснил, почему ENV для них опасен."
+    non-root: "Я добавил непривилегированного пользователя и объяснил риск root."
+    wsgi-server: "Я заменил runserver на gunicorn и объяснил почему."
+    pinned-base: "Я зафиксировал версию базового образа."
+    dockerignore: "Я добавил .dockerignore и объяснил, зачем он нужен."
+    fixed-dockerfile: "Я привёл исправленный Dockerfile без единой проблемы."

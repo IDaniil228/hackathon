@@ -7,21 +7,20 @@
 from __future__ import annotations
 
 import json
-import math
 from typing import Any
 
 import pytest
 
 from taskgen.contracts import ChatMessage, ScenarioFact, TemplateSpec
+from taskgen.evaluation.quotes import EmbeddingCache
 from taskgen.generation.essay import (
-    EmbeddingCache,
     EssayCheckOptions,
     EssayScenario,
     check_essay_scenario,
     generate_essay,
     split_sentences,
 )
-from tests.evaluation.fakes import FakeLLM
+from tests.evaluation.fakes import FakeLLM, TableEmbedder, unit
 from tests.generation.test_essay import leakage_spec
 
 FACT_A = "аналитик обучил градиентный бустинг"
@@ -32,33 +31,6 @@ S_BOOST = "Маша обучила бустинг на деревьях."
 S_DATES = "Таблица собиралась полгода."
 S_HINT = "Сведения из проверки просочились в обучение."
 S_PLAIN = "Отчёт ушёл руководителю."
-
-
-def unit(angle_cos: float, axis: int = 0, dims: int = 6) -> list[float]:
-    """Вектор с косинусом angle_cos к оси axis; остаток уходит в последнее измерение."""
-    vector = [0.0] * dims
-    vector[axis] = angle_cos
-    vector[-1] = math.sqrt(max(0.0, 1.0 - angle_cos**2))
-    return vector
-
-
-class TableEmbedder:
-    """Эмбеддер по таблице; текст вне таблицы — ошибка теста, а не случайный вектор."""
-
-    def __init__(self, vectors: dict[str, list[float]], *, model: str = "table") -> None:
-        self.model_name = model
-        self.vectors = vectors
-        self.calls: list[list[str]] = []
-        self.fail: Exception | None = None
-
-    async def embed(self, texts: list[str]) -> list[list[float]]:
-        self.calls.append(list(texts))
-        if self.fail is not None:
-            raise self.fail
-        return [self.vectors[text] for text in texts]
-
-    def embedded(self) -> list[str]:
-        return [text for call in self.calls for text in call]
 
 
 def small_spec(*, forbidden: list[str] | None = None) -> TemplateSpec:
@@ -387,6 +359,64 @@ async def test_llm_phrase_verdict_needs_a_real_quote():
 
     assert quoted.forbidden_found == [PHRASE] and not quoted.ok
     assert invented.forbidden_found == [] and invented.ok, invented.reasons
+
+
+# --- Проверка смысла цитат проверяльщика -----------------------------------------------------
+
+# Предложение ситуации, которое есть в тексте, но к факту B отношения не имеет.
+RELEVANCE_TABLE = {S_BOOST: unit(0.9, 0), S_DATES: unit(0.9, 1), S_PLAIN: unit(0.1, 1)}
+
+
+async def test_checker_quote_off_topic_for_fact_does_not_confirm_it():
+    situation = f"{S_BOOST} {S_PLAIN}"
+    llm = honest_checker({"boosting": [S_BOOST], "dates": [S_PLAIN]})
+    embedder = TableEmbedder(vectors(**RELEVANCE_TABLE))
+
+    result = await run(
+        llm, small_spec(forbidden=[]), situation, embedder, options("llm", quote_threshold=0.5)
+    )
+
+    assert result.missing_facts == ["dates"] and not result.ok
+    assert result.evidence == {"boosting": S_BOOST}
+
+
+async def test_checker_quote_on_topic_confirms_fact():
+    situation = f"{S_BOOST} {S_DATES}"
+    llm = honest_checker({"boosting": [S_BOOST], "dates": [S_DATES]})
+    embedder = TableEmbedder(vectors(**RELEVANCE_TABLE))
+
+    result = await run(
+        llm, small_spec(forbidden=[]), situation, embedder, options("llm", quote_threshold=0.5)
+    )
+
+    assert result.ok, result.reasons
+    assert result.notes == []
+
+
+async def test_checker_relevance_is_skipped_with_note_without_embedder():
+    situation = f"{S_BOOST} {S_PLAIN}"
+    llm = honest_checker({"boosting": [S_BOOST], "dates": [S_PLAIN]})
+
+    result = await run(
+        llm, small_spec(forbidden=[]), situation, None, options("llm", quote_threshold=0.5)
+    )
+
+    assert result.ok, result.reasons
+    assert any("смысла цитат" in note for note in result.notes)
+
+
+async def test_checker_relevance_does_not_clear_forbidden_phrase():
+    # Найденная фраза отклоняет ситуацию; проверка смысла её не снимает, иначе она
+    # ослабила бы проверку, а не усилила.
+    situation = f"{S_BOOST} {S_DATES} {S_HINT}"
+    llm = honest_checker({"boosting": [S_BOOST], "dates": [S_DATES]}, {PHRASE: [S_HINT]})
+    table = vectors(**RELEVANCE_TABLE, **{S_HINT: unit(0.0, 2)})
+
+    result = await run(
+        llm, small_spec(), situation, TableEmbedder(table), options("llm", quote_threshold=0.5)
+    )
+
+    assert result.forbidden_found == [PHRASE] and not result.ok
 
 
 # --- Генерация во всех режимах ---------------------------------------------------------------

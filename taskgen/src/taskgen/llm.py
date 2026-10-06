@@ -12,7 +12,7 @@ from typing import Any
 import httpx
 
 from taskgen.config import LLMSettings, Settings
-from taskgen.contracts import ChatMessage, LLMClient, ReasoningEffort
+from taskgen.contracts import ChatMessage, Embedder, LLMClient, ReasoningEffort
 
 
 class LimitedLLM:
@@ -57,6 +57,18 @@ def limited_llm(state: Any) -> LimitedLLM:
         llm = LimitedLLM(state.llm, limit=settings.llm.concurrency)
         state.limited_llm = llm
     return llm
+
+
+def state_embedder(state: Any) -> Embedder | None:
+    """Эмбеддер из app.state.embedder, а без него — LLM-клиент, как в API банка.
+
+    Клиент без embed и model_name не эмбеддер: тогда None, и каждый потребитель сам решает,
+    чем обойтись без эмбеддингов.
+    """
+    embedder = getattr(state, "embedder", None) or state.llm
+    if not (hasattr(embedder, "embed") and hasattr(embedder, "model_name")):
+        return None
+    return embedder
 
 
 class OpenAICompatibleClient:

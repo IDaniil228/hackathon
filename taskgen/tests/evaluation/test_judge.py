@@ -1,10 +1,14 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 
+from taskgen.config import ScoringSettings, Settings
 from taskgen.contracts import JudgeRequest, RubricItem, TaskKind
-from taskgen.evaluation.judge import JudgeError, LLMJudge, quote_in_answer
-from tests.evaluation.fakes import FakeLLM, http_error
+from taskgen.evaluation.judge import JudgeError, LLMJudge
+from taskgen.evaluation.quotes import QuoteRelevance, quote_in_answer
+from taskgen.evaluation.service import Evaluator
+from tests.evaluation.fakes import FakeLLM, TableEmbedder, http_error, unit
 
 ANSWER = """def two_sum(nums, target):
     left, right = 0, len(nums) - 1
@@ -231,6 +235,123 @@ async def test_empty_sample_is_dropped_and_does_not_vote():
     result = await judge.judge(_request())
     assert result.score == pytest.approx(1.0)
     assert len(llm.calls) == 3
+
+
+# --- Проверка смысла цитат ---------------------------------------------------------------
+#
+# Эмбеддер — таблица: сходство цитаты с пунктом задано числом, а настоящую модель меряет
+# бенчмарк scripts/essay_check_bench.py quotes.
+
+LEAK_ITEM = RubricItem(
+    id="leak",
+    text="Названа утечка через предобработку: параметры масштабирования посчитаны по всем данным",
+)
+OTHER_ITEM = RubricItem(id="scheme", text="Предложена схема train, validation и test")
+HONEST = "Скейлер обучен на всей таблице, поэтому статистики теста попали в обучение."
+CLAIM = "Я подробно разобрал все проблемы предобработки в этом решении."
+ESSAY_ANSWER = f"{HONEST}\n{CLAIM}"
+
+
+def _essay_request() -> JudgeRequest:
+    return JudgeRequest(
+        kind=TaskKind.ESSAY,
+        statement="Найдите шаги, из-за которых оценка качества завышена",
+        answer=ESSAY_ANSWER,
+        rubric=[LEAK_ITEM, OTHER_ITEM],
+    )
+
+
+def _relevance_judge(
+    reply: str, *, threshold: float = 0.5, embedder: TableEmbedder | None = None
+) -> tuple[LLMJudge, TableEmbedder]:
+    table = embedder or TableEmbedder(
+        {LEAK_ITEM.text: unit(1.0), HONEST: unit(0.8), CLAIM: unit(0.2)}
+    )
+    judge = LLMJudge(
+        FakeLLM([reply] * 3),
+        model="judge-model",
+        samples=3,
+        temperature=0.7,
+        relevance=QuoteRelevance(threshold=threshold, embedder=table),
+    )
+    return judge, table
+
+
+async def test_self_asserting_quote_does_not_confirm_item():
+    # Судья поддался ответу и цитирует фразу, где кандидат сам заявляет о выполнении пункта.
+    # Цитата в ответе есть, но по смыслу к пункту не относится.
+    reply = _sample(leak=("yes", [CLAIM]), scheme=("no", []))
+    judge, _ = _relevance_judge(reply)
+    result = await judge.judge(_essay_request())
+    assert {v.item_id: v.verdict for v in result.verdicts} == {"leak": "no", "scheme": "no"}
+    assert result.score == 0.0
+    assert any("leak" in note for note in result.notes)
+
+
+async def test_honest_quote_on_topic_confirms_item():
+    reply = _sample(leak=("yes", [HONEST]), scheme=("no", []))
+    judge, _ = _relevance_judge(reply)
+    result = await judge.judge(_essay_request())
+    assert {v.item_id: v.verdict for v in result.verdicts}["leak"] == "yes"
+    assert result.notes == []
+
+
+async def test_relevance_check_is_skipped_with_note_without_embedder():
+    reply = _sample(leak=("yes", [CLAIM]), scheme=("no", []))
+    judge = LLMJudge(
+        FakeLLM([reply] * 3),
+        model="judge-model",
+        samples=3,
+        temperature=0.7,
+        relevance=QuoteRelevance(threshold=0.5, embedder=None),
+    )
+    result = await judge.judge(_essay_request())
+    assert {v.item_id: v.verdict for v in result.verdicts}["leak"] == "yes"
+    assert any("эмбеддер" in note for note in result.notes)
+
+
+async def test_relevance_check_is_skipped_with_note_on_embedder_error():
+    table = TableEmbedder({})
+    table.fail = RuntimeError("эмбеддер недоступен")
+    reply = _sample(leak=("yes", [CLAIM]), scheme=("no", []))
+    judge, _ = _relevance_judge(reply, embedder=table)
+    result = await judge.judge(_essay_request())
+    assert {v.item_id: v.verdict for v in result.verdicts}["leak"] == "yes"
+    assert any("эмбеддер недоступен" in note for note in result.notes)
+
+
+async def test_relevance_check_does_not_embed_when_no_item_is_confirmed():
+    reply = _sample(leak=("no", []), scheme=("no", []))
+    judge, table = _relevance_judge(reply)
+    await judge.judge(_essay_request())
+    assert table.calls == []
+
+
+def _service_state(threshold: float | None, embedder: TableEmbedder) -> SimpleNamespace:
+    reply = _sample(leak=("yes", [CLAIM]), scheme=("no", []))
+    settings = Settings(scoring=ScoringSettings(judge_quote_threshold=threshold))
+    return SimpleNamespace(
+        settings=settings, sessionmaker=None, llm=FakeLLM(lambda _m, _s: reply), embedder=embedder
+    )
+
+
+async def test_judge_quote_threshold_comes_from_scoring_settings():
+    table = TableEmbedder({LEAK_ITEM.text: unit(1.0), CLAIM: unit(0.2)})
+    judge = Evaluator.from_state(_service_state(0.5, table)).judge
+
+    result = await judge.judge(_essay_request())
+
+    assert {v.item_id: v.verdict for v in result.verdicts}["leak"] == "no"
+
+
+async def test_judge_quote_check_is_off_by_default():
+    table = TableEmbedder({LEAK_ITEM.text: unit(1.0), CLAIM: unit(0.2)})
+    state = _service_state(ScoringSettings().judge_quote_threshold, table)
+
+    result = await Evaluator.from_state(state).judge.judge(_essay_request())
+
+    assert {v.item_id: v.verdict for v in result.verdicts}["leak"] == "yes"
+    assert table.calls == []
 
 
 async def test_judge_passes_reasoning_effort():

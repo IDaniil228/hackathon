@@ -38,8 +38,8 @@ from taskgen.evaluation.jsonout import (
     StructuredOutputError,
     complete_structured,
 )
+from taskgen.evaluation.quotes import EmbeddingCache
 from taskgen.generation.essay import (
-    EmbeddingCache,
     EssayCheckOptions,
     EssayScenarioError,
     generate_essay,
@@ -368,6 +368,7 @@ async def _essay(
                 fact_threshold=deps.options.essay_fact_threshold,
                 forbidden_threshold=deps.options.essay_forbidden_threshold,
                 grey_zone=deps.options.essay_grey_zone,
+                quote_threshold=deps.options.essay_quote_threshold,
             ),
             embedder=deps.embedder,
             embedding_cache=deps.embedding_cache,

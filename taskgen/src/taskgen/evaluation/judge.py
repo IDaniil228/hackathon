@@ -2,7 +2,8 @@
 
 Каждый пункт рубрики судья оценивает как yes, partial или no и цитирует строки ответа.
 Код проверяет каждую цитату: yes или partial без цитаты или с цитатой, которой нет в ответе,
-засчитывается как no. Судья вызывается judge_samples раз при ненулевой температуре; по
+засчитывается как no. С QuoteRelevance вердикт ещё и снимается в no, если цитаты по смыслу
+не относятся к пункту. Судья вызывается judge_samples раз при ненулевой температуре; по
 каждому пункту берётся нижняя медиана вердиктов, а разброс баллов сэмплов идёт в spread.
 """
 
@@ -24,6 +25,11 @@ from taskgen.contracts import (
     RubricVerdict,
 )
 from taskgen.evaluation.jsonout import StructuredOutputError, complete_structured
+from taskgen.evaluation.quotes import (
+    QuoteRelevance,
+    RelevanceUnavailableError,
+    quote_in_answer,
+)
 from taskgen.markers import find_nonce, markers, new_nonce
 
 _VALUE = {"no": 0.0, "partial": 0.5, "yes": 1.0}
@@ -62,16 +68,6 @@ class _Sample(BaseModel):
 
 class JudgeError(Exception):
     """Ни один сэмпл судьи не дал ответа по схеме."""
-
-
-def _normalize(text: str) -> str:
-    return " ".join(text.split())
-
-
-def quote_in_answer(quote: str, answer: str) -> bool:
-    """Цитата есть в ответе с точностью до пробельных символов: модели переносят строки."""
-    normalized = _normalize(quote)
-    return bool(normalized) and normalized in _normalize(answer)
 
 
 def _schema(rubric: list[RubricItem]) -> dict:
@@ -161,12 +157,14 @@ class LLMJudge:
         samples: int,
         temperature: float,
         reasoning_effort: ReasoningEffort | None = None,
+        relevance: QuoteRelevance | None = None,
     ) -> None:
         self._llm = llm
         self._model = model
         self._samples = samples
         self._temperature = temperature
         self._reasoning_effort = reasoning_effort
+        self._relevance = relevance
 
     @staticmethod
     def markers_for(messages: list[ChatMessage]) -> tuple[str, str]:
@@ -204,6 +202,7 @@ class LLMJudge:
         samples = [result for result in results if result is not None]
         if not samples:
             raise JudgeError(f"Все {self._samples} сэмплов судьи не прошли проверку схемы")
+        notes = await self._check_relevance(samples, request.rubric)
 
         final: dict[str, RubricVerdict] = {}
         for item in request.rubric:
@@ -222,4 +221,39 @@ class LLMJudge:
             verdicts=[final[item.id] for item in request.rubric],
             score=_score(final, request.rubric),
             spread=max(sample_scores) - min(sample_scores),
+            notes=notes,
         )
+
+    async def _check_relevance(
+        self, samples: list[dict[str, RubricVerdict]], rubric: list[RubricItem]
+    ) -> list[str]:
+        """Снимает в no вердикты, чьи цитаты по смыслу не относятся к пункту рубрики.
+
+        Проверка идёт до медианы, в каждом сэмпле: иначе снятый вердикт мог бы победить
+        в голосовании. Без эмбеддера вердикты остаются как есть, а причина идёт в замечания.
+        """
+        if self._relevance is None:
+            return []
+        texts = {item.id: item.text for item in rubric}
+        confirmed = [
+            (sample, item_id)
+            for sample in samples
+            for item_id, verdict in sample.items()
+            if verdict.verdict != "no"
+        ]
+        try:
+            scores = await self._relevance.similarities(
+                [(texts[item_id], sample[item_id].quotes) for sample, item_id in confirmed]
+            )
+        except RelevanceUnavailableError as error:
+            return [f"проверка смысла цитат пропущена: {error}"]
+        notes: list[str] = []
+        threshold = self._relevance.threshold
+        for (sample, item_id), score in zip(confirmed, scores, strict=True):
+            if score < threshold:
+                sample[item_id] = RubricVerdict(item_id=item_id, verdict="no")
+                notes.append(
+                    f"пункт {item_id}: цитаты не относятся к пункту "
+                    f"(сходство {score:.3f} ниже порога {threshold})"
+                )
+        return list(dict.fromkeys(notes))

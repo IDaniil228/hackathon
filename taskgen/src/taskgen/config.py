@@ -189,6 +189,16 @@ class ScoringSettings(BaseModel):
         description="Температура судьи. Ненулевая нужна, чтобы сэмплы различались и разброс "
         "что-то значил",
     )
+    judge_quote_threshold: float | None = Field(
+        default=None,
+        ge=-1.0,
+        le=1.0,
+        description="Порог косинусного сходства цитат судьи с текстом пункта рубрики: ниже "
+        "него вердикт пункта становится no. Без эмбеддера проверка пропускается с замечанием. "
+        "null выключает проверку, и по умолчанию она выключена: бенчмарк "
+        "scripts/essay_check_bench.py quotes с bge-m3 не нашёл порога, который отделяет "
+        "честные цитаты от самоутверждений кандидата. Числа замера — docs/taskgen/security.md",
+    )
     analyzer_timeout_seconds: float = Field(
         default=30.0, gt=0.0, description="Лимит времени одного статического анализатора, секунды"
     )
@@ -293,6 +303,16 @@ class GenerationSettings(BaseModel):
         le=1.0,
         description="Порог косинусного сходства запрещённой фразы с предложением ситуации "
         "для bge-m3, подобран тем же бенчмарком",
+    )
+    essay_quote_threshold: float | None = Field(
+        default=None,
+        ge=-1.0,
+        le=1.0,
+        description="Порог косинусного сходства цитат LLM-проверяльщика с фактом: ниже него "
+        "факт не засчитан. Без эмбеддера проверка пропускается с замечанием. null выключает "
+        "проверку, и по умолчанию она выключена: бенчмарк scripts/essay_check_bench.py "
+        "quotes с bge-m3 не нашёл порога, который не отсекает предложения с фактом и "
+        "отсекает предложения о другом. Числа замера — docs/taskgen/security.md",
     )
     essay_grey_zone: float = Field(
         default=0.05,
