@@ -1,28 +1,34 @@
-# Agent instructions
+# Инструкции для агентов
 
-This repository is a hackathon entry for the FSP special track: a platform that matches IT candidates and employers. The employer finds a verified candidate category and sends an invitation to the candidate
+Репозиторий — решение хакатона ФСП, специальный трек: платформа, которая сводит ИТ-кандидатов и работодателей. Работодатель находит подтверждённую категорию кандидатов и сам отправляет кандидату приглашение
 
-## Sources of truth
+## Источники правды
 
-- The task statement is `docs/ФСП спец. трек ТЗ.pdf`. Its evaluation criteria set the priorities
-- The team's product direction is `docs/Идеи.md`
-- The database design is `docs/Структура БД.md`, and the diagram is `docs/ER.canvas`
+- Условие задачи — `docs/ФСП спец. трек ТЗ.pdf`. Его критерии оценки задают приоритеты
+- Продуктовое направление команды — `docs/Идеи.md`
+- Устройство БД — `docs/Структура БД.md`, диаграмма — `docs/ER.canvas`
 
-Read the relevant document before a design decision. Do not copy its content into code comments or other documents: link to it
+Перед проектным решением прочитай нужный документ. Не копируй его содержимое в комментарии и другие документы: ссылайся на него
 
-## Skills
+## Язык
 
-The skills are git submodules in `.agents/skills/`, and `.claude/skills` is a symlink to that directory. Codex and opencode read `.agents/skills/`, and Claude Code reads `.claude/skills/`
+Всё пишется по-русски: README, документация, комментарии в коде, сообщения коммитов, pull request, описания эндпоинтов, тексты заданий. По-английски остаются только идентификаторы в коде
 
-- If a directory in `.agents/skills/` is empty, the clone did not fetch the submodules. Run `git submodule update --init` before other work
-- Before an action that a skill's description names, load that skill
-- Never edit a file inside `.agents/skills/`. A change goes to the skill's own repository, and this repository then moves the submodule to the new commit
-- If `git status` shows a submodule as modified and nobody intended to move it, run `git submodule update --init`. Do not commit that change: it would move the submodule back to an old commit
+## Память проекта
 
-## Commits
+Память проекта лежит в `.claude/memory/`: один факт на файл, индекс — `.claude/memory/MEMORY.md`. Прочитай индекс в начале работы и открой те записи, которые относятся к задаче. Новый устойчивый факт о проекте записывай туда же и добавляй строку в индекс. Личные данные и всё, что не касается проекта, туда не пишутся: репозиторий публичный
 
-This repository uses the `ai-commit-trailers` skill as its AI-disclosure policy. Every commit that an agent writes or helps to write carries the trailer that the skill decides, with the value `<tool>:<model>` of the agent that made the change
+У Claude Code автопамять направляется в эту директорию машинной настройкой `autoMemoryDirectory` в `.claude/settings.local.json`. Путь в ней абсолютный, поэтому файл не коммитится и у каждого свой
 
-## Language
+## Скиллы
 
-Write code, code comments, commit messages and pull requests in English. The documents in `docs/` stay in Russian
+Скиллы — git submodules в `.agents/skills/`, а `.claude/skills` — симлинк на эту директорию. Codex и opencode читают `.agents/skills/`, Claude Code читает `.claude/skills/`
+
+- Если директория в `.agents/skills/` пустая, clone не скачал submodules. Выполни `git submodule update --init` до остальной работы
+- Перед действием, которое названо в описании скилла, загрузи этот скилл
+- Не правь файлы внутри `.agents/skills/`. Изменение уходит в репозиторий самого скилла, а здесь submodule переводится на новый коммит
+- Если `git status` показывает submodule изменённым, а его никто не переводил, выполни `git submodule update --init`. Не коммить такое изменение: оно вернёт submodule на старый коммит
+
+## Коммиты
+
+Политика раскрытия участия ИИ в этом репозитории — скилл `ai-commit-trailers`. Каждый коммит, который агент написал или помог написать, несёт трейлер, выбранный по этому скиллу, со значением `<tool>:<model>` агента, сделавшего изменение

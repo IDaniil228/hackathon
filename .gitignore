@@ -1,4 +1,8 @@
-api/.venv
+.venv/
+.pytest_cache/
+.ruff_cache/
+.env
 .idea
 .obsidian
-__pychace__/
+__pycache__/
+.claude/settings.local.json

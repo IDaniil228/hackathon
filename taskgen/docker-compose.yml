@@ -1,0 +1,46 @@
+# Сервис поднимается автономно: своя БД, своя песочница. LLM — на хосте или в профиле ollama.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: taskgen
+      POSTGRES_PASSWORD: taskgen
+      POSTGRES_DB: taskgen
+    ports: ["5432:5432"]
+    volumes: [db-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskgen"]
+      interval: 2s
+      retries: 30
+
+  piston:
+    image: ghcr.io/engineer-man/piston
+    # Piston изолирует запуски через Isolate (namespaces и cgroup v2), ему нужен privileged.
+    privileged: true
+    ports: ["2000:2000"]
+    volumes: [piston-packages:/piston/packages]
+    tmpfs: [/tmp:exec]
+
+  ollama:
+    image: ollama/ollama
+    profiles: [ollama]
+    ports: ["11434:11434"]
+    volumes: [ollama-data:/root/.ollama]
+
+  taskgen:
+    build: .
+    depends_on:
+      db: {condition: service_healthy}
+      piston: {condition: service_started}
+    ports: ["8000:8000"]
+    env_file: [{path: .env, required: false}]
+    environment:
+      TASKGEN_DATABASE_URL: postgresql+asyncpg://taskgen:taskgen@db:5432/taskgen
+      TASKGEN_SANDBOX__PISTON_URL: http://piston:2000
+      TASKGEN_LLM__BASE_URL: ${TASKGEN_LLM__BASE_URL:-http://host.docker.internal:11434/v1}
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+volumes:
+  db-data:
+  piston-packages:
+  ollama-data:
