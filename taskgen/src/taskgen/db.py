@@ -154,7 +154,7 @@ class TestSession(Base):
     __test__ = False
 
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
-    # Идентификатор кандидата в основном бэкенде; персональных данных здесь нет.
+    # Идентификатор кандидата в основном бэкенде; сам по себе персональных данных не несёт.
     candidate_ref: Mapped[str] = mapped_column(String(100), index=True)
     area_code: Mapped[str] = mapped_column(ForeignKey("areas.code"))
     claimed_grade_code: Mapped[str] = mapped_column(ForeignKey("grades.code"))
@@ -164,6 +164,14 @@ class TestSession(Base):
     status: Mapped[str] = mapped_column(String(16), default=SessionStatus.GENERATING)
     # Почему сессия failed; текст уходит клиенту.
     failure: Mapped[str | None] = mapped_column(Text)
+    # Снимок профиля кандидата (CandidateProfile) — персональные данные. Нужен только
+    # генерации и удаляется, когда сгенерировано последнее задание; хэш остаётся, чтобы
+    # отметить в profile_changed, что основной бэкенд прислал другой профиль.
+    profile: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    profile_hash: Mapped[str | None] = mapped_column(String(64))
+    profile_changed: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
+    )
     # Как отбирались шаблоны: режим, параметры, расстояния и вероятности. Пишет генерация при
     # создании сессии; это основа объяснимости выдачи, а result пишет оценка позже.
     selection: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

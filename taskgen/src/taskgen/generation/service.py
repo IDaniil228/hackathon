@@ -41,6 +41,7 @@ from taskgen.generation.instance import (
     TemplateDefectError,
     generate_instance,
 )
+from taskgen.generation.profile import CandidateProfile, profile_hash
 from taskgen.llm import limited_llm
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,7 @@ class SessionSpec:
     seed: int | None = None
     # Поля SelectionSettings; задаются только admin-ключом, проверяет это API.
     selection_override: dict[str, Any] | None = None
+    profile: CandidateProfile | None = None
 
 
 @dataclass
@@ -158,6 +160,8 @@ async def create_session(gen: Generator, spec: SessionSpec) -> uuid.UUID:
                 temperature=override.get("temperature"),
                 alpha=override.get("alpha"),
                 beta=override.get("beta"),
+                profile_skills=spec.profile.skills if spec.profile else (),
+                resume=spec.profile.resume if spec.profile else "",
             )
         except SelectionError as error:
             raise InvalidRequestError(f"Отбор невозможен: {error}") from error
@@ -204,6 +208,8 @@ async def _insert_session(
             temperature=result.parameters.temperature,
             status=SessionStatus.GENERATING,
             selection=selection,
+            profile=spec.profile.model_dump(mode="json") if spec.profile else None,
+            profile_hash=profile_hash(spec.profile) if spec.profile else None,
         )
         db.add(row)
         await db.flush()
@@ -353,7 +359,8 @@ async def _save_instance(gen: Generator, task_id: uuid.UUID, instance: TaskInsta
 async def finish_session(gen: Generator, session_id: uuid.UUID, failure: str | None = None) -> None:
     """Переводит сессию из generating в ready или, если задан failure, в failed.
 
-    При сбое оставшиеся pending-задания получают failed: генерировать их больше незачем.
+    При сбое оставшиеся pending-задания получают failed: генерировать их больше незачем. В
+    обоих случаях снимок профиля удаляется: заданий, которым он нужен, больше нет.
     """
     async with gen.sessionmaker() as db, db.begin():
         session = await db.get(TestSession, session_id, with_for_update=True)
@@ -370,10 +377,26 @@ async def finish_session(gen: Generator, session_id: uuid.UUID, failure: str | N
             )
             session.status = SessionStatus.FAILED
             session.failure = failure
+            session.profile = None
             return
         statuses = set(await db.scalars(select(Task.status).where(Task.session_id == session_id)))
         if statuses == {TaskStatus.READY}:
             session.status = SessionStatus.READY
+            session.profile = None
+
+
+async def check_profile(gen: Generator, session_id: uuid.UUID, current_hash: str) -> bool:
+    """Сверяет хэш текущего профиля кандидата с хэшем сессии; возвращает profile_changed.
+
+    Изменение только фиксируется: флаг не сбрасывается, а сессия и задания не меняются.
+    """
+    async with gen.sessionmaker() as db, db.begin():
+        session = await db.get(TestSession, session_id, with_for_update=True)
+        if session is None:
+            raise NotFoundError("Сессия не найдена")
+        if current_hash != session.profile_hash:
+            session.profile_changed = True
+        return session.profile_changed
 
 
 # --- Чтение ---------------------------------------------------------------------------------

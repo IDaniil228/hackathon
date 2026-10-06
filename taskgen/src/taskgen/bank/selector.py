@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -120,11 +121,14 @@ async def select_templates(
     temperature: float | None = None,
     alpha: float | None = None,
     beta: float | None = None,
+    profile_skills: Sequence[str] = (),
+    resume: str = "",
 ) -> SelectionResult:
     """Выбирает до k текущих шаблонов области: p ∝ exp(−d / T), без возвращения.
 
     Параметр берётся из аргумента, если он задан, иначе из test_configs для (area, grade),
-    если поле там не NULL, иначе из settings.
+    если поле там не NULL, иначе из settings. Сходство по эмбеддингам считается с текстом
+    из навыков, навыков профиля и резюме; доля общих навыков — только по skills.
     """
     if await session.get(Area, area) is None:
         raise SelectionError(f"нет области {area!r} в справочнике")
@@ -153,7 +157,12 @@ async def select_templates(
     if not templates:
         return SelectionResult([], SelectionMode.EMBEDDINGS, None, parameters, 0)
 
-    similarities, reason = await _embedding_similarities(session, templates, skills, embedder)
+    # Навыки профиля из других областей не меняют долю общих навыков с шаблонами области,
+    # но для эмбеддинга кандидата они — часть картины.
+    described = list(dict.fromkeys([*skills, *profile_skills]))
+    similarities, reason = await _embedding_similarities(
+        session, templates, described, resume, embedder
+    )
     mode = SelectionMode.EMBEDDINGS
     if similarities is None:
         mode = SelectionMode.SKILLS_JACCARD
@@ -207,6 +216,7 @@ async def _embedding_similarities(
     session: AsyncSession,
     templates: list[Template],
     skills: list[str],
+    resume: str,
     embedder: Embedder | None,
 ) -> tuple[list[float] | None, str | None]:
     """Косинусы эмбеддингов или (None, причина), если сравнивать нечем.
@@ -216,8 +226,8 @@ async def _embedding_similarities(
     """
     if embedder is None:
         return None, "эмбеддер не подключён"
-    if not skills:
-        return None, "у кандидата не указаны навыки"
+    if not skills and not resume.strip():
+        return None, "у кандидата не указаны ни навыки, ни резюме"
 
     rows = await session.execute(
         select(
@@ -247,7 +257,13 @@ async def _embedding_similarities(
     )
     # Навыки кандидата сравниваются с описанием шаблона, поэтому в эмбеддер идут названия
     # навыков, а не коды: "Два указателя" ближе к тексту описания, чем "two-pointers".
-    query = ", ".join(titles.get(code, code) for code in skills)
+    # Резюме добавляет то, чего нет в списке навыков: опыт, предметные области, задачи.
+    parts = []
+    if skills:
+        parts.append("Навыки: " + ", ".join(titles.get(code, code) for code in skills))
+    if resume.strip():
+        parts.append("Резюме: " + resume.strip())
+    query = "\n\n".join(parts)
     try:
         [candidate] = await embedder.embed([query])
         return [cosine_similarity(fresh[t.id], candidate) for t in templates], None

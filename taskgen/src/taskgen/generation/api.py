@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from taskgen.auth import Role, require
 from taskgen.contracts import SessionStatus, TaskKind, TaskStatus
@@ -24,6 +24,7 @@ from taskgen.generation.instance import (
     SandboxUnavailableError,
     TemplateDefectError,
 )
+from taskgen.generation.profile import CandidateProfile, profile_hash
 from taskgen.generation.service import Generator, SessionSpec
 from taskgen.generation.worker import GenerationWorker
 
@@ -83,6 +84,41 @@ class SessionCreate(BaseModel):
     selection_override: SelectionOverride | None = Field(
         default=None, description="Только для роли admin: параметры отбора для этой сессии"
     )
+    profile: CandidateProfile | None = Field(
+        default=None,
+        description="Профиль кандидата. Влияет на отбор шаблонов и тематику легенды, но не на "
+        "сложность. Хранится в сессии, пока генерируются её задания, затем удаляется; "
+        "остаётся только хэш",
+    )
+
+
+class ProfileCheck(BaseModel):
+    """Текущий профиль кандидата или его хэш; ровно одно из двух полей."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    profile: CandidateProfile | None = Field(
+        default=None, description="Текущий профиль; хэш сервис посчитает сам"
+    )
+    profile_hash: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+        description="SHA-256 канонического JSON профиля: ключи по алфавиту, без пробелов, "
+        "UTF-8, все поля профиля со значениями по умолчанию. Надёжнее передать profile",
+    )
+
+    @model_validator(mode="after")
+    def _exactly_one(self) -> ProfileCheck:
+        if (self.profile is None) == (self.profile_hash is None):
+            raise ValueError("Нужно ровно одно поле: profile или profile_hash")
+        return self
+
+
+class ProfileCheckOut(BaseModel):
+    profile_changed: bool = Field(
+        description="Профиль кандидата отличается от того, с которым создана сессия; флаг "
+        "только фиксирует факт и не сбрасывается"
+    )
 
 
 class TaskOut(BaseModel):
@@ -127,6 +163,8 @@ class SessionOut(BaseModel):
     )
     failure: str | None = Field(description="Причина статуса failed")
     assigned_grade: str | None = Field(description="Грейд по итогам оценки; null — до оценки")
+    profile_hash: str | None = Field(description="Хэш профиля, с которым создана сессия")
+    profile_changed: bool = Field(description="Основной бэкенд сообщил о другом профиле")
     created_at: datetime
     tasks: list[TaskOut] = Field(description="Все задания сессии по порядку, с их статусами")
 
@@ -143,6 +181,8 @@ class SessionOut(BaseModel):
             status=SessionStatus(session.status),
             failure=session.failure,
             assigned_grade=result.get("assigned_grade"),
+            profile_hash=session.profile_hash,
+            profile_changed=session.profile_changed,
             created_at=session.created_at,
             tasks=[TaskOut.of(task) for task in view.tasks],
         )
@@ -228,6 +268,7 @@ async def create_session(
         selection_override=body.selection_override.model_dump(exclude_none=True)
         if body.selection_override
         else None,
+        profile=body.profile,
     )
     try:
         session_id = await service.create_session(gen, spec)
@@ -262,6 +303,33 @@ async def get_session(session_id: uuid.UUID, request: Request) -> SessionOut:
         return SessionOut.of(await service.get_session(_generator(request), session_id))
     except service.NotFoundError as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
+
+
+@router.post(
+    "/sessions/{session_id}/profile",
+    response_model=ProfileCheckOut,
+    summary="Сверить профиль кандидата с профилем сессии",
+    description=(
+        "Основной бэкенд передаёт текущий профиль кандидата или его хэш. Если хэш отличается "
+        "от хэша профиля, с которым создана сессия, сессия помечается profile_changed. Это "
+        "только фиксация факта: задания и статус сессии не меняются"
+    ),
+    responses={
+        **_AUTH_ERRORS,
+        404: {"description": "Сессия не найдена"},
+        422: {"description": "Нужно ровно одно поле: profile или profile_hash"},
+    },
+    dependencies=[Depends(require(Role.CLIENT))],
+)
+async def check_profile(
+    session_id: uuid.UUID, body: ProfileCheck, request: Request
+) -> ProfileCheckOut:
+    current = body.profile_hash or profile_hash(body.profile)
+    try:
+        changed = await service.check_profile(_generator(request), session_id, current)
+    except service.NotFoundError as error:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
+    return ProfileCheckOut(profile_changed=changed)
 
 
 @router.get(

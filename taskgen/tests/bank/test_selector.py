@@ -370,6 +370,47 @@ async def test_ranking_keeps_every_candidate_by_probability_for_replacement(db_s
     assert {entry["kind"] for entry in ranking} == {"code"}
 
 
+async def test_candidate_text_combines_skills_profile_skills_and_resume(db_session, area):
+    items = [await put(db_session, area, f"{area}-a", "middle", vector=NEAR)]
+    embedder = await with_embeddings(db_session, items)
+    titles = dict((await db_session.execute(select(Skill.code, Skill.title))).all())
+    resume = "Пять лет пишу сервисы на Python и разбираю графы зависимостей."
+    result = await select_templates(
+        db_session,
+        area=area,
+        grade="middle",
+        skills=["python"],
+        profile_skills=["pytorch", "python", "no-such-skill"],
+        resume=resume,
+        rng=random.Random(0),
+        settings=SelectionSettings(),
+        embedder=embedder,
+    )
+    assert result.selection_mode is SelectionMode.EMBEDDINGS
+    [text] = embedder.calls[-1]
+    assert titles["python"] in text and titles["pytorch"] in text
+    # Код без названия в справочнике идёт в текст как есть, без повторов.
+    assert "no-such-skill" in text
+    assert text.replace(resume, "").count(titles["python"]) == 1
+    assert resume in text
+
+
+async def test_resume_alone_is_enough_for_embeddings(db_session, area):
+    items = [await put(db_session, area, f"{area}-a", "middle", vector=NEAR)]
+    embedder = await with_embeddings(db_session, items)
+    result = await select_templates(
+        db_session,
+        area=area,
+        grade="middle",
+        skills=[],
+        resume="Резюме без списка навыков",
+        rng=random.Random(0),
+        settings=SelectionSettings(),
+        embedder=embedder,
+    )
+    assert result.selection_mode is SelectionMode.EMBEDDINGS
+
+
 async def test_empty_area_gives_empty_selection(db_session, area):
     result = await select_templates(
         db_session,
