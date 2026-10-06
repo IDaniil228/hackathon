@@ -1,0 +1,62 @@
+# Гейт сервиса taskgen: только проверки, которые зависят от одного репозитория.
+# Интеграционные тесты (метка integration) сюда не входят: им нужны Postgres и Piston с
+# пакетами, которые скачиваются из сети, и смоук-тесты с настоящей LLM. Их красный цвет
+# зависел бы от внешних сервисов, а не от изменения в pull request.
+name: taskgen
+
+on:
+  push:
+    branches: [master]
+    paths: ["taskgen/**", "docs/taskgen/**", ".github/workflows/taskgen.yml"]
+  pull_request:
+    paths: ["taskgen/**", "docs/taskgen/**", ".github/workflows/taskgen.yml"]
+  workflow_dispatch:
+  # Автоматизация проверяет ветку вызовом этого же workflow с ref, а не копией его команд.
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: taskgen
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      # Версия uv закреплена здесь; Python и все пакеты, включая ruff, берутся из
+      # taskgen/.python-version и taskgen/uv.lock.
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: "0.12.17"
+          working-directory: taskgen
+      - run: uv sync --locked
+      - run: uv run --locked ruff check .
+      - run: uv run --locked ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: "0.12.17"
+          working-directory: taskgen
+      - run: uv sync --locked
+      - name: docs/taskgen/generated собрана из текущего кода
+        run: uv run --locked pytest -q tests/test_docs_generated.py
+      - name: Тесты без Postgres, Piston и LLM
+        run: uv run --locked pytest -q -m "not integration" --deselect tests/test_docs_generated.py
