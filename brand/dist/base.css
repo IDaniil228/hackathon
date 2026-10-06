@@ -1,0 +1,953 @@
+/*
+ * Базовые стили платформы по брендбуку ФСП. Все цвета, размеры и отступы берутся из
+ * переменных tokens.css; литералы цвета здесь запрещены тестом brand/test_build.py.
+ * Подключение: сначала tokens.css, затем base.css.
+ */
+
+/* Шрифт JetBrains Mono из архива брендбука, лицензия в fonts/OFL.txt */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/JetBrainsMono-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/JetBrainsMono-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/JetBrainsMono-Bold.woff2") format("woff2");
+}
+
+/* ---------- Основа ---------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--fsp-color-bg);
+  color: var(--fsp-color-text);
+  font-family: var(--fsp-font-family-text);
+  font-size: var(--fsp-text-md-size);
+  line-height: var(--fsp-text-md-leading);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background-color: var(--fsp-color-selection);
+  color: var(--fsp-color-text);
+}
+
+img,
+svg {
+  max-width: 100%;
+}
+
+/* ---------- Типографика ---------- */
+
+h1,
+h2,
+h3,
+h4,
+.fsp-display {
+  margin: 0 0 var(--fsp-space-4);
+  font-family: var(--fsp-font-family-brand);
+  font-weight: var(--fsp-font-weight-medium);
+  color: var(--fsp-color-text);
+}
+
+.fsp-display {
+  font-size: var(--fsp-text-4xl-size);
+  line-height: var(--fsp-text-4xl-leading);
+  font-weight: var(--fsp-font-weight-regular);
+}
+
+h1 {
+  font-size: var(--fsp-text-3xl-size);
+  line-height: var(--fsp-text-3xl-leading);
+}
+
+h2 {
+  font-size: var(--fsp-text-2xl-size);
+  line-height: var(--fsp-text-2xl-leading);
+}
+
+h3 {
+  font-size: var(--fsp-text-xl-size);
+  line-height: var(--fsp-text-xl-leading);
+}
+
+h4 {
+  font-size: var(--fsp-text-lg-size);
+  line-height: var(--fsp-text-lg-leading);
+  font-weight: var(--fsp-font-weight-bold);
+}
+
+p {
+  margin: 0 0 var(--fsp-space-4);
+  max-width: 72ch;
+}
+
+small,
+.fsp-caption {
+  font-size: var(--fsp-text-sm-size);
+  line-height: var(--fsp-text-sm-leading);
+}
+
+.fsp-overline {
+  display: block;
+  margin-bottom: var(--fsp-space-2);
+  font-size: var(--fsp-text-xs-size);
+  line-height: var(--fsp-text-xs-leading);
+  font-weight: var(--fsp-font-weight-medium);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fsp-color-text-muted);
+}
+
+.fsp-muted {
+  color: var(--fsp-color-text-muted);
+}
+
+/* Крупные цифры: зарплатная вилка, счётчики */
+.fsp-figure {
+  font-family: var(--fsp-font-family-brand);
+  font-size: var(--fsp-text-xl-size);
+  line-height: var(--fsp-text-xl-leading);
+  font-weight: var(--fsp-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--fsp-color-text);
+}
+
+code,
+kbd {
+  font-family: var(--fsp-font-family-brand);
+  font-size: 0.9em;
+  padding: 0 var(--fsp-space-1);
+  border-radius: var(--fsp-radius-sm);
+  background-color: var(--fsp-color-surface-muted);
+  color: var(--fsp-color-text);
+}
+
+/* Разделитель в духе фирменных "линий графики": тонкая линия с точками на концах */
+.fsp-rule {
+  position: relative;
+  height: 1px;
+  margin: var(--fsp-space-6) var(--fsp-space-1);
+  border: 0;
+  background-color: var(--fsp-color-border-strong);
+  overflow: visible;
+}
+
+.fsp-rule::before,
+.fsp-rule::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--fsp-radius-pill);
+  background-color: var(--fsp-color-accent);
+}
+
+.fsp-rule::before {
+  left: -3px;
+}
+
+.fsp-rule::after {
+  right: -3px;
+  background-color: var(--fsp-color-primary);
+}
+
+/* ---------- Ссылки и фокус ---------- */
+
+a {
+  color: var(--fsp-color-link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  transition: color var(--fsp-duration-fast) var(--fsp-easing-standard);
+}
+
+a:hover {
+  color: var(--fsp-color-link-hover);
+}
+
+:focus-visible {
+  outline: var(--fsp-focus-width) solid var(--fsp-color-focus);
+  outline-offset: var(--fsp-focus-offset);
+}
+
+.fsp-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Кнопки ---------- */
+
+.fsp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--fsp-space-2);
+  min-height: var(--fsp-control-md);
+  padding: 0 var(--fsp-space-5);
+  border: 1px solid transparent;
+  border-radius: var(--fsp-radius-sm);
+  font-family: var(--fsp-font-family-brand);
+  font-size: var(--fsp-text-sm-size);
+  line-height: var(--fsp-text-sm-leading);
+  font-weight: var(--fsp-font-weight-medium);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--fsp-duration-fast) var(--fsp-easing-standard),
+    border-color var(--fsp-duration-fast) var(--fsp-easing-standard),
+    color var(--fsp-duration-fast) var(--fsp-easing-standard);
+}
+
+.fsp-btn--sm {
+  min-height: var(--fsp-control-sm);
+  padding: 0 var(--fsp-space-3);
+  font-size: var(--fsp-text-xs-size);
+}
+
+.fsp-btn--lg {
+  min-height: var(--fsp-control-lg);
+  padding: 0 var(--fsp-space-6);
+  font-size: var(--fsp-text-md-size);
+}
+
+.fsp-btn--block {
+  width: 100%;
+}
+
+.fsp-btn--primary {
+  background-color: var(--fsp-color-primary);
+  color: var(--fsp-color-text-on-primary);
+}
+
+.fsp-btn--primary:hover {
+  background-color: var(--fsp-color-primary-hover);
+  color: var(--fsp-color-text-on-primary);
+}
+
+.fsp-btn--primary:active {
+  background-color: var(--fsp-color-primary-active);
+  color: var(--fsp-color-text-on-primary);
+}
+
+.fsp-btn--secondary {
+  background-color: var(--fsp-color-surface);
+  border-color: var(--fsp-color-border-strong);
+  color: var(--fsp-color-text);
+}
+
+.fsp-btn--secondary:hover {
+  background-color: var(--fsp-color-surface-hover);
+  color: var(--fsp-color-text);
+}
+
+.fsp-btn--secondary:active {
+  background-color: var(--fsp-color-neutral-soft);
+  color: var(--fsp-color-text);
+}
+
+.fsp-btn--ghost {
+  background-color: transparent;
+  color: var(--fsp-color-link);
+}
+
+.fsp-btn--ghost:hover {
+  background-color: var(--fsp-color-surface-hover);
+  color: var(--fsp-color-link);
+}
+
+.fsp-btn--ghost:active {
+  background-color: var(--fsp-color-primary-soft);
+  color: var(--fsp-color-link);
+}
+
+.fsp-btn--danger {
+  background-color: var(--fsp-color-danger);
+  color: var(--fsp-color-text-on-primary);
+}
+
+.fsp-btn--danger:hover {
+  background-color: var(--fsp-color-danger-hover);
+  color: var(--fsp-color-text-on-primary);
+}
+
+.fsp-btn--danger:active {
+  background-color: var(--fsp-color-danger-hover);
+  color: var(--fsp-color-text-on-primary);
+}
+
+/* Неактивное состояние: WCAG не требует контраста, но форма и подпись остаются различимы */
+.fsp-btn:disabled,
+.fsp-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Ссылка-кнопка не умеет disabled: клик гасится здесь, а не в разметке */
+.fsp-btn[aria-disabled="true"] {
+  pointer-events: none;
+}
+
+/* ---------- Формы ---------- */
+
+.fsp-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fsp-space-1);
+  margin-bottom: var(--fsp-space-4);
+}
+
+.fsp-label {
+  font-size: var(--fsp-text-sm-size);
+  line-height: var(--fsp-text-sm-leading);
+  font-weight: var(--fsp-font-weight-medium);
+  color: var(--fsp-color-text);
+}
+
+.fsp-hint {
+  font-size: var(--fsp-text-xs-size);
+  line-height: var(--fsp-text-xs-leading);
+  color: var(--fsp-color-text-muted);
+}
+
+.fsp-error-text {
+  font-size: var(--fsp-text-xs-size);
+  line-height: var(--fsp-text-xs-leading);
+  color: var(--fsp-color-danger-text);
+}
+
+.fsp-input,
+.fsp-select,
+.fsp-textarea {
+  width: 100%;
+  min-height: var(--fsp-control-md);
+  padding: var(--fsp-space-2) var(--fsp-space-3);
+  border: 1px solid var(--fsp-color-border-strong);
+  border-radius: var(--fsp-radius-sm);
+  background-color: var(--fsp-color-surface);
+  color: var(--fsp-color-text);
+  font: inherit;
+  font-size: var(--fsp-text-sm-size);
+  transition: border-color var(--fsp-duration-fast) var(--fsp-easing-standard);
+}
+
+.fsp-textarea {
+  min-height: calc(var(--fsp-control-lg) * 2);
+  resize: vertical;
+}
+
+.fsp-input::placeholder,
+.fsp-textarea::placeholder {
+  color: var(--fsp-color-text-muted);
+  opacity: 1;
+}
+
+.fsp-input:hover,
+.fsp-select:hover,
+.fsp-textarea:hover {
+  border-color: var(--fsp-color-text-muted);
+}
+
+.fsp-input:focus-visible,
+.fsp-select:focus-visible,
+.fsp-textarea:focus-visible {
+  border-color: var(--fsp-color-focus);
+  outline-offset: 0;
+}
+
+.fsp-input[aria-invalid="true"],
+.fsp-select[aria-invalid="true"],
+.fsp-textarea[aria-invalid="true"] {
+  border-color: var(--fsp-color-danger-text);
+}
+
+.fsp-input:disabled,
+.fsp-select:disabled,
+.fsp-textarea:disabled {
+  background-color: var(--fsp-color-surface-muted);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Стрелка списка нарисована рамкой текущего цвета, без картинки */
+.fsp-select-wrap {
+  position: relative;
+}
+
+.fsp-select {
+  appearance: none;
+  padding-right: var(--fsp-space-10);
+  cursor: pointer;
+}
+
+.fsp-select-wrap::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: var(--fsp-space-4);
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--fsp-color-text-muted);
+  border-bottom: 2px solid var(--fsp-color-text-muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+
+.fsp-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fsp-space-2);
+  min-height: var(--fsp-control-sm);
+  font-size: var(--fsp-text-sm-size);
+  color: var(--fsp-color-text);
+  cursor: pointer;
+}
+
+.fsp-choice input[type="checkbox"]:not(.fsp-switch),
+.fsp-choice input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--fsp-color-control);
+  cursor: pointer;
+}
+
+/* Переключатель: <input type="checkbox" role="switch" class="fsp-switch"> */
+.fsp-switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 22px;
+  margin: 0;
+  border: 1px solid var(--fsp-color-border-strong);
+  border-radius: var(--fsp-radius-pill);
+  background-color: var(--fsp-color-surface-muted);
+  cursor: pointer;
+  transition: background-color var(--fsp-duration-base) var(--fsp-easing-standard);
+}
+
+.fsp-switch::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--fsp-radius-pill);
+  background-color: var(--fsp-color-text-muted);
+  transition: transform var(--fsp-duration-base) var(--fsp-easing-standard);
+}
+
+.fsp-switch:checked {
+  border-color: var(--fsp-color-control);
+  background-color: var(--fsp-color-control);
+}
+
+.fsp-switch:checked::before {
+  background-color: var(--fsp-color-control-knob);
+  transform: translateX(18px);
+}
+
+.fsp-switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.fsp-fieldset {
+  margin: 0 0 var(--fsp-space-4);
+  padding: 0;
+  border: 0;
+}
+
+.fsp-fieldset > legend {
+  margin-bottom: var(--fsp-space-2);
+  padding: 0;
+  font-size: var(--fsp-text-sm-size);
+  font-weight: var(--fsp-font-weight-medium);
+}
+
+/* ---------- Карточки ---------- */
+
+.fsp-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fsp-space-4);
+  padding: var(--fsp-space-6);
+  border: 1px solid var(--fsp-color-border);
+  border-radius: var(--fsp-radius-md);
+  background-color: var(--fsp-color-surface);
+  color: var(--fsp-color-text);
+  box-shadow: var(--fsp-shadow-sm);
+}
+
+.fsp-card--interactive {
+  transition:
+    box-shadow var(--fsp-duration-base) var(--fsp-easing-standard),
+    border-color var(--fsp-duration-base) var(--fsp-easing-standard);
+}
+
+.fsp-card--interactive:hover {
+  border-color: var(--fsp-color-border-strong);
+  box-shadow: var(--fsp-shadow-md);
+}
+
+/* Акцентная карточка: синяя полоса слева, как у "лучей" логотипа */
+.fsp-card--accent {
+  border-left: 4px solid var(--fsp-color-primary);
+}
+
+.fsp-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--fsp-space-3);
+}
+
+.fsp-card__title {
+  margin: 0;
+  font-size: var(--fsp-text-lg-size);
+  line-height: var(--fsp-text-lg-leading);
+}
+
+.fsp-card__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fsp-space-2);
+  padding-top: var(--fsp-space-4);
+  border-top: 1px solid var(--fsp-color-border);
+}
+
+/* ---------- Бейджи и метки ---------- */
+
+/*
+ * Статусы приглашений и откликов совпадают с enum hire.invitation_status
+ * в docs/Структура БД.md. Цвет дублируется точкой и подписью, а не заменяет её.
+ */
+.fsp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fsp-space-2);
+  padding: 2px var(--fsp-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--fsp-radius-pill);
+  font-family: var(--fsp-font-family-brand);
+  font-size: var(--fsp-text-xs-size);
+  line-height: var(--fsp-text-xs-leading);
+  font-weight: var(--fsp-font-weight-medium);
+  white-space: nowrap;
+}
+
+.fsp-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: var(--fsp-radius-pill);
+  background-color: currentColor;
+}
+
+.fsp-badge--sent {
+  background-color: var(--fsp-color-primary-soft);
+  color: var(--fsp-color-link);
+}
+
+.fsp-badge--viewed {
+  background-color: var(--fsp-color-neutral-soft);
+  color: var(--fsp-color-text);
+}
+
+.fsp-badge--accepted {
+  background-color: var(--fsp-color-primary);
+  color: var(--fsp-color-text-on-primary);
+}
+
+.fsp-badge--declined {
+  background-color: var(--fsp-color-danger-soft);
+  color: var(--fsp-color-danger-text);
+}
+
+.fsp-badge--withdrawn,
+.fsp-badge--expired {
+  background-color: var(--fsp-color-surface-muted);
+  color: var(--fsp-color-text-muted);
+}
+
+.fsp-badge--expired {
+  border-style: dashed;
+  border-color: var(--fsp-color-border-strong);
+}
+
+/* Метка навыка или стека */
+.fsp-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--fsp-space-2);
+  border: 1px solid var(--fsp-color-border);
+  border-radius: var(--fsp-radius-sm);
+  background-color: var(--fsp-color-surface-muted);
+  color: var(--fsp-color-text);
+  font-family: var(--fsp-font-family-brand);
+  font-size: var(--fsp-text-xs-size);
+  line-height: var(--fsp-text-xs-leading);
+}
+
+.fsp-tag--verified {
+  border-color: var(--fsp-color-primary);
+  background-color: var(--fsp-color-primary-soft);
+  color: var(--fsp-color-link);
+}
+
+.fsp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fsp-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ---------- Таблицы ---------- */
+
+.fsp-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--fsp-color-border);
+  border-radius: var(--fsp-radius-md);
+  background-color: var(--fsp-color-surface);
+}
+
+.fsp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fsp-text-sm-size);
+  line-height: var(--fsp-text-sm-leading);
+}
+
+.fsp-table th {
+  padding: var(--fsp-space-3) var(--fsp-space-4);
+  background-color: var(--fsp-color-surface-muted);
+  color: var(--fsp-color-text-muted);
+  font-size: var(--fsp-text-xs-size);
+  font-weight: var(--fsp-font-weight-medium);
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.fsp-table td {
+  padding: var(--fsp-space-3) var(--fsp-space-4);
+  border-top: 1px solid var(--fsp-color-border);
+  background-color: var(--fsp-color-surface);
+  color: var(--fsp-color-text);
+  vertical-align: middle;
+}
+
+.fsp-table tbody tr:hover td {
+  background-color: var(--fsp-color-surface-hover);
+  color: var(--fsp-color-text);
+}
+
+.fsp-table .fsp-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- Каркас кабинета и навигация ---------- */
+
+.fsp-container {
+  width: 100%;
+  max-width: var(--fsp-layout-container);
+  margin: 0 auto;
+  padding: 0 var(--fsp-space-4);
+}
+
+.fsp-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fsp-space-4);
+  padding: var(--fsp-space-3) var(--fsp-space-6);
+  border-bottom: 1px solid var(--fsp-color-border);
+  background-color: var(--fsp-color-surface);
+  color: var(--fsp-color-text);
+}
+
+.fsp-app {
+  display: grid;
+  grid-template-columns: var(--fsp-layout-sidebar) minmax(0, 1fr);
+  gap: var(--fsp-space-6);
+  align-items: start;
+}
+
+.fsp-sidebar {
+  position: sticky;
+  top: var(--fsp-space-4);
+  padding: var(--fsp-space-3);
+  border: 1px solid var(--fsp-color-border);
+  border-radius: var(--fsp-radius-md);
+  background-color: var(--fsp-color-surface);
+  color: var(--fsp-color-text);
+}
+
+.fsp-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fsp-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fsp-nav__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fsp-space-2);
+  min-height: var(--fsp-control-md);
+  padding: 0 var(--fsp-space-3);
+  border-radius: var(--fsp-radius-sm);
+  color: var(--fsp-color-text);
+  font-family: var(--fsp-font-family-brand);
+  font-size: var(--fsp-text-sm-size);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.fsp-nav__link:hover {
+  background-color: var(--fsp-color-surface-hover);
+  color: var(--fsp-color-text);
+}
+
+.fsp-nav__link[aria-current="page"] {
+  background-color: var(--fsp-color-primary-soft);
+  color: var(--fsp-color-link);
+  font-weight: var(--fsp-font-weight-medium);
+}
+
+/* Счётчик новых записей в пункте меню */
+.fsp-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--fsp-space-1);
+  border-radius: var(--fsp-radius-pill);
+  background-color: var(--fsp-color-primary);
+  color: var(--fsp-color-text-on-primary);
+  font-size: var(--fsp-text-xs-size);
+  font-weight: var(--fsp-font-weight-bold);
+}
+
+/* Значение совпадает с breakpoint.md в tokens.json; test_build.py следит за этим */
+@media (width < 768px) {
+  .fsp-app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fsp-sidebar {
+    position: static;
+    padding: var(--fsp-space-2);
+  }
+
+  /* Пункты переносятся, а не прокручиваются: текущий раздел всегда виден */
+  .fsp-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .fsp-nav__link {
+    min-height: var(--fsp-control-sm);
+  }
+
+  .fsp-topbar {
+    padding: var(--fsp-space-3) var(--fsp-space-4);
+  }
+
+  .fsp-card {
+    padding: var(--fsp-space-4);
+  }
+}
+
+/* ---------- Уведомления ---------- */
+
+.fsp-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--fsp-space-1) var(--fsp-space-3);
+  padding: var(--fsp-space-4);
+  border: 1px solid transparent;
+  border-left-width: 4px;
+  border-radius: var(--fsp-radius-sm);
+  font-size: var(--fsp-text-sm-size);
+  line-height: var(--fsp-text-sm-leading);
+}
+
+.fsp-alert__icon {
+  grid-row: span 2;
+  font-family: var(--fsp-font-family-brand);
+  font-weight: var(--fsp-font-weight-bold);
+}
+
+.fsp-alert__title {
+  margin: 0;
+  font-weight: var(--fsp-font-weight-bold);
+}
+
+.fsp-alert__body {
+  margin: 0;
+}
+
+.fsp-alert--info,
+.fsp-alert--success {
+  border-color: var(--fsp-color-primary);
+  background-color: var(--fsp-color-primary-soft);
+  color: var(--fsp-color-text);
+}
+
+.fsp-alert--danger {
+  border-color: var(--fsp-color-danger);
+  background-color: var(--fsp-color-danger-soft);
+  color: var(--fsp-color-text);
+}
+
+.fsp-alert--neutral {
+  border-color: var(--fsp-color-border-strong);
+  background-color: var(--fsp-color-surface-muted);
+  color: var(--fsp-color-text);
+}
+
+.fsp-alert--danger .fsp-alert__title {
+  color: var(--fsp-color-danger-text);
+}
+
+/* Всплывающее уведомление: та же разметка .fsp-alert внутри .fsp-toasts */
+.fsp-toasts {
+  position: fixed;
+  right: var(--fsp-space-4);
+  bottom: var(--fsp-space-4);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fsp-space-2);
+  width: min(360px, calc(100% - var(--fsp-space-8)));
+}
+
+.fsp-toasts .fsp-alert {
+  box-shadow: var(--fsp-shadow-lg);
+}
+
+/* ---------- Логотип ---------- */
+
+/*
+ * Охранное поле вокруг логотипа считается от его высоты. Высоту задаёт --fsp-logo-height
+ * на элементе .fsp-logo; по умолчанию это минимум для полной версии.
+ */
+.fsp-logo {
+  --fsp-logo-height: var(--fsp-logo-min-height-full);
+  display: inline-block;
+  padding: calc(var(--fsp-logo-height) * var(--fsp-logo-clearspace));
+  line-height: 0;
+}
+
+.fsp-logo--short {
+  --fsp-logo-height: var(--fsp-logo-min-height-short);
+}
+
+.fsp-logo img {
+  display: block;
+  height: var(--fsp-logo-height);
+  width: auto;
+  max-width: none;
+}
+
+/* Версия логотипа под активную тему: светлый фон или тёмный */
+.fsp-only-dark {
+  display: none !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .fsp-only-dark {
+    display: revert !important;
+  }
+
+  :root:not([data-theme="light"]) .fsp-only-light {
+    display: none !important;
+  }
+}
+
+:root[data-theme="dark"] .fsp-only-dark {
+  display: revert !important;
+}
+
+:root[data-theme="dark"] .fsp-only-light {
+  display: none !important;
+}
+
+/* ---------- Раскладка ---------- */
+
+.fsp-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fsp-space-4);
+}
+
+.fsp-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fsp-space-3);
+}
+
+/* Сетка карточек без медиазапросов: колонки сами переносятся по ширине */
+.fsp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: var(--fsp-space-4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+  }
+}
