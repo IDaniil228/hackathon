@@ -229,9 +229,12 @@ def test_broken_reference_without_replacement_is_500_and_names_template(world):
 
 
 def test_failed_template_is_replaced_by_next_of_same_grade(world):
-    world.add_templates(world.broken(), world.code("good"), world.code("mid", grade="middle"))
+    # Шаблон middle при равных вероятностях стоит в ранжировании первым (по имени): замена
+    # без проверки грейда взяла бы его.
+    world.add_templates(world.broken(), world.code("good"), world.code("aaa", grade="middle"))
     bad, good = f"{world.prefix}-bad", f"{world.prefix}-good"
-    override = {"selection_override": {"tasks_per_test": 1}}
+    # Температура 1 уравнивает вероятности: порядок замен решают только грейд и имя.
+    override = {"selection_override": {"tasks_per_test": 1, "temperature": 1.0}}
     # Какой шаблон выпадет первым, решает seed; ищется seed, при котором выпал сломанный.
     for seed in range(40):
         response = world.create(seed=seed, **override)
