@@ -96,11 +96,13 @@ class GenerationSettings(BaseModel):
     public_examples: int = Field(default=2, ge=0)
     # Чем проверять ситуацию эссе на факты и пересказ запрещённых фраз: llm, embeddings или
     # both (generation/essay.py). Без эмбеддера режимы с эмбеддингами проверяет LLM.
+    # LLM по умолчанию: на бенчмарке scripts/essay_check_bench.py эмбеддинги принимают
+    # отрицание факта за сам факт и не отличают запрещённую фразу от темы ситуации.
     essay_check_method: EssayCheckMethod = "llm"
-    # Пороги косинусного сходства с предложением ситуации для bge-m3; другой модели эмбеддингов
-    # нужны свои пороги.
+    # Пороги косинусного сходства с предложением ситуации для bge-m3, подобранные тем же
+    # бенчмарком по F1; другой модели эмбеддингов нужны свои пороги.
     essay_fact_threshold: float = Field(default=0.6, ge=-1.0, le=1.0)
-    essay_forbidden_threshold: float = Field(default=0.6, ge=-1.0, le=1.0)
+    essay_forbidden_threshold: float = Field(default=0.425, ge=-1.0, le=1.0)
     # Полуширина серой зоны вокруг порогов в режиме both: такие факты и фразы решает LLM.
     essay_grey_zone: float = Field(default=0.05, ge=0.0, le=1.0)
 
