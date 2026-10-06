@@ -42,7 +42,7 @@ class PistonRunner:
             [{"name": name, "content": content} for name, content in request.files.items()],
             stdin=request.stdin,
             args=request.args,
-            limits=request.limits,
+            limits=spec.effective_limits(request.limits),
         )
         return stage_result(response["run"])
 
@@ -51,19 +51,21 @@ class PistonRunner:
         spec = self._registry.get(request.runtime)
         files, args = harness_files(spec.harness, request.entrypoint, request.solution)
         nonce = secrets.token_hex(16)
+        # Эвристика причины обрыва сравнивает пик памяти с действующим лимитом, а не запрошенным.
+        limits = spec.effective_limits(request.limits)
         response = await self._execute(
             spec,
             files,
             stdin=protocol.build_stdin(nonce, request.cases),
             args=args,
-            limits=request.limits,
+            limits=limits,
         )
         compiled = response.get("compile")
         if compiled is not None and compiled.get("code") != 0:
             return protocol.failed_report(request.cases, _compile_error(compiled))
         run = response["run"]
         output = protocol.parse_output(run.get("stdout") or "", nonce)
-        return protocol.build_report(request.cases, output, run, request.limits)
+        return protocol.build_report(request.cases, output, run, limits)
 
     async def aclose(self) -> None:
         await self._http.aclose()

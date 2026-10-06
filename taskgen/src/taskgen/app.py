@@ -14,6 +14,7 @@ from taskgen.db import make_sessionmaker
 from taskgen.evaluation.api import router as evaluation_router
 from taskgen.generation.api import router as generation_router
 from taskgen.llm import OpenAICompatibleClient
+from taskgen.sandbox.piston import PistonRunner
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -23,9 +24,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.settings = settings
         app.state.sessionmaker = make_sessionmaker(settings.database_url)
-        app.state.llm = OpenAICompatibleClient(settings.llm)
+        llm = OpenAICompatibleClient(settings.llm)
+        sandbox = PistonRunner(settings.sandbox)
+        app.state.llm = llm
+        app.state.sandbox = sandbox
         yield
-        await app.state.llm.aclose()
+        # Закрываются созданные здесь клиенты: тесты и встраивание подменяют state своими.
+        await sandbox.aclose()
+        await llm.aclose()
 
     app = FastAPI(
         title="taskgen",

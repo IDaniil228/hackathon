@@ -43,6 +43,27 @@ async def test_request_maps_runtime_files_and_limits():
     assert body["run_memory_limit"] == 128 * 1024 * 1024
 
 
+async def test_runtime_minimum_limits_raise_small_requests_only():
+    sent: list[dict] = []
+    runner = runner_answering(ok(stage()), sent)
+    small = RunLimits(timeout_ms=1000, memory_bytes=64 * 1024 * 1024)
+    large = RunLimits(timeout_ms=50_000, memory_bytes=4 * 1024 * 1024 * 1024)
+
+    await runner.run(RunRequest(runtime="python-ml", files={"m.py": ""}, limits=small))
+    await runner.run(RunRequest(runtime="python-ml", files={"m.py": ""}, limits=large))
+    await runner.run(RunRequest(runtime="python", files={"m.py": ""}, limits=small))
+
+    ml_floor, ml_large, plain = sent
+    # Один импорт torch не помещается в лимиты по умолчанию, поэтому у окружения есть пол.
+    assert ml_floor["run_memory_limit"] > small.memory_bytes
+    assert ml_floor["run_timeout"] > small.timeout_ms
+    assert ml_floor["run_cpu_time"] == ml_floor["run_timeout"]
+    assert ml_large["run_memory_limit"] == large.memory_bytes
+    assert ml_large["run_timeout"] == large.timeout_ms
+    assert plain["run_memory_limit"] == small.memory_bytes
+    assert plain["run_timeout"] == small.timeout_ms
+
+
 async def test_compiled_runtime_limits_compiler_memory():
     sent: list[dict] = []
     runner = runner_answering(ok(stage(), compile_stage=stage()), sent)

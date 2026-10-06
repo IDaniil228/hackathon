@@ -14,6 +14,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ValidationError
 
+from taskgen.contracts import RunLimits
 from taskgen.sandbox.errors import SandboxError
 
 
@@ -26,10 +27,20 @@ class RuntimeSpec(BaseModel):
     package: str | None = None
     # official ставится из репозитория Piston, local собирается из taskgen/sandbox/packages.
     source: Literal["official", "local"] = "official"
+    # Пол лимитов окружения: тяжёлый рантайм не запускается в лимитах по умолчанию.
+    min_timeout_ms: int | None = None
+    min_memory_bytes: int | None = None
 
     @property
     def package_name(self) -> str:
         return self.package or self.language
+
+    def effective_limits(self, limits: RunLimits) -> RunLimits:
+        """Запрошенные лимиты, поднятые до пола окружения; бо́льшие запросы не меняются."""
+        return RunLimits(
+            timeout_ms=max(limits.timeout_ms, self.min_timeout_ms or 0),
+            memory_bytes=max(limits.memory_bytes, self.min_memory_bytes or 0),
+        )
 
 
 class RuntimeRegistry:

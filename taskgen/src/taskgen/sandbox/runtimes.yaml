@@ -13,6 +13,10 @@ python-ml:
   harness: python
   # У Piston нет такого пакета, он собирается из taskgen/sandbox/packages/python-ml.
   source: local
+  # Импорт torch занимает около 200 МБ. Обучение маленькой сети (2000 примеров, 200 шагов)
+  # занимает около 280 МБ и 2,7 с и не помещается в лимиты по умолчанию; пол взят с запасом.
+  min_timeout_ms: 10000
+  min_memory_bytes: 536870912
 
 cpp:
   language: c++
