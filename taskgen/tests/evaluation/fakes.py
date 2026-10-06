@@ -41,6 +41,9 @@ class FakeLLM:
         )
         return self._responder(messages, json_schema)
 
+    async def aclose(self) -> None:
+        """Приложение закрывает клиента LLM при остановке."""
+
 
 def http_error(status: int) -> httpx.HTTPStatusError:
     request = httpx.Request("POST", "http://llm/chat/completions")
