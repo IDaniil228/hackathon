@@ -25,7 +25,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from taskgen.bank.parser import FENCE, closes_fence, find_phrases, unclosed_fence
+from taskgen.bank.parser import FENCE, closes_fence, find_phrases
 from taskgen.bank.selection import cosine_similarity
 from taskgen.contracts import (
     ChatMessage,
@@ -39,6 +39,7 @@ from taskgen.contracts import (
 from taskgen.evaluation.jsonout import EmptyReplyError, StructuredOutputError, complete_structured
 from taskgen.evaluation.judge import quote_in_answer
 from taskgen.generation.params import fill_placeholders
+from taskgen.generation.textcheck import text_problems
 from taskgen.markers import markers, new_nonce
 
 logger = logging.getLogger(__name__)
@@ -457,8 +458,8 @@ async def check_essay_scenario(
     if literal:
         listed = ", ".join(f"«{phrase}»" for phrase in literal)
         reasons.append(f"в заголовке или ситуации есть запрещённые фразы: {listed}")
-    if unclosed_fence(scenario.situation):
-        reasons.append("в ситуации не закрыт блок кода, и вопросы попадут внутрь него")
+    # Вопросы автора идут после ситуации: незакрытый блок кода спрятал бы их внутри кода.
+    reasons.extend(text_problems(f"{scenario.title}\n\n{scenario.situation}"))
 
     facts = filled_facts(spec, params)
     phrases = [phrase for phrase in spec.forbidden if phrase not in literal]

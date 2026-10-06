@@ -257,7 +257,7 @@ async def test_cut_off_legend_is_rewritten():
     instance = await generate_instance(code_spec(), 3, deps(llm, LocalSandbox()))
     assert len(llm.calls) == 2
     assert instance.statement == CLEAN
-    assert "оборвано" in prompt_of(llm.calls[1])
+    assert "оборвался" in prompt_of(llm.calls[1])
 
 
 async def test_legend_that_never_passes_checks_is_model_error():

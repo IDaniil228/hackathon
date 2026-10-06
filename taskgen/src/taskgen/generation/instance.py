@@ -17,7 +17,6 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field
 
-from taskgen.bank.parser import unclosed_fence
 from taskgen.config import GenerationSettings
 from taskgen.contracts import (
     ChatMessage,
@@ -66,6 +65,7 @@ from taskgen.generation.solver import (
     SolverVerdict,
     solve_code,
 )
+from taskgen.generation.textcheck import text_problems
 from taskgen.markers import markers, new_nonce
 from taskgen.sandbox.environment import describe_all, describe_runtime
 from taskgen.sandbox.errors import SandboxError
@@ -433,9 +433,7 @@ async def _code(
             return "условие содержит данные скрытых тестов; приводи только данные из примеров"
         if defines_entrypoint(legend.statement, entrypoint):
             return "условие содержит код решения; опиши задачу словами, без реализации функции"
-        if unclosed_fence(legend.statement):
-            return "условие оборвано посреди блока кода; допиши его целиком и закрой блок"
-        return None
+        return "; ".join(text_problems(f"{legend.title}\n\n{legend.statement}")) or None
 
     solver = deps.solver()
     solve = None
