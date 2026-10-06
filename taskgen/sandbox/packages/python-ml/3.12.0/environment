@@ -1,0 +1,6 @@
+export PATH=$PWD/bin:$PATH
+# Piston ограничивает число процессов, а потоки считаются вместе с ними. Без этих переменных
+# OpenBLAS и OpenMP заводят по потоку на ядро хоста и на многоядерной машине упираются в лимит.
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
