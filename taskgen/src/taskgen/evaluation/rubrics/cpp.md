@@ -50,7 +50,7 @@
 
 ## `clang_tidy.naming`
 
-Число нарушений соглашений об именах по проверке readability-identifier-naming clang-tidy: классы в CamelCase, функции и переменные в lower_case
+Число нарушений соглашений об именах по проверке readability-identifier-naming clang-tidy: классы и структуры в CamelCase, переменные и параметры в lower_case. Имена функций не проверяются: в C++ равно приняты lower_case и camelBack
 
 - хорошо: 0
 - плохо: 5
