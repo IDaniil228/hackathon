@@ -12,7 +12,6 @@ import random
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
 
 import pytest
 import yaml
@@ -22,9 +21,7 @@ from taskgen.bank.importer import import_documents, read_directory
 from taskgen.bank.parser import parse_template
 from taskgen.config import SandboxSettings
 from taskgen.contracts import (
-    ParamSpec,
     RunLimits,
-    RunRequest,
     TaskKind,
     TemplateSpec,
     TestCase,
@@ -32,6 +29,8 @@ from taskgen.contracts import (
     TestRunRequest,
 )
 from taskgen.db import Area, AreaSkill, Grade
+from taskgen.generation.harness import GeneratorError, generator_request, parse_generator_output
+from taskgen.generation.params import draw_params
 from taskgen.sandbox.piston import PistonRunner
 from tests.seed.mutants import MUTANTS
 
@@ -50,18 +49,6 @@ MAX_INPUT_BYTES = 64 * 1024
 SANDBOX = SandboxSettings()
 LIMITS = RunLimits(timeout_ms=SANDBOX.run_timeout_ms, memory_bytes=SANDBOX.run_memory_limit_bytes)
 
-GENERATOR_HARNESS = """\
-import json
-import random
-import sys
-
-payload = json.loads(sys.stdin.read())
-namespace = {"__name__": "taskgen_generator"}
-exec(compile(payload["source"], "generator.py", "exec"), namespace)
-cases = namespace["generate"](payload["params"], random.Random(payload["seed"]))
-sys.stdout.write(json.dumps(cases, ensure_ascii=False, allow_nan=False))
-"""
-
 
 def _source(path: Path) -> str:
     return path.relative_to(SEED_DIR).as_posix()
@@ -74,21 +61,6 @@ def _spec(path: Path) -> TemplateSpec:
 CODE_PATHS = [p for p in PATHS if _spec(p).kind is TaskKind.CODE]
 
 
-def draw_params(specs: dict[str, ParamSpec], rng: random.Random) -> dict[str, Any]:
-    """Значения по тем же правилам, что у генерации экземпляра: имена по алфавиту, int из
-    отрезка [min, max], float равномерно, choice — один из вариантов."""
-    values: dict[str, Any] = {}
-    for name in sorted(specs):
-        spec = specs[name]
-        if spec.type == "int":
-            values[name] = rng.randint(int(spec.min), int(spec.max))
-        elif spec.type == "float":
-            values[name] = rng.uniform(spec.min, spec.max)
-        else:
-            values[name] = rng.choice(spec.choices)
-    return values
-
-
 @pytest.fixture
 async def piston():
     runner = PistonRunner(SANDBOX)
@@ -97,27 +69,22 @@ async def piston():
 
 
 async def generate_cases(piston: PistonRunner, spec: TemplateSpec, seed: int) -> list[TestCase]:
+    # Параметры и обвязка — те же функции, что у генерации экземпляра: шлюз проверяет
+    # шаблон ровно так, как его исполнит сервис.
     params = draw_params(spec.params, random.Random(seed))
-    payload = {"source": spec.test_generator, "params": params, "seed": seed}
-    result = await piston.run(
-        RunRequest(
-            runtime="python",
-            files={"main.py": GENERATOR_HARNESS},
-            stdin=json.dumps(payload, ensure_ascii=False),
-            limits=LIMITS,
-        )
-    )
-    assert result.exit_code == 0 and not result.timed_out, (params, result.stderr[-2000:])
-    raw = json.loads(result.stdout)
-    assert isinstance(raw, list) and len(raw) >= MIN_CASES, (params, raw)
-    for item in raw:
-        assert isinstance(item, dict) and isinstance(item.get("input"), list), item
-        assert "expected" in item, item
-    distinct = {json.dumps(item["expected"], sort_keys=True) for item in raw}
+    result = await piston.run(generator_request(spec.test_generator or "", params, seed, LIMITS))
+    try:
+        cases = parse_generator_output(result)
+    except GeneratorError as error:
+        pytest.fail(f"{error}; параметры {params}")
+    assert len(cases) >= MIN_CASES, (params, cases)
+    # Объект именованных аргументов сервис принимает, но обвязка C++ понимает только массив.
+    assert all(isinstance(case.input, list) for case in cases), cases
+    distinct = {json.dumps(case.expected, sort_keys=True) for case in cases}
     assert len(distinct) > 1, f"все кейсы ждут один ответ {distinct}"
-    size = len(json.dumps([item["input"] for item in raw], ensure_ascii=False).encode())
+    size = len(json.dumps([case.input for case in cases], ensure_ascii=False).encode())
     assert size <= MAX_INPUT_BYTES, f"входы кейсов занимают {size} байт"
-    return [TestCase.model_validate(item) for item in raw]
+    return cases
 
 
 async def run_solution(
