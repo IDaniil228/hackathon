@@ -19,6 +19,10 @@ from taskgen.bank.parser import TemplateError, TemplateIssue, content_hash, pars
 from taskgen.contracts import TemplateSpec
 from taskgen.db import Area, Grade, Skill, Template
 
+# Первый ключ рекомендательной блокировки отделяет блокировки импорта от любых других
+# пользователей pg_advisory_xact_lock в той же БД; второй ключ — хэш имени шаблона.
+_IMPORT_LOCK_SPACE = 0x7467
+
 
 class ImportStatus(StrEnum):
     CREATED = "created"
@@ -118,9 +122,14 @@ async def _upsert(
     session: AsyncSession, doc: TemplateDocument, spec: TemplateSpec
 ) -> ImportOutcome:
     digest = content_hash(doc.text)
-    # Блокировка текущей версии сериализует параллельный импорт одного имени.
+    # Импорт одного имени идёт строго по очереди. Блокировка строки здесь не годится: у нового
+    # имени строки ещё нет, а после чужого commit заблокированная строка перестаёт быть
+    # текущей, и второй импорт упирается в templates_current_uq вместо новой версии.
+    await session.execute(
+        select(func.pg_advisory_xact_lock(_IMPORT_LOCK_SPACE, func.hashtext(spec.name)))
+    )
     current = await session.scalar(
-        select(Template).where(Template.name == spec.name, Template.is_current).with_for_update()
+        select(Template).where(Template.name == spec.name, Template.is_current)
     )
     if current is not None and current.content_hash == digest:
         return ImportOutcome(

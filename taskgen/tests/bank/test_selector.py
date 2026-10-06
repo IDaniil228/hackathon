@@ -3,13 +3,14 @@ import math
 import random
 
 import pytest
+from sqlalchemy import update
 
 from taskgen.bank.embeddings import refresh_embeddings
 from taskgen.bank.importer import TemplateDocument, import_documents
 from taskgen.bank.selection import jaccard_similarity
 from taskgen.bank.selector import SelectionError, SelectionMode, select_templates
 from taskgen.config import SelectionSettings
-from taskgen.db import Area, Grade, TestConfig
+from taskgen.db import Area, Grade, TemplateEmbedding, TestConfig
 from tests.bank.conftest import FakeEmbedder
 from tests.bank.factory import make_template
 
@@ -172,6 +173,27 @@ async def test_missing_vector_for_any_candidate_falls_back(db_session, area):
     )
     assert result.selection_mode is SelectionMode.SKILLS_JACCARD
     assert "1" in result.fallback_reason
+
+
+async def test_stale_vector_is_not_used(db_session, area):
+    items = [await put(db_session, area, f"{area}-a", "middle", vector=NEAR)]
+    embedder = await with_embeddings(db_session, items)
+    await db_session.execute(
+        update(TemplateEmbedding)
+        .where(TemplateEmbedding.model == embedder.model_name)
+        .values(content_hash="0" * 64)
+    )
+    result = await select_templates(
+        db_session,
+        area=area,
+        grade="middle",
+        skills=["python"],
+        rng=random.Random(0),
+        settings=SelectionSettings(),
+        embedder=embedder,
+        k=1,
+    )
+    assert result.selection_mode is SelectionMode.SKILLS_JACCARD
 
 
 async def test_embedder_error_falls_back_and_is_logged(db_session, area, caplog):

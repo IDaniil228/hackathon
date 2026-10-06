@@ -26,8 +26,8 @@ CODE_SECTIONS: dict[str, str] = {
     "Генерация": "Придумай легенду про склад. Массив длины {n}, уникальность: {unique}.",
     "Эталон": (
         "```python\n"
+        "## Два указателя с концов массива\n"
         "def two_sum(nums, target):\n"
-        "    ## индексы с двух концов\n"
         "    i, j = 0, len(nums) - 1\n"
         "    while i < j:\n"
         "        s = nums[i] + nums[j]\n"

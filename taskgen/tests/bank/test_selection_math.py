@@ -91,6 +91,15 @@ def test_probabilities_at_extremes():
     assert probabilities(d, 1.0) == [0.25] * 4
 
 
+def test_temperature_scale_maps_half_to_unit_softmax_temperature():
+    # t = 0.5 даёт T = t / (1 − t) = 1, то есть p ∝ exp(−d).
+    p = probabilities([0.0, 1.0], 0.5)
+    assert p[1] / p[0] == pytest.approx(math.exp(-1.0))
+    # t = 0.8 даёт T = 4.
+    p = probabilities([0.0, 1.0], 0.8)
+    assert p[1] / p[0] == pytest.approx(math.exp(-0.25))
+
+
 def test_probabilities_survive_huge_distances_at_low_temperature():
     p = probabilities([1000.0, 1001.0], 0.001)
     assert sum(p) == pytest.approx(1.0)

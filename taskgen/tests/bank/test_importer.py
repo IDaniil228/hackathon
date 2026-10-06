@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from sqlalchemy import func, select
 
@@ -8,7 +10,7 @@ from taskgen.bank.importer import (
     read_directory,
 )
 from taskgen.bank.parser import TemplateError, content_hash
-from taskgen.db import Template
+from taskgen.db import Template, make_sessionmaker
 from tests.bank.factory import make_essay, make_template
 
 pytestmark = pytest.mark.integration
@@ -92,6 +94,57 @@ async def test_duplicate_names_in_one_batch_are_rejected(db_session, unique):
         await import_documents(db_session, batch)
     assert any(issue.location == "name" for issue in caught.value.issues)
     assert await versions(db_session, name) == []
+
+
+async def test_concurrent_update_of_one_name_waits_and_keeps_one_current(
+    settings, unique, purge_committed
+):
+    name = f"{unique}-a"
+    maker = make_sessionmaker(settings.database_url)
+    async with maker() as session, session.begin():
+        await import_documents(session, [doc(make_template(name=name))])
+
+    first, second = maker(), maker()
+    await first.begin()
+    await second.begin()
+    [a] = await import_documents(first, [doc(make_template(name=name, difficulty=4))])
+    # Второй импорт ждёт блокировку текущей версии, пока первый не зафиксируется.
+    pending = asyncio.create_task(
+        import_documents(second, [doc(make_template(name=name, difficulty=5))])
+    )
+    await asyncio.sleep(0.2)
+    assert not pending.done()
+    await first.commit()
+    [b] = await pending
+    await second.commit()
+    await first.close()
+    await second.close()
+
+    assert (a.version, b.version) == (2, 3)
+    async with maker() as session:
+        assert await versions(session, name) == [(1, False), (2, False), (3, True)]
+    await maker.kw["bind"].dispose()
+
+
+async def test_concurrent_creation_of_one_name_is_serialized(settings, unique, purge_committed):
+    name = f"{unique}-a"
+    maker = make_sessionmaker(settings.database_url)
+    first, second = maker(), maker()
+    await first.begin()
+    await second.begin()
+    await import_documents(first, [doc(make_template(name=name))])
+    pending = asyncio.create_task(import_documents(second, [doc(make_template(name=name))]))
+    await asyncio.sleep(0.2)
+    assert not pending.done()
+    await first.commit()
+    [b] = await pending
+    await second.commit()
+    await first.close()
+    await second.close()
+    assert b.status is ImportStatus.UNCHANGED
+    async with maker() as session:
+        assert await versions(session, name) == [(1, True)]
+    await maker.kw["bind"].dispose()
 
 
 def test_read_directory_takes_markdown_recursively(tmp_path):

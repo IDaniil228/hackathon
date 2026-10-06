@@ -32,7 +32,7 @@ def test_valid_code_template_is_parsed_into_spec():
     assert spec.entrypoint == "two_sum"
     assert "def two_sum" in spec.reference_solution
     # Заголовок внутри блока кода не начинает новый раздел.
-    assert "## индексы" in spec.reference_solution
+    assert "## Два указателя" in spec.reference_solution
     assert "def generate" in spec.test_generator
     assert "{n}" in spec.generator_prompt
     assert [item.id for item in spec.rubric] == ["linear", "edge"]
