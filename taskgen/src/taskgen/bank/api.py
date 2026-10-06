@@ -282,6 +282,10 @@ async def _import(
         background.add_task(
             refresh_embeddings_safely, request.app.state.sessionmaker, _embedder(request)
         )
+        # Подписчик — пул генерации: новые версии шаблонов получают запас экземпляров.
+        notify = getattr(request.app.state, "on_templates_imported", None)
+        if notify is not None:
+            notify([o.template_id for o in outcomes if o.status is not ImportStatus.UNCHANGED])
     return outcomes
 
 

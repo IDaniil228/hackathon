@@ -42,6 +42,9 @@ from taskgen.generation.params import draw_params, fill_placeholders
 from taskgen.sandbox.environment import describe_all, describe_runtime
 from taskgen.sandbox.errors import SandboxError
 
+# seed хранится в tasks.seed типа BIGINT со знаком.
+SEED_BITS = 63
+
 # --- Ошибки; текст сообщения уходит клиенту ------------------------------------------------
 
 
@@ -133,6 +136,19 @@ class TaskInstance:
     def hidden_dump(self) -> dict[str, Any]:
         return self.hidden.model_dump(mode="json")
 
+    def columns(self) -> dict[str, Any]:
+        """Колонки строки tasks или pool_instances, которые заполняет экземпляр."""
+        return {
+            "kind": self.kind.value,
+            "statement": self.statement,
+            "params": self.params,
+            "seed": self.seed,
+            "public_payload": self.public_dump(),
+            "hidden_payload": self.hidden_dump(),
+            "generated_by": self.generated_by,
+            "validated": self.validated,
+        }
+
 
 @dataclass(frozen=True)
 class InstanceDeps:
@@ -150,7 +166,7 @@ class InstanceDeps:
 def attempt_seeds(seed: int, count: int) -> list[int]:
     """Первый seed — заданный, следующие выводятся из него: перебор тоже воспроизводим."""
     rng = random.Random(seed)
-    return [seed] + [rng.getrandbits(63) for _ in range(count - 1)]
+    return [seed] + [rng.getrandbits(SEED_BITS) for _ in range(count - 1)]
 
 
 async def generate_instance(spec: TemplateSpec, seed: int, deps: InstanceDeps) -> TaskInstance:

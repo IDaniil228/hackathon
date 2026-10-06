@@ -42,8 +42,11 @@ def create_app(
         app.state.sandbox = sandbox or own_sandbox
         worker = GenerationWorker(app.state)
         app.state.generation_worker = worker
+        # Банк сообщает об импорте через state и не зависит от модуля генерации.
+        app.state.on_templates_imported = worker.wake_pool
         if settings.generation.autostart:
             await worker.resume()
+            worker.start_pool_loop()
         yield
         await worker.aclose()
         # Закрываются созданные здесь клиенты: тесты и встраивание подменяют state своими.

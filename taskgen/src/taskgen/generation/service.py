@@ -14,12 +14,12 @@ import random
 import secrets
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from taskgen.bank.parser import TemplateError, parse_template
 from taskgen.bank.selector import SelectionError, SelectionResult, select_templates
 from taskgen.config import GenerationSettings, Settings
 from taskgen.contracts import (
@@ -29,10 +29,11 @@ from taskgen.contracts import (
     SandboxRunner,
     SessionStatus,
     TaskStatus,
-    TemplateSpec,
 )
 from taskgen.db import AreaSkill, Skill, Task, Template, TestSession
+from taskgen.generation import pool
 from taskgen.generation.instance import (
+    SEED_BITS,
     GenerationError,
     InstanceDeps,
     ModelOutputError,
@@ -47,9 +48,6 @@ logger = logging.getLogger(__name__)
 # Ключи, которые сессия добавляет к объяснению отбора в test_sessions.selection.
 SEED_KEY = "seed"
 RANKING_KEY = "ranking"
-
-# seed хранится в tasks.seed типа BIGINT со знаком.
-SEED_BITS = 63
 
 # Отказ самого шаблона лечится другим шаблоном. Недоступная песочница или модель — нет:
 # любой шаблон упадёт так же.
@@ -209,19 +207,32 @@ async def _insert_session(
         )
         db.add(row)
         await db.flush()
-        for position, (item, seed) in enumerate(
-            zip(result.selected, task_seeds, strict=True), start=1
-        ):
-            db.add(
-                Task(
-                    session_id=row.id,
-                    template_id=item.template.id,
-                    position=position,
-                    status=TaskStatus.PENDING,
-                    kind=item.template.kind,
-                    seed=seed,
-                )
+        tasks = [
+            Task(
+                session_id=row.id,
+                template_id=item.template.id,
+                position=position,
+                status=TaskStatus.PENDING,
+                kind=item.template.kind,
+                seed=seed,
             )
+            for position, (item, seed) in enumerate(
+                zip(result.selected, task_seeds, strict=True), start=1
+            )
+        ]
+        # Явный seed обещает воспроизводимую сессию, а экземпляр пула выбран другим seed.
+        if spec.seed is None and gen.options.pool_size > 0:
+            stock = await pool.take(
+                db,
+                tasks[0].template_id,
+                max_age=timedelta(hours=gen.options.pool_max_age_hours),
+            )
+            if stock is not None:
+                stock.pop("id")
+                for name, value in stock.items():
+                    setattr(tasks[0], name, value)
+                tasks[0].status = TaskStatus.READY
+        db.add_all(tasks)
         return row.id
 
 
@@ -263,7 +274,8 @@ async def run_task(gen: Generator, task_id: uuid.UUID) -> None:
             return
         task, template = row
         try:
-            instance = await generate_instance(_spec(template), task.seed, gen.instance_deps())
+            spec = pool.template_spec(template)
+            instance = await generate_instance(spec, task.seed, gen.instance_deps())
         except _REPLACEABLE as error:
             if await _replace(gen, task, template, str(error)):
                 continue
@@ -280,13 +292,6 @@ async def run_task(gen: Generator, task_id: uuid.UUID) -> None:
             raise SessionAbortedError(reason, error) from error
         await _save_instance(gen, task_id, instance)
         return
-
-
-def _spec(template: Template) -> TemplateSpec:
-    try:
-        return parse_template(template.body, source=template.name)
-    except TemplateError as error:
-        raise TemplateDefectError(f"Шаблон {template.name} не разбирается: {error}") from error
 
 
 async def _replace(gen: Generator, task: Task, template: Template, reason: str) -> bool:
@@ -341,22 +346,8 @@ async def _save_instance(gen: Generator, task_id: uuid.UUID, instance: TaskInsta
         await db.execute(
             update(Task)
             .where(Task.id == task_id, Task.status == TaskStatus.PENDING)
-            .values(status=TaskStatus.READY, **instance_values(instance))
+            .values(status=TaskStatus.READY, **instance.columns())
         )
-
-
-def instance_values(instance: TaskInstance) -> dict[str, Any]:
-    """Колонки задания, которые заполняет готовый экземпляр."""
-    return {
-        "kind": instance.kind.value,
-        "statement": instance.statement,
-        "params": instance.params,
-        "seed": instance.seed,
-        "public_payload": instance.public_dump(),
-        "hidden_payload": instance.hidden_dump(),
-        "generated_by": instance.generated_by,
-        "validated": instance.validated,
-    }
 
 
 async def finish_session(gen: Generator, session_id: uuid.UUID, failure: str | None = None) -> None:

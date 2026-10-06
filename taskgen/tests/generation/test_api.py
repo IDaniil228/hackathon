@@ -1,192 +1,23 @@
-"""API сессий на настоящей БД с подделками LLM и песочницы.
-
-Каждый тест работает в своей области: отбор не видит шаблоны других тестов.
-"""
+"""API сессий на настоящей БД с подделками LLM и песочницы."""
 
 from __future__ import annotations
 
 import json
-import re
 import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select
 
 from taskgen.app import create_app
-from taskgen.bank.importer import TemplateDocument, import_documents
 from taskgen.config import GenerationSettings
 from taskgen.contracts import HiddenPayload
-from taskgen.db import Area, AreaSkill, CandidateSummary, Task, Template, TestSession
-from tests.conftest import ADMIN_KEY
-from tests.evaluation.fakes import FakeLLM, http_error
-from tests.generation.fakes import GatedLLM, LocalSandbox
-from tests.generation.templates import ENTRYPOINT, REFERENCE, code_template_md, essay_template_md
+from taskgen.db import Task
+from tests.evaluation.fakes import FakeLLM
+from tests.generation.fakes import LocalSandbox
+from tests.generation.templates import ENTRYPOINT, REFERENCE
+from tests.generation.world import ADMIN, ModelStub, World, fake_world
 
 pytestmark = pytest.mark.integration
-
-ADMIN = {"Authorization": f"Bearer {ADMIN_KEY}"}
-ENTRYPOINT_IN_PROMPT = re.compile(r"функцию `(\w+)`")
-ANSWER_IN_JUDGE = re.compile(r"<<<ОТВЕТ-\w+>>>\n(.*?)\n<<<КОНЕЦ", re.DOTALL)
-BROKEN_REFERENCE = "```python\ndef top_sum(nums, k):\n    return 0\n```"
-
-
-class ModelStub:
-    """Отвечает за генератора, судью и summary; что именно спрошено, видно по схеме."""
-
-    def __init__(self) -> None:
-        self.down = False
-
-    def __call__(self, messages, schema):
-        if self.down:
-            raise http_error(503)
-        properties = (schema or {}).get("properties", {})
-        if "sentences" in properties:
-            return json.dumps({"sentences": ["Кандидат решил задания."]}, ensure_ascii=False)
-        if "items" in properties:
-            answer = ANSWER_IN_JUDGE.search(messages[-1].content).group(1)
-            quote = next(line for line in answer.splitlines() if line.strip())
-            ids = properties["items"]["items"]["properties"]["item_id"]["enum"]
-            items = [{"item_id": i, "verdict": "yes", "quotes": [quote]} for i in ids]
-            return json.dumps({"items": items}, ensure_ascii=False)
-        prompt = messages[1].content
-        match = ENTRYPOINT_IN_PROMPT.search(prompt)
-        statement = f"Напишите функцию {match.group(1)}." if match else "Расскажите про GIL."
-        return json.dumps({"title": "Задание", "statement": statement}, ensure_ascii=False)
-
-
-class World:
-    def __init__(self, client: TestClient) -> None:
-        self.client = client
-        self.area = f"g{uuid.uuid4().hex[:12]}"
-        self.candidate = f"cand-{uuid.uuid4().hex[:8]}"
-        self.prefix = f"g{uuid.uuid4().hex[:10]}"
-        self._run(self._create_area)
-
-    @property
-    def state(self):
-        return self.client.app.state
-
-    def _run(self, fn, *args):
-        return self.client.portal.call(fn, *args)
-
-    async def _create_area(self) -> None:
-        async with self.state.sessionmaker() as db, db.begin():
-            db.add(Area(code=self.area, title="Тестовая область"))
-            await db.flush()
-            db.add(AreaSkill(area_code=self.area, skill_code="python"))
-
-    def add_templates(self, *bodies: str) -> None:
-        async def load():
-            async with self.state.sessionmaker() as db, db.begin():
-                docs = [TemplateDocument(f"t{i}.md", body) for i, body in enumerate(bodies)]
-                await import_documents(db, docs)
-
-        self._run(load)
-
-    def code(self, suffix: str = "code", **frontmatter) -> str:
-        frontmatter.setdefault("skills", ["python"])
-        return code_template_md(name=f"{self.prefix}-{suffix}", area=self.area, **frontmatter)
-
-    def broken(self, suffix: str = "bad", **frontmatter) -> str:
-        return self.code(suffix, sections={"Эталон": BROKEN_REFERENCE}, **frontmatter)
-
-    def essay(self, suffix: str = "essay", **frontmatter) -> str:
-        frontmatter.setdefault("skills", ["python"])
-        return essay_template_md(name=f"{self.prefix}-{suffix}", area=self.area, **frontmatter)
-
-    def gate(self, free: int) -> GatedLLM:
-        """Пропустить free вызовов LLM, а остальные держать до gated.open()."""
-        gated = GatedLLM(self.state.llm, free=free)
-        self.state.llm = gated
-        return gated
-
-    def open(self, gated: GatedLLM) -> None:
-        self._run(gated.open)
-
-    def create(self, headers=ADMIN, **body):
-        payload = {
-            "candidate_ref": self.candidate,
-            "area": self.area,
-            "claimed_grade": "junior",
-            "skills": ["python"],
-        } | body
-        return self.client.post("/sessions", json=payload, headers=headers)
-
-    def wait(self) -> None:
-        """Дождаться, пока фоновая генерация всех сессий закончится."""
-        self._run(self.state.generation_worker.wait_idle)
-
-    def view(self, session_id, headers=ADMIN) -> dict:
-        response = self.client.get(f"/sessions/{session_id}", headers=headers)
-        assert response.status_code == 200, response.text
-        return response.json()
-
-    def create_ready(self, headers=ADMIN, **body) -> dict:
-        response = self.create(headers=headers, **body)
-        assert response.status_code == 201, response.text
-        self.wait()
-        return self.view(response.json()["id"], headers)
-
-    def tasks(self, session_id) -> list[Task]:
-        async def load():
-            async with self.state.sessionmaker() as db:
-                query = select(Task).where(Task.session_id == session_id).order_by(Task.position)
-                return list(await db.scalars(query))
-
-        return self._run(load)
-
-    def sessions(self) -> list[TestSession]:
-        async def load():
-            async with self.state.sessionmaker() as db:
-                query = select(TestSession).where(TestSession.candidate_ref == self.candidate)
-                return list(await db.scalars(query))
-
-        return self._run(load)
-
-    def cleanup(self) -> None:
-        async def drop():
-            async with self.state.sessionmaker() as db, db.begin():
-                await db.execute(
-                    delete(TestSession).where(TestSession.candidate_ref == self.candidate)
-                )
-                await db.execute(delete(Template).where(Template.area_code == self.area))
-                await db.execute(delete(AreaSkill).where(AreaSkill.area_code == self.area))
-                await db.execute(delete(Area).where(Area.code == self.area))
-                await db.execute(
-                    delete(CandidateSummary).where(CandidateSummary.candidate_ref == self.candidate)
-                )
-
-        self._run(drop)
-
-
-def _fake_world(client: TestClient) -> World:
-    client.portal.call(client.app.state.llm.aclose)
-    client.app.state.model_stub = ModelStub()
-    client.app.state.llm = FakeLLM(client.app.state.model_stub)
-    client.app.state.sandbox = LocalSandbox()
-    return World(client)
-
-
-@pytest.fixture
-def world(settings):
-    with TestClient(create_app(settings)) as client:
-        w = _fake_world(client)
-        try:
-            yield w
-        finally:
-            # Задержанные вызовы LLM отпускаются, иначе фоновая генерация ждала бы вечно.
-            if isinstance(w.state.llm, GatedLLM):
-                w.open(w.state.llm)
-            w.wait()
-            w.cleanup()
-
-
-@pytest.fixture
-def client_headers(world) -> dict[str, str]:
-    issued = world.client.post("/keys", json={"name": "backend", "role": "client"}, headers=ADMIN)
-    assert issued.status_code == 201
-    return {"Authorization": f"Bearer {issued.json()['key']}"}
 
 
 def _secrets(task: Task) -> list[str]:
@@ -452,14 +283,17 @@ def test_unfinished_session_is_resumed_after_restart(settings):
     # Первый запуск: ответ с первым заданием, остальные стоят в очереди к модели, когда
     # сервис останавливается.
     with TestClient(create_app(settings)) as client:
-        world = _fake_world(client)
+        world = fake_world(client)
         world.add_templates(world.code("a"), world.code("b"), world.essay())
         world.gate(free=1)
         created = world.create().json()
         assert created["status"] == "generating"
     area, candidate, prefix = world.area, world.candidate, world.prefix
 
-    restarted = settings.model_copy(update={"generation": GenerationSettings(autostart=True)})
+    # Пул выключен: иначе он пополнялся бы по всем шаблонам общей тестовой БД.
+    restarted = settings.model_copy(
+        update={"generation": GenerationSettings(autostart=True, pool_size=0)}
+    )
     with TestClient(create_app(restarted, llm=FakeLLM(ModelStub()), sandbox=LocalSandbox())) as c:
         again = World.__new__(World)
         again.client, again.area, again.candidate, again.prefix = c, area, candidate, prefix

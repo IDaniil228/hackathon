@@ -213,6 +213,31 @@ class Task(Base):
     created_at: Mapped[datetime] = _now()
 
 
+class PoolInstance(Base):
+    """Стандартный экземпляр шаблона без персонализации, проверенный эталоном заранее.
+
+    Выдаётся первым заданием одной сессии: строка копируется в tasks и удаляется в той же
+    транзакции, поэтому второй раз её не выдать. Своей связи с tasks у пула нет.
+    """
+
+    __tablename__ = "pool_instances"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    # Удаление шаблона уносит его запас: выдавать экземпляр без шаблона нельзя.
+    template_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("templates.id", ondelete="CASCADE"), index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16))
+    statement: Mapped[str] = mapped_column(Text)
+    params: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    seed: Mapped[int] = mapped_column(BigInteger)
+    public_payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    hidden_payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    generated_by: Mapped[str] = mapped_column(String(100))
+    validated: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = _now()
+
+
 class Answer(Base):
     __tablename__ = "answers"
 

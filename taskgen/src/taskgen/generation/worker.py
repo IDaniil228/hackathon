@@ -1,10 +1,10 @@
-"""Фоновая генерация заданий внутри процесса сервиса.
+"""Фоновая генерация заданий и пополнение пула внутри процесса сервиса.
 
 Очередь — это сами строки tasks со статусом pending, поэтому внешний брокер не нужен, а
 рестарт ничего не теряет: при старте приложения resume() снова запускает сессии в статусе
-generating. Задача asyncio на сессию живёт только в памяти процесса. Предполагается один
-процесс сервиса: два процесса с общей БД сгенерировали бы одно задание дважды, и записал
-бы его тот, кто успел первым.
+generating, а пул пополняется по таймеру и после импорта шаблонов. Задача asyncio на сессию
+живёт только в памяти процесса. Предполагается один процесс сервиса: два процесса с общей
+БД сгенерировали бы одно задание дважды, и записал бы его тот, кто успел первым.
 """
 
 from __future__ import annotations
@@ -12,13 +12,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections.abc import Iterable
 from typing import Any
 
 from sqlalchemy import select
 
 from taskgen.contracts import SessionStatus
 from taskgen.db import TestSession
-from taskgen.generation import service
+from taskgen.generation import pool, service
 from taskgen.generation.service import Generator, SessionAbortedError, SessionFailedError
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,9 @@ class GenerationWorker:
         # после старта приложения.
         self._state = state
         self._jobs: dict[uuid.UUID, asyncio.Task[None]] = {}
+        self._pool_jobs: set[asyncio.Task[None]] = set()
+        self._pool_loop: asyncio.Task[None] | None = None
+        self._pool_lock = asyncio.Lock()
 
     def generator(self) -> Generator:
         return Generator.from_state(self._state)
@@ -64,18 +68,63 @@ class GenerationWorker:
             logger.info("Подхвачено незавершённых сессий: %d", len(ids))
         return len(ids)
 
-    @property
-    def busy(self) -> bool:
-        return bool(self._jobs)
+    # --- Пул ---------------------------------------------------------------------------------
 
-    async def wait_idle(self) -> None:
-        """Ждёт, пока закончатся все сессии, включая запущенные во время ожидания."""
+    async def refill_pool(self, template_ids: Iterable[uuid.UUID] | None = None) -> int:
+        """Пополняет пул; пополнения идут по одному, а сессии кандидатов — впереди них."""
+        async with self._pool_lock:
+            return await pool.refill(
+                self.generator(), template_ids=template_ids, before_each=self._sessions_done
+            )
+
+    def wake_pool(self, template_ids: Iterable[uuid.UUID] | None = None) -> None:
+        """Пополнить пул в фоне, например после импорта шаблонов."""
+        if self._state.settings.generation.pool_size == 0:
+            return
+        ids = list(template_ids) if template_ids is not None else None
+        job = asyncio.create_task(self._refill_logged(ids), name="pool-refill")
+        self._pool_jobs.add(job)
+        job.add_done_callback(self._pool_jobs.discard)
+
+    def start_pool_loop(self) -> None:
+        """Пополнять пул сразу и затем с интервалом pool_refill_interval_seconds."""
+        self._pool_loop = asyncio.create_task(self._loop(), name="pool-loop")
+
+    async def _loop(self) -> None:
+        while True:
+            await self._refill_logged(None)
+            await asyncio.sleep(self._state.settings.generation.pool_refill_interval_seconds)
+
+    async def _refill_logged(self, template_ids: list[uuid.UUID] | None) -> None:
+        # Сбой пополнения не должен останавливать сервис: первое задание тогда генерируется
+        # на месте, как при пустом пуле.
+        try:
+            made = await self.refill_pool(template_ids)
+        except Exception:
+            logger.exception("Пополнение пула не удалось")
+        else:
+            if made:
+                logger.info("Пул пополнен на %d экземпляров", made)
+
+    async def _sessions_done(self) -> None:
+        # Модель на слабой машине одна: экземпляр пула пишется, только когда сессии
+        # кандидатов не ждут её. Уже начатую генерацию пула сессия всё же ждёт.
         while self._jobs:
             await asyncio.gather(*list(self._jobs.values()), return_exceptions=True)
 
+    # --- Ожидание и остановка -----------------------------------------------------------------
+
+    async def wait_idle(self) -> None:
+        """Ждёт, пока закончатся сессии и пополнения пула, включая начатые во время ожидания."""
+        while self._jobs or self._pool_jobs:
+            jobs = [*self._jobs.values(), *self._pool_jobs]
+            await asyncio.gather(*jobs, return_exceptions=True)
+
     async def aclose(self) -> None:
         # Отменённые задания остаются pending и подхватываются при следующем старте.
-        jobs = list(self._jobs.values())
+        jobs = [*self._jobs.values(), *self._pool_jobs]
+        if self._pool_loop is not None:
+            jobs.append(self._pool_loop)
         for job in jobs:
             job.cancel()
         await asyncio.gather(*jobs, return_exceptions=True)
