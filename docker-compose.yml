@@ -1,0 +1,61 @@
+name: fsp-platform
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: fsp-postgres
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Параметры инициализации кластера. Применяются только при создании тома.
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Сортировка строк по правилам русского языка через ICU; сам поиск
+      # to_tsvector('russian', ...) от локали ОС не зависит (словарь snowball)
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8 --locale-provider=icu --icu-locale=ru-RU"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      # Скрипты отрабатывают по возрастанию имени и ТОЛЬКО при пустом томе
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    shm_size: 256mb
+    command:
+      - postgres
+      # Умеренные настройки: решение должно подниматься на обычной рабочей машине (п. 3.1 ТЗ)
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - max_connections=100
+      # Логируем медленные запросы, чтобы было чем мерить производительность на демо
+      - -c
+      - log_min_duration_statement=500
+
+  adminer:
+    image: adminer:5
+    container_name: fsp-adminer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: dracula
+    ports:
+      - "${ADMINER_PORT:-8081}:8080"
+    profiles: ["tools"]
+
+volumes:
+  pgdata:
+    name: fsp-pgdata
