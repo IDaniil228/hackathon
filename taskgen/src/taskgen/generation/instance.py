@@ -99,7 +99,7 @@ class PublicPayload(BaseModel):
         default=None,
         # Описание в схеме API собирается той же функцией, что и значение в задании.
         description="Только для заданий с кодом: окружение и доступные библиотеки. Варианты: "
-        + "; ".join(f"{name} — «{text}»" for name, text in describe_all().items()),
+        + "; ".join(f'{name} — "{text}"' for name, text in describe_all().items()),
     )
 
 
