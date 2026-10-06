@@ -21,6 +21,7 @@ from taskgen.contracts import (
     JudgeRequest,
     JudgeResult,
     LLMClient,
+    ReasoningEffort,
     RubricItem,
     RubricVerdict,
 )
@@ -155,11 +156,20 @@ def _score(verdicts: dict[str, RubricVerdict], rubric: list[RubricItem]) -> floa
 
 
 class LLMJudge:
-    def __init__(self, llm: LLMClient, *, model: str, samples: int, temperature: float) -> None:
+    def __init__(
+        self,
+        llm: LLMClient,
+        *,
+        model: str,
+        samples: int,
+        temperature: float,
+        reasoning_effort: ReasoningEffort | None = None,
+    ) -> None:
         self._llm = llm
         self._model = model
         self._samples = samples
         self._temperature = temperature
+        self._reasoning_effort = reasoning_effort
 
     @staticmethod
     def markers_for(messages: list[ChatMessage]) -> tuple[str, str]:
@@ -181,8 +191,10 @@ class LLMJudge:
                 _schema(request.rubric),
                 model=self._model,
                 temperature=self._temperature,
+                reasoning_effort=self._reasoning_effort,
             )
         except StructuredOutputError:
+            # Сюда же попадает пустой ответ после рассуждений: такой сэмпл не голосует.
             return None
         return _verified(sample, request)
 

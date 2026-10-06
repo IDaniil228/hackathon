@@ -22,6 +22,7 @@ from taskgen.contracts import (
     ChatMessage,
     HiddenPayload,
     LLMClient,
+    ReasoningEffort,
     RunLimits,
     SandboxRunner,
     TaskKind,
@@ -30,7 +31,11 @@ from taskgen.contracts import (
     TestReport,
     TestRunRequest,
 )
-from taskgen.evaluation.jsonout import StructuredOutputError, complete_structured
+from taskgen.evaluation.jsonout import (
+    EmptyReplyError,
+    StructuredOutputError,
+    complete_structured,
+)
 from taskgen.generation.harness import GeneratorError, generator_request, parse_generator_output
 from taskgen.generation.leaks import hidden_leaks, mentions_entrypoint, public_count
 from taskgen.generation.params import draw_params, fill_placeholders
@@ -128,6 +133,7 @@ class InstanceDeps:
     model: str
     options: GenerationSettings
     limits: RunLimits
+    reasoning_effort: ReasoningEffort | None = None
 
 
 # --- Генерация ------------------------------------------------------------------------------
@@ -306,9 +312,13 @@ async def _write_legend(
                 LEGEND_SCHEMA,
                 model=deps.model,
                 temperature=deps.options.legend_temperature,
+                reasoning_effort=deps.reasoning_effort,
             )
         except httpx.HTTPError as error:
             raise LLMUnavailableError("Модель генерации недоступна, повторите позже") from error
+        except EmptyReplyError:
+            reason = "модель вернула пустой ответ, возможно, истратив его на рассуждения"
+            continue
         except StructuredOutputError:
             reason = "ответ модели не соответствует формату"
             continue

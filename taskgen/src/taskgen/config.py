@@ -10,6 +10,8 @@ from functools import lru_cache
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from taskgen.contracts import ReasoningEffort
+
 
 class LLMSettings(BaseModel):
     """OpenAI-совместимый провайдер: Ollama, vLLM или облачный шлюз."""
@@ -20,6 +22,12 @@ class LLMSettings(BaseModel):
     # Судья другой модели снижает завышение оценок собственного текста генератора.
     judge_model: str = "qwen3.5:4b"
     embedding_model: str = "bge-m3"
+    # Поле reasoning_effort запроса для каждой роли; рядом с моделью, потому что уместное
+    # значение зависит от модели. None — поле не передаётся, модель рассуждает как обычно.
+    # На слабой машине "none" сокращает ответ в разы: рассуждение qwen3.5:4b на простой
+    # запрос занимало тысячи токенов и иногда не оставляло места самому ответу.
+    generator_reasoning_effort: ReasoningEffort | None = None
+    judge_reasoning_effort: ReasoningEffort | None = None
     timeout_seconds: float = 120.0
     # Локальная модель отвечает на запросы по очереди; облачному провайдеру можно больше.
     concurrency: int = Field(default=1, ge=1)

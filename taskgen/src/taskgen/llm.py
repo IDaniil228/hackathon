@@ -12,7 +12,7 @@ from typing import Any
 import httpx
 
 from taskgen.config import LLMSettings, Settings
-from taskgen.contracts import ChatMessage, LLMClient
+from taskgen.contracts import ChatMessage, LLMClient, ReasoningEffort
 
 
 class LimitedLLM:
@@ -33,10 +33,15 @@ class LimitedLLM:
         model: str | None = None,
         temperature: float = 0.7,
         json_schema: dict[str, Any] | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> str:
         async with self._semaphore:
             return await self.inner.complete(
-                messages, model=model, temperature=temperature, json_schema=json_schema
+                messages,
+                model=model,
+                temperature=temperature,
+                json_schema=json_schema,
+                reasoning_effort=reasoning_effort,
             )
 
 
@@ -71,6 +76,7 @@ class OpenAICompatibleClient:
         model: str | None = None,
         temperature: float = 0.7,
         json_schema: dict[str, Any] | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
     ) -> str:
         body: dict[str, Any] = {
             "model": model or self._settings.generator_model,
@@ -82,9 +88,13 @@ class OpenAICompatibleClient:
                 "type": "json_schema",
                 "json_schema": {"name": "answer", "schema": json_schema, "strict": True},
             }
+        # Ollama через этот API не понимает think: false, а reasoning_effort понимает.
+        if reasoning_effort is not None:
+            body["reasoning_effort"] = reasoning_effort
         response = await self._http.post("/chat/completions", json=body)
         response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        # Модель с рассуждениями может истратить весь ответ на них и вернуть content: null.
+        return response.json()["choices"][0]["message"].get("content") or ""
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         response = await self._http.post(

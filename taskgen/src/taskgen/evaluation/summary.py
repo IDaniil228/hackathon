@@ -15,7 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from taskgen.contracts import ChatMessage, LLMClient
+from taskgen.contracts import ChatMessage, LLMClient, ReasoningEffort
 from taskgen.evaluation.jsonout import StructuredOutputError, complete_structured
 
 logger = logging.getLogger(__name__)
@@ -186,7 +186,13 @@ def fallback_text(data: dict[str, Any]) -> str:
     return " ".join(sentences)
 
 
-async def write_summary(llm: LLMClient, data: dict[str, Any], *, model: str | None) -> str:
+async def write_summary(
+    llm: LLMClient,
+    data: dict[str, Any],
+    *,
+    model: str | None,
+    reasoning_effort: ReasoningEffort | None = None,
+) -> str:
     """Текст от LLM, если он прошёл проверку, иначе текст по шаблону."""
     messages = [
         ChatMessage(role="system", content=_SYSTEM),
@@ -197,7 +203,13 @@ async def write_summary(llm: LLMClient, data: dict[str, Any], *, model: str | No
     ]
     try:
         reply = await complete_structured(
-            llm, messages, _Sentences, _SCHEMA, model=model, temperature=0.2
+            llm,
+            messages,
+            _Sentences,
+            _SCHEMA,
+            model=model,
+            temperature=0.2,
+            reasoning_effort=reasoning_effort,
         )
     except StructuredOutputError as error:
         logger.warning("Summary по шаблону: модель не вернула JSON (%s)", error)

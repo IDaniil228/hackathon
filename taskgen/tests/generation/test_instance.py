@@ -31,13 +31,14 @@ def legend(statement: str = CLEAN, title: str = "Склад", **extra) -> str:
     return json.dumps({"title": title, "statement": statement, **extra}, ensure_ascii=False)
 
 
-def deps(llm, sandbox=None, **options) -> InstanceDeps:
+def deps(llm, sandbox=None, reasoning_effort=None, **options) -> InstanceDeps:
     return InstanceDeps(
         llm=llm,
         sandbox=sandbox,
         model=MODEL,
         options=GenerationSettings(**options),
         limits=LIMITS,
+        reasoning_effort=reasoning_effort,
     )
 
 
@@ -268,3 +269,23 @@ async def test_essay_does_not_need_sandbox():
     llm = FakeLLM(lambda _m, _s: legend("Вопрос?"))
     instance = await generate_instance(essay_spec(), 1, deps(llm, None))
     assert instance.statement == "Вопрос?"
+
+
+async def test_empty_reply_after_reasoning_is_retried_within_legend_attempts():
+    llm = FakeLLM(["", legend()])
+    instance = await generate_instance(code_spec(), 3, deps(llm, LocalSandbox()))
+    assert instance.statement == CLEAN
+    assert len(llm.calls) == 2
+
+
+async def test_only_empty_replies_are_model_error_not_crash():
+    llm = FakeLLM(lambda _m, _s: "")
+    with pytest.raises(ModelOutputError, match="пуст"):
+        await generate_instance(code_spec(), 3, deps(llm, LocalSandbox(), legend_attempts=2))
+    assert len(llm.calls) == 2
+
+
+async def test_reasoning_effort_reaches_legend_call():
+    llm = FakeLLM(lambda _m, _s: legend())
+    await generate_instance(code_spec(), 3, deps(llm, LocalSandbox(), reasoning_effort="none"))
+    assert {call["reasoning_effort"] for call in llm.calls} == {"none"}

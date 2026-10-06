@@ -15,7 +15,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from taskgen.contracts import ChatMessage, LLMClient
+from taskgen.contracts import ChatMessage, LLMClient, ReasoningEffort
 
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
 _FENCE = re.compile(r"```(?:json)?\s*\n(.*?)```", re.DOTALL)
@@ -24,6 +24,14 @@ _DECODER = json.JSONDecoder()
 
 class StructuredOutputError(Exception):
     """Ответ модели не удалось привести к схеме ни со схемой, ни без неё."""
+
+
+class EmptyReplyError(StructuredOutputError):
+    """Модель не вернула текста вне рассуждений.
+
+    Повтор без схемы это не исправит: модель снова истратит ответ на рассуждения. Поэтому
+    второй вызов не делается, а решение о повторе принимает вызывающий.
+    """
 
 
 def _first_object(text: str) -> dict[str, Any] | None:
@@ -77,6 +85,7 @@ async def complete_structured[ModelT: BaseModel](
     *,
     model: str | None,
     temperature: float = 0.0,
+    reasoning_effort: ReasoningEffort | None = None,
 ) -> ModelT:
     """Ответ модели как экземпляр model_cls или StructuredOutputError.
 
@@ -84,16 +93,25 @@ async def complete_structured[ModelT: BaseModel](
     """
     try:
         reply = await llm.complete(
-            messages, model=model, temperature=temperature, json_schema=schema
+            messages,
+            model=model,
+            temperature=temperature,
+            json_schema=schema,
+            reasoning_effort=reasoning_effort,
         )
     except httpx.HTTPStatusError as error:
         if not error.response.is_client_error:
             raise
     else:
+        if not _THINK.sub("", reply).strip():
+            raise EmptyReplyError("Модель вернула пустой ответ")
         if (parsed := _parse(reply, model_cls)) is not None:
             return parsed
     reply = await llm.complete(
-        [*messages, _fallback_instruction(schema)], model=model, temperature=temperature
+        [*messages, _fallback_instruction(schema)],
+        model=model,
+        temperature=temperature,
+        reasoning_effort=reasoning_effort,
     )
     if (parsed := _parse(reply, model_cls)) is not None:
         return parsed

@@ -10,7 +10,7 @@ import secrets
 
 from pydantic import BaseModel, Field
 
-from taskgen.contracts import AISignal, ChatMessage, LLMClient
+from taskgen.contracts import AISignal, ChatMessage, LLMClient, ReasoningEffort
 from taskgen.evaluation.jsonout import StructuredOutputError, complete_structured
 
 _SYSTEM = """Оцени вероятность того, что код ниже сгенерирован языковой моделью, а не написан
@@ -34,9 +34,12 @@ class _Verdict(BaseModel):
 
 
 class LLMAIDetector:
-    def __init__(self, llm: LLMClient, *, model: str) -> None:
+    def __init__(
+        self, llm: LLMClient, *, model: str, reasoning_effort: ReasoningEffort | None = None
+    ) -> None:
         self._llm = llm
         self._model = model
+        self._reasoning_effort = reasoning_effort
 
     async def detect(self, code: str, language: str) -> AISignal:
         nonce = secrets.token_hex(8)
@@ -48,7 +51,13 @@ class LLMAIDetector:
         detector = f"llm:{self._model}"
         try:
             verdict = await complete_structured(
-                self._llm, messages, _Verdict, _SCHEMA, model=self._model, temperature=0.0
+                self._llm,
+                messages,
+                _Verdict,
+                _SCHEMA,
+                model=self._model,
+                temperature=0.0,
+                reasoning_effort=self._reasoning_effort,
             )
         except StructuredOutputError:
             return AISignal(detector=detector, note="модель не вернула ответ по схеме")

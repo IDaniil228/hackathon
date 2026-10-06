@@ -30,6 +30,7 @@ class FakeLLM:
         model: str | None = None,
         temperature: float = 0.7,
         json_schema: dict[str, Any] | None = None,
+        reasoning_effort: str | None = None,
     ) -> str:
         self.calls.append(
             {
@@ -37,6 +38,7 @@ class FakeLLM:
                 "model": model,
                 "temperature": temperature,
                 "json_schema": json_schema,
+                "reasoning_effort": reasoning_effort,
             }
         )
         return self._responder(messages, json_schema)

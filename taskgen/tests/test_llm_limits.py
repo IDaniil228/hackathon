@@ -15,12 +15,14 @@ class SlowLLM:
         self.active = 0
         self.peak = 0
 
-    async def complete(self, messages, *, model=None, temperature=0.7, json_schema=None) -> str:
+    async def complete(
+        self, messages, *, model=None, temperature=0.7, json_schema=None, reasoning_effort=None
+    ) -> str:
         self.active += 1
         self.peak = max(self.peak, self.active)
         await asyncio.sleep(0.01)
         self.active -= 1
-        return f"{model}:{temperature}:{json_schema}"
+        return f"{model}:{temperature}:{json_schema}:{reasoning_effort}"
 
 
 def _state(**fields):
@@ -56,5 +58,7 @@ def test_generation_and_evaluation_share_the_limiter():
 
 async def test_limited_llm_passes_arguments_through():
     llm = LimitedLLM(SlowLLM(), limit=1)
-    reply = await llm.complete([], model="m", temperature=0.1, json_schema={"a": 1})
-    assert reply == "m:0.1:{'a': 1}"
+    reply = await llm.complete(
+        [], model="m", temperature=0.1, json_schema={"a": 1}, reasoning_effort="low"
+    )
+    assert reply == "m:0.1:{'a': 1}:low"

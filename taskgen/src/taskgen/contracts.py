@@ -69,6 +69,9 @@ class ChatMessage(BaseModel):
     content: str
 
 
+ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
+
+
 class LLMClient(Protocol):
     async def complete(
         self,
@@ -77,7 +80,11 @@ class LLMClient(Protocol):
         model: str | None = None,
         temperature: float = 0.7,
         json_schema: dict[str, Any] | None = None,
-    ) -> str: ...
+        # None — поле не передаётся, и модель рассуждает так, как настроена по умолчанию.
+        reasoning_effort: ReasoningEffort | None = None,
+    ) -> str:
+        """Текст ответа модели; пустая строка, если модель не вернула content."""
+        ...
 
 
 class Embedder(Protocol):

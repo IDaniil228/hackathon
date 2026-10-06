@@ -223,3 +223,19 @@ async def test_schema_restricts_item_ids_to_rubric():
     schema = llm.calls[0]["json_schema"]
     item_schema = schema["properties"]["items"]["items"]
     assert item_schema["properties"]["item_id"]["enum"] == ["two_pointers", "no_extra_memory"]
+
+
+async def test_empty_sample_is_dropped_and_does_not_vote():
+    yes = _sample(two_pointers=("yes", [GOOD_QUOTE]), no_extra_memory=("yes", [OTHER_QUOTE]))
+    judge, llm = _judge([yes, "", yes])
+    result = await judge.judge(_request())
+    assert result.score == pytest.approx(1.0)
+    assert len(llm.calls) == 3
+
+
+async def test_judge_passes_reasoning_effort():
+    reply = _sample(two_pointers=("no", []), no_extra_memory=("no", []))
+    llm = FakeLLM([reply] * 2)
+    judge = LLMJudge(llm, model="m", samples=2, temperature=0.7, reasoning_effort="none")
+    await judge.judge(_request())
+    assert [call["reasoning_effort"] for call in llm.calls] == ["none", "none"]

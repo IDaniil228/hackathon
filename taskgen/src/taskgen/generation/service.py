@@ -123,6 +123,7 @@ class Generator:
             llm=self.llm,
             sandbox=self.sandbox,
             model=self.settings.llm.generator_model,
+            reasoning_effort=self.settings.llm.generator_reasoning_effort,
             options=self.options,
             limits=RunLimits(
                 timeout_ms=sandbox.run_timeout_ms, memory_bytes=sandbox.run_memory_limit_bytes

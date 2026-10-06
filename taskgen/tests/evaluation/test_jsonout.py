@@ -98,3 +98,18 @@ async def test_structured_raises_when_both_attempts_fail():
     llm = FakeLLM(["мусор", "снова мусор"])
     with pytest.raises(StructuredOutputError):
         await complete_structured(llm, MESSAGES, Point, SCHEMA, model="m")
+
+
+async def test_empty_reply_is_invalid_without_fallback_call():
+    # Пустой content — модель истратила ответ на рассуждения; повтор без схемы этого не
+    # исправит, а на слабой машине стоит ещё минуты. Решение о повторе — за вызывающим.
+    llm = FakeLLM(["", '{"x": 1, "y": 1}'])
+    with pytest.raises(StructuredOutputError, match="пуст"):
+        await complete_structured(llm, MESSAGES, Point, SCHEMA, model="m")
+    assert len(llm.calls) == 1
+
+
+async def test_reasoning_effort_reaches_both_attempts():
+    llm = FakeLLM(["мусор", '{"x": 1, "y": 1}'])
+    await complete_structured(llm, MESSAGES, Point, SCHEMA, model="m", reasoning_effort="none")
+    assert [call["reasoning_effort"] for call in llm.calls] == ["none", "none"]
