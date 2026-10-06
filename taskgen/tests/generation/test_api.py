@@ -79,7 +79,10 @@ def test_session_with_code_and_essay(world, client_headers):
 
 
 def test_first_task_is_ready_at_once_and_rest_arrive_in_background(world):
-    world.add_templates(world.code("a"), world.code("b"), world.essay())
+    # Только задания с кодом: каждому нужен ровно один вызов модели, и free=1 пропускает
+    # ровно первое задание. Эссе нужно два вызова (ситуация и проверка фактов): выпади оно
+    # первым по случайному отбору, его второй вызов ждал бы gated.open() вечно.
+    world.add_templates(world.code("a"), world.code("b"), world.code("c"))
     gated = world.gate(free=1)
     response = world.create()
     assert response.status_code == 201, response.text
@@ -300,7 +303,8 @@ def test_unfinished_session_is_resumed_after_restart(settings):
     # сервис останавливается.
     with TestClient(create_app(settings)) as client:
         world = fake_world(client)
-        world.add_templates(world.code("a"), world.code("b"), world.essay())
+        # Только код: free=1 должен пропустить ровно первое задание, а эссе нужно два вызова.
+        world.add_templates(world.code("a"), world.code("b"), world.code("c"))
         world.gate(free=1)
         created = world.create().json()
         assert created["status"] == "generating"
