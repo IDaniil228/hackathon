@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import timedelta
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import func, update
 
+from taskgen.app import create_app
 from taskgen.config import GenerationSettings
 from taskgen.db import PoolInstance
 from taskgen.generation import pool
 from tests.bank.conftest import FakeEmbedder
-from tests.generation.world import ADMIN
+from tests.evaluation.fakes import FakeLLM
+from tests.generation.fakes import LocalSandbox
+from tests.generation.world import ADMIN, ModelStub, World
 
 pytestmark = pytest.mark.integration
 
@@ -169,3 +174,21 @@ def test_upload_through_api_refills_pool(world):
     instances = world.pool()
     assert len(instances) == 2
     assert {i.template_id for i in instances} == {world.templates()["api"].id}
+
+
+def test_pool_refills_on_its_own_interval(settings):
+    # Пополнение по таймеру идёт по всем текущим шаблонам БД, поэтому тест рассчитан на
+    # тестовую БД без чужих шаблонов: шаблоны других тестов удаляются их очисткой.
+    generation = GenerationSettings(autostart=True, pool_size=1, pool_refill_interval_seconds=0.05)
+    auto = settings.model_copy(update={"generation": generation})
+    with TestClient(create_app(auto, llm=FakeLLM(ModelStub()), sandbox=LocalSandbox())) as c:
+        world = World(c)
+        try:
+            # Шаблон появляется после старта: его подхватывает следующий оборот таймера.
+            world.add_templates(world.code())
+            deadline = time.monotonic() + 10
+            while not world.pool() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            assert len(world.pool()) == 1
+        finally:
+            world.cleanup()
