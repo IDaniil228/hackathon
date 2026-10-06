@@ -59,6 +59,11 @@ class ModelStub:
         return json.dumps({"title": "Задание", "statement": statement}, ensure_ascii=False)
 
 
+# По названию проверка покрытия банка отличает области тестового мира от настоящих: прогон,
+# прерванный до cleanup, оставляет такую область в общей БД.
+TEST_AREA_TITLE = "Тестовая область"
+
+
 class World:
     def __init__(self, client: TestClient) -> None:
         self.client = client
@@ -76,7 +81,7 @@ class World:
 
     async def _create_area(self) -> None:
         async with self.state.sessionmaker() as db, db.begin():
-            db.add(Area(code=self.area, title="Тестовая область"))
+            db.add(Area(code=self.area, title=TEST_AREA_TITLE))
             await db.flush()
             db.add(AreaSkill(area_code=self.area, skill_code="python"))
 

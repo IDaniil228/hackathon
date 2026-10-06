@@ -35,6 +35,7 @@ from taskgen.db import Area, AreaSkill, Grade
 from taskgen.generation.harness import GeneratorError, generator_request, parse_generator_output
 from taskgen.generation.params import draw_params, fill_placeholders
 from taskgen.sandbox.piston import PistonRunner
+from tests.generation.world import TEST_AREA_TITLE
 from tests.seed.mutants import MUTANTS
 
 SEED_DIR = Path(__file__).resolve().parents[2] / "seed" / "templates"
@@ -304,7 +305,7 @@ def test_coverage_check_names_what_is_missing():
 
 @pytest.mark.integration
 async def test_bank_covers_every_cell_and_imports(db_session):
-    areas = set(await db_session.scalars(select(Area.code)))
+    areas = set(await db_session.scalars(select(Area.code).where(Area.title != TEST_AREA_TITLE)))
     grades = set(await db_session.scalars(select(Grade.code)))
     gaps = coverage_gaps([_spec(path) for path in PATHS], areas, grades, SelectionSettings())
     assert not gaps, "\n".join(gaps)
