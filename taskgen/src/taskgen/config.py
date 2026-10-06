@@ -28,6 +28,10 @@ class LLMSettings(BaseModel):
     # запрос занимало тысячи токенов и иногда не оставляло места самому ответу.
     generator_reasoning_effort: ReasoningEffort | None = None
     judge_reasoning_effort: ReasoningEffort | None = None
+    # Проверяльщик ситуации эссе: ищет в ней факты шаблона и цитирует их. None — та же
+    # модель, что пишет ситуацию.
+    checker_model: str | None = None
+    checker_reasoning_effort: ReasoningEffort | None = None
     timeout_seconds: float = 120.0
     # Локальная модель отвечает на запросы по очереди; облачному провайдеру можно больше.
     concurrency: int = Field(default=1, ge=1)

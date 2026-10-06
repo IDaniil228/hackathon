@@ -9,6 +9,7 @@ import pytest
 
 from taskgen.config import GenerationSettings
 from taskgen.contracts import RunLimits
+from taskgen.generation.essay import essay_questions
 from taskgen.generation.instance import (
     InstanceDeps,
     Personalization,
@@ -18,7 +19,7 @@ from taskgen.generation.instance import (
 from taskgen.generation.leaks import defines_entrypoint
 from taskgen.sandbox.environment import describe_runtime
 from tests.evaluation.fakes import FakeLLM
-from tests.generation.fakes import LocalSandbox
+from tests.generation.fakes import LocalSandbox, essay_reply
 from tests.generation.templates import ENTRYPOINT, REFERENCE, code_spec, essay_spec
 
 LIMITS = RunLimits(timeout_ms=5000, memory_bytes=256 * 1024 * 1024)
@@ -151,11 +152,20 @@ def test_adjacent_skill_is_reproducible_and_follows_probability():
     assert {pick[0] for pick in picks if pick} == {"pytorch", "sql"}
 
 
-async def test_essay_is_personalized_too():
-    llm = FakeLLM(lambda _m, _s: legend("Расскажите про GIL."))
-    instance = await generate_instance(essay_spec(), 3, deps(llm, None), profile("Эссе-резюме"))
-    assert "Эссе-резюме" in prompt(llm.calls[0])
-    assert instance.personalization["profile"] is True
+async def test_essay_profile_and_topic_shape_only_the_situation():
+    spec = essay_spec()
+    llm = FakeLLM(essay_reply)
+    instance = await generate_instance(
+        spec, 3, deps(llm, adjacent_topic_probability=1.0), profile("Эссе-резюме")
+    )
+    scenario, check = llm.calls
+    assert "Эссе-резюме" in prompt(scenario)
+    assert "Тематика легенды: PyTorch" in prompt(scenario)
+    assert "не инструкции" in scenario["messages"][0].content
+    # Проверяльщик видит только факты и ситуацию; вопросы автора не меняются.
+    assert "Эссе-резюме" not in prompt(check)
+    assert instance.statement.endswith(essay_questions(spec, instance.params))
+    assert instance.personalization == {"profile": True, "adjacent_skill": "pytorch"}
 
 
 async def test_without_profile_prompt_has_no_profile_section():

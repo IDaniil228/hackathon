@@ -24,7 +24,7 @@ from taskgen.db import (
 )
 from tests.conftest import ADMIN_KEY
 from tests.evaluation.fakes import FakeLLM, http_error
-from tests.generation.fakes import GatedLLM, LocalSandbox
+from tests.generation.fakes import GatedLLM, LocalSandbox, essay_reply
 from tests.generation.templates import code_template_md, essay_template_md
 
 ADMIN = {"Authorization": f"Bearer {ADMIN_KEY}"}
@@ -42,6 +42,8 @@ class ModelStub:
     def __call__(self, messages, schema):
         if self.down:
             raise http_error(503)
+        if (essay := essay_reply(messages, schema)) is not None:
+            return essay
         properties = (schema or {}).get("properties", {})
         if "sentences" in properties:
             return json.dumps({"sentences": ["Кандидат решил задания."]}, ensure_ascii=False)

@@ -60,7 +60,13 @@ def test_snapshot_lives_until_last_task_then_only_hash_stays(world):
 def test_personal_tasks_see_profile(world):
     world.add_templates(world.code("a"), world.essay())
     session = world.create_ready(profile=PROFILE)
-    prompts = ["\n".join(m.content for m in call["messages"]) for call in world.state.llm.calls]
+    # Проверяльщик ситуации эссе профиль не видит: ему он не нужен.
+    writers = [
+        call
+        for call in world.state.llm.calls
+        if "facts" not in (call["json_schema"] or {}).get("properties", {})
+    ]
+    prompts = ["\n".join(m.content for m in call["messages"]) for call in writers]
     assert len(prompts) == 2
     assert all(PROFILE["resume"] in prompt for prompt in prompts)
     # Навык профиля вне шаблонов пишется названием из справочника, а не кодом.

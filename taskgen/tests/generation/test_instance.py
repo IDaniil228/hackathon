@@ -9,6 +9,7 @@ import pytest
 
 from taskgen.config import GenerationSettings
 from taskgen.contracts import HiddenPayload, RunLimits, TestReport
+from taskgen.generation.essay import essay_questions
 from taskgen.generation.instance import (
     InstanceDeps,
     LLMUnavailableError,
@@ -20,7 +21,7 @@ from taskgen.generation.instance import (
 from taskgen.generation.params import draw_params
 from taskgen.sandbox.environment import describe_runtime
 from tests.evaluation.fakes import FakeLLM, http_error
-from tests.generation.fakes import LocalSandbox, call_entrypoint
+from tests.generation.fakes import LocalSandbox, call_entrypoint, essay_reply
 from tests.generation.templates import ENTRYPOINT, code_spec, essay_spec
 
 MODEL = "generator-model"
@@ -32,7 +33,14 @@ def legend(statement: str = CLEAN, title: str = "Склад", **extra) -> str:
     return json.dumps({"title": title, "statement": statement, **extra}, ensure_ascii=False)
 
 
-def deps(llm, sandbox=None, reasoning_effort=None, **options) -> InstanceDeps:
+def deps(
+    llm,
+    sandbox=None,
+    reasoning_effort=None,
+    checker_model=None,
+    checker_reasoning_effort=None,
+    **options,
+) -> InstanceDeps:
     return InstanceDeps(
         llm=llm,
         sandbox=sandbox,
@@ -40,6 +48,8 @@ def deps(llm, sandbox=None, reasoning_effort=None, **options) -> InstanceDeps:
         options=GenerationSettings(**options),
         limits=LIMITS,
         reasoning_effort=reasoning_effort,
+        checker_model=checker_model,
+        checker_reasoning_effort=checker_reasoning_effort,
     )
 
 
@@ -255,16 +265,23 @@ async def test_llm_down_is_unavailable():
         await generate_instance(code_spec(), 3, deps(FakeLLM(responder), LocalSandbox()))
 
 
-async def test_essay_instance():
+async def test_essay_is_checked_situation_plus_verbatim_questions():
     spec = essay_spec()
     sandbox = LocalSandbox()
-    llm = FakeLLM(lambda _m, _s: legend("Объясните, как работает GIL.", title="GIL"))
-    instance = await generate_instance(spec, 11, deps(llm, sandbox))
+    llm = FakeLLM(essay_reply)
+    instance = await generate_instance(spec, 11, deps(llm, sandbox, checker_model="checker"))
 
     assert sandbox.runs == [] and sandbox.test_runs == []
     assert instance.params == draw_params(spec.params, random.Random(11))
-    assert f"про {instance.params['topic']}" in prompt_of(llm.calls[0])
-    assert instance.statement == "Объясните, как работает GIL."
+    scenario, check = llm.calls
+    assert f"про {instance.params['topic']}" in prompt_of(scenario)
+    assert scenario["model"] == MODEL and check["model"] == "checker"
+    # Вопросы автора идут в условие дословно, после ситуации, и писатель их не видит.
+    questions = essay_questions(spec, instance.params)
+    assert instance.statement.endswith(questions)
+    assert questions not in prompt_of(scenario)
+    assert all(fact.text in instance.statement for fact in spec.scenario_facts)
+    assert instance.public.title == "Ситуация"
     assert instance.hidden.cases == []
     assert instance.hidden.rubric == spec.rubric
     assert instance.hidden.reference_report is None
@@ -275,10 +292,33 @@ async def test_essay_instance():
     assert instance.public.environment is None
 
 
-async def test_essay_does_not_need_sandbox():
-    llm = FakeLLM(lambda _m, _s: legend("Вопрос?"))
-    instance = await generate_instance(essay_spec(), 1, deps(llm, None))
-    assert instance.statement == "Вопрос?"
+async def test_essay_situation_without_facts_is_retried_then_model_error():
+    llm = FakeLLM(lambda m, s: essay_reply(m, s, keep_facts=False))
+    with pytest.raises(ModelOutputError, match="нет фактов"):
+        await generate_instance(essay_spec(), 1, deps(llm, None, legend_attempts=2))
+    # Две попытки: ситуация и проверка в каждой; вторая ситуация знает причину отказа.
+    assert len(llm.calls) == 4
+    assert "Предыдущий вариант отклонён" in prompt_of(llm.calls[2])
+
+
+async def test_essay_checker_without_own_model_uses_generator_model_and_efforts():
+    llm = FakeLLM(essay_reply)
+    await generate_instance(
+        essay_spec(),
+        1,
+        deps(llm, None, reasoning_effort="none", checker_reasoning_effort="low"),
+    )
+    scenario, check = llm.calls
+    assert scenario["model"] == check["model"] == MODEL
+    assert (scenario["reasoning_effort"], check["reasoning_effort"]) == ("none", "low")
+
+
+async def test_essay_with_llm_down_is_unavailable():
+    def responder(_m, _s):
+        raise http_error(503)
+
+    with pytest.raises(LLMUnavailableError):
+        await generate_instance(essay_spec(), 1, deps(FakeLLM(responder), None))
 
 
 async def test_empty_reply_after_reasoning_is_retried_within_legend_attempts():

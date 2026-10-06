@@ -8,6 +8,8 @@ LocalSandbox исполняет код в локальном процессе Py
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 import sys
 import tempfile
 from collections.abc import Callable
@@ -17,6 +19,33 @@ from typing import Any
 import httpx
 
 from taskgen.contracts import CaseOutcome, RunRequest, RunResult, TestReport, TestRunRequest
+
+_FACTS_HEADER = "Факты, которые обязаны быть в ситуации:\n"
+_CHECKER_FACT = re.compile(r"^- (?P<id>[^:\n]+): (?P<text>.+)$", re.MULTILINE)
+
+
+def essay_reply(messages, schema, *, keep_facts: bool = True) -> str | None:
+    """Ответ модели на запрос ситуации эссе или её проверки; None — запрос не про эссе.
+
+    Писатель складывает ситуацию из фактов запроса (или пишет её без фактов), проверяльщик
+    честно ищет каждый факт в ситуации и цитирует его.
+    """
+    properties = (schema or {}).get("properties", {})
+    user = messages[1].content
+    if "situation" in properties:
+        listing = user.split(_FACTS_HEADER, 1)[1].split("\n\n", 1)[0]
+        facts = [line.removeprefix("- ") for line in listing.splitlines()]
+        situation = " ".join(facts) if keep_facts else "В команде что-то происходит."
+        return json.dumps({"title": "Ситуация", "situation": situation}, ensure_ascii=False)
+    if "facts" in properties:
+        listing, situation = user.split("<<<СИТУАЦИЯ-", 1)
+        items = []
+        for match in _CHECKER_FACT.finditer(listing):
+            present = match["text"] in situation
+            quotes = [match["text"]] if present else []
+            items.append({"fact_id": match["id"], "present": present, "quotes": quotes})
+        return json.dumps({"facts": items}, ensure_ascii=False)
+    return None
 
 
 class GatedLLM:

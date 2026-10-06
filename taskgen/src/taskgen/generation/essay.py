@@ -19,8 +19,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from taskgen.bank.parser import FENCE, find_phrases
-from taskgen.contracts import ChatMessage, LLMClient, ScenarioFact, TemplateSpec
-from taskgen.evaluation.jsonout import StructuredOutputError, complete_structured
+from taskgen.contracts import ChatMessage, LLMClient, ReasoningEffort, ScenarioFact, TemplateSpec
+from taskgen.evaluation.jsonout import EmptyReplyError, StructuredOutputError, complete_structured
 from taskgen.evaluation.judge import quote_in_answer
 from taskgen.generation.params import fill_placeholders
 
@@ -71,8 +71,18 @@ def build_statement(situation: str, questions: str) -> str:
     return f"{situation.strip()}\n\n{questions.strip()}"
 
 
-def scenario_messages(spec: TemplateSpec, params: dict[str, Any]) -> list[ChatMessage]:
-    """Запрос ситуации. Вопросов в нём нет: модели нечего пересказать и не на что ответить."""
+def scenario_messages(
+    spec: TemplateSpec,
+    params: dict[str, Any],
+    *,
+    system_suffix: str = "",
+    request_suffix: str = "",
+) -> list[ChatMessage]:
+    """Запрос ситуации. Вопросов в нём нет: модели нечего пересказать и не на что ответить.
+
+    Суффиксы — персонализация от генерации: профиль кандидата и тема легенды. Они меняют
+    только ситуацию, а вопросы и факты задаёт шаблон.
+    """
     facts = "\n".join(f"- {fact.text}" for fact in filled_facts(spec, params))
     request = (
         f"Инструкция автора задания:\n{fill_placeholders(spec.generator_prompt, params)}\n\n"
@@ -85,8 +95,8 @@ def scenario_messages(spec: TemplateSpec, params: dict[str, Any]) -> list[ChatMe
             f"другого слова: {phrases}."
         )
     return [
-        ChatMessage(role="system", content=SCENARIO_SYSTEM),
-        ChatMessage(role="user", content=request),
+        ChatMessage(role="system", content=SCENARIO_SYSTEM + system_suffix),
+        ChatMessage(role="user", content=request + request_suffix),
     ]
 
 
@@ -183,7 +193,11 @@ def _unclosed_fence(text: str) -> bool:
 
 
 async def _present_facts(
-    llm: LLMClient, facts: list[ScenarioFact], situation: str, model: str
+    llm: LLMClient,
+    facts: list[ScenarioFact],
+    situation: str,
+    model: str,
+    reasoning_effort: ReasoningEffort | None,
 ) -> set[str] | None:
     """Факты с проверенными цитатами или None, если проверяльщик не ответил по схеме."""
     try:
@@ -194,6 +208,7 @@ async def _present_facts(
             _checker_schema(facts),
             model=model,
             temperature=0.0,
+            reasoning_effort=reasoning_effort,
         )
     except StructuredOutputError:
         return None
@@ -215,6 +230,7 @@ async def check_essay_scenario(
     params: dict[str, Any],
     *,
     model: str,
+    reasoning_effort: ReasoningEffort | None = None,
 ) -> EssayCheck:
     """Проверка ситуации до выдачи кандидату.
 
@@ -230,7 +246,7 @@ async def check_essay_scenario(
         reasons.append("в ситуации не закрыт блок кода, и вопросы попадут внутрь него")
 
     facts = filled_facts(spec, params)
-    present = await _present_facts(llm, facts, scenario.situation, model)
+    present = await _present_facts(llm, facts, scenario.situation, model, reasoning_effort)
     if present is None:
         reasons.append("проверяльщик фактов не ответил по схеме")
         present = set()
@@ -274,6 +290,10 @@ async def generate_essay(
     checker_model: str,
     temperature: float,
     attempts: int,
+    reasoning_effort: ReasoningEffort | None = None,
+    checker_reasoning_effort: ReasoningEffort | None = None,
+    system_suffix: str = "",
+    request_suffix: str = "",
 ) -> EssayDraft:
     """Проверенное условие эссе за не больше чем attempts попыток написать ситуацию.
 
@@ -281,20 +301,39 @@ async def generate_essay(
     он писатель, а не кандидат, и ответов из рубрики в причинах нет.
     httpx.HTTPError от любой из моделей не перехватывается.
     """
-    base = scenario_messages(spec, params)
+    base = scenario_messages(
+        spec, params, system_suffix=system_suffix, request_suffix=request_suffix
+    )
     messages = base
     reason = ""
     last: EssayCheck | None = None
     for _ in range(attempts):
         try:
             scenario = await complete_structured(
-                llm, messages, EssayScenario, SCENARIO_SCHEMA, model=model, temperature=temperature
+                llm,
+                messages,
+                EssayScenario,
+                SCENARIO_SCHEMA,
+                model=model,
+                temperature=temperature,
+                reasoning_effort=reasoning_effort,
             )
+        except EmptyReplyError:
+            reason = "модель вернула пустой ответ, возможно, истратив его на рассуждения"
+            messages = base
+            continue
         except StructuredOutputError:
             reason = "ответ модели не соответствует формату"
             messages = base
             continue
-        last = await check_essay_scenario(llm, spec, scenario, params, model=checker_model)
+        last = await check_essay_scenario(
+            llm,
+            spec,
+            scenario,
+            params,
+            model=checker_model,
+            reasoning_effort=checker_reasoning_effort,
+        )
         if last.ok:
             questions = essay_questions(spec, params)
             return EssayDraft(
