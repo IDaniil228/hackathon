@@ -1,11 +1,13 @@
+import asyncio
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 
 import pytest
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, create_async_engine
 
 from taskgen.config import Settings
-from taskgen.db import CONNECT_ARGS
+from taskgen.db import CONNECT_ARGS, Template
 
 
 class FakeEmbedder:
@@ -28,6 +30,23 @@ class FakeEmbedder:
 def unique() -> str:
     """Префикс имён шаблонов: тесты не сталкиваются с данными в общей БД."""
     return f"t{uuid.uuid4().hex[:10]}"
+
+
+@pytest.fixture
+def purge_committed(settings: Settings, unique: str) -> Iterator[None]:
+    """Удаляет после теста шаблоны с префиксом unique, которые код зафиксировал в БД.
+
+    Нужен там, где транзакцию открывает сам код (API, CLI) и откатить её снаружи нельзя.
+    """
+    yield
+
+    async def purge() -> None:
+        engine = create_async_engine(settings.database_url, connect_args=CONNECT_ARGS)
+        async with engine.begin() as connection:
+            await connection.execute(delete(Template).where(Template.name.like(f"{unique}%")))
+        await engine.dispose()
+
+    asyncio.run(purge())
 
 
 @pytest.fixture

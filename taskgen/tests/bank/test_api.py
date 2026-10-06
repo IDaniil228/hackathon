@@ -1,11 +1,7 @@
-import asyncio
 import re
 
 import pytest
-from sqlalchemy import delete
-from sqlalchemy.ext.asyncio import create_async_engine
 
-from taskgen.db import CONNECT_ARGS, Template
 from tests.bank.conftest import FakeEmbedder
 from tests.bank.factory import make_essay, make_template
 from tests.conftest import ADMIN_KEY
@@ -22,18 +18,10 @@ def embedder() -> FakeEmbedder:
 
 
 @pytest.fixture
-def api(client, embedder, settings, unique):
+def api(client, embedder, purge_committed):
     """Клиент с подделкой эмбеддера; шаблоны теста удаляются после него."""
     client.app.state.embedder = embedder
-    yield client
-
-    async def cleanup() -> None:
-        engine = create_async_engine(settings.database_url, connect_args=CONNECT_ARGS)
-        async with engine.begin() as connection:
-            await connection.execute(delete(Template).where(Template.name.like(f"{unique}%")))
-        await engine.dispose()
-
-    asyncio.run(cleanup())
+    return client
 
 
 @pytest.fixture
