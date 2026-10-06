@@ -1,7 +1,12 @@
 # Слой хранения
 
-PostgreSQL 18 + pgvector. Схема и справочники разворачиваются автоматически при
-первом старте контейнера.
+PostgreSQL 18 + pgvector. Схема накатывается одним SQL-файлом явной командой —
+никакой автоматики образа при создании тома.
+
+| Файл | Что делает |
+|---|---|
+| `schema.sql` | расширения, шесть схем, 62 таблицы, 182 индекса, справочники, банк шаблонов заданий |
+| `demo_data.sql` | демо-данные под сквозной сценарий из ТЗ |
 
 ## Запуск
 
@@ -10,7 +15,26 @@ cp .env.example .env     # пароль поменять
 docker compose up -d postgres
 ```
 
-Готовность: `docker compose ps` — статус `healthy`. Подключение:
+Контейнер поднимается с пустой базой. Схема:
+
+```bash
+docker compose exec -T postgres psql -U fsp -d fsp -v ON_ERROR_STOP=1 -f /sql/schema.sql
+```
+
+Демо-данные (опционально):
+
+```bash
+docker compose exec -T postgres psql -U fsp -d fsp -v ON_ERROR_STOP=1 -f /sql/demo_data.sql
+```
+
+Каталог `db/` смонтирован в контейнер как `/sql` только для чтения. С хоста,
+если установлен psql, то же самое без контейнера:
+
+```bash
+psql "postgresql://fsp:ПАРОЛЬ@localhost:5432/fsp" -v ON_ERROR_STOP=1 -f db/schema.sql
+```
+
+Подключиться руками:
 
 ```bash
 docker compose exec postgres psql -U fsp -d fsp
@@ -22,41 +46,31 @@ docker compose exec postgres psql -U fsp -d fsp
 docker compose --profile tools up -d adminer
 ```
 
-## Как устроен деплой схемы
+## Как устроен `schema.sql`
 
-Файлы `db/init/*.sql` монтируются в `/docker-entrypoint-initdb.d` и выполняются
-по возрастанию имени **только при пустом томе**:
+Файл **самодостаточен и применим повторно**: он начинается с
+`DROP SCHEMA ... CASCADE` по своим шести схемам и создаёт их заново вместе со
+справочниками. Поменяли схему — просто накатили файл ещё раз, пересоздавать
+том не нужно.
 
-| Файл | Содержимое |
-|---|---|
-| `00_extensions.sql` | `vector`, `citext`, `pg_trgm` |
-| `01_schemas.sql` | схемы `core`, `ref`, `profile`, `assess`, `hire`, `match` |
-| `10_core.sql` | пользователи, токены, сессии, согласия 152-ФЗ |
-| `20_ref.sql` | справочники предметной области и описание EAV-атрибутов |
-| `30_profile.sql` | анкета кандидата, резюме, ФСП, GitHub |
-| `40_assess.sql` | опрос, банк заданий, тестирование, история грейдов |
-| `50_hire.sql` | компании, вакансии, потребности, приглашения, отклики |
-| `60_match.sql` | эмбеддинги, подборки, объяснения, чат |
-| `70_indexes.sql` | индексы |
-| `90_seed_ref.sql` | справочники: отрасли, специализации, грейды, навыки |
-| `91_seed_task_bank.sql` | банк шаблонов заданий (сменная часть системы) |
-| `95_seed_demo.sql` | демо-данные под сквозной сценарий |
+Всё обёрнуто в одну транзакцию. DDL в PostgreSQL транзакционный, поэтому при
+любой ошибке посреди файла база остаётся ровно в прежнем состоянии: не будет
+«половины схемы». Проверено специально сломанным прогоном.
 
-Изменили схему — пересоздайте том:
+> [!] `DROP SCHEMA ... CASCADE` сносит данные в этих схемах. Это не «миграция»,
+> а пересоздание. Как только появятся данные, которые жалко, схема переезжает
+> на Alembic: `alembic stamp head` на развёрнутой базе, дальше ревизиями.
 
-```bash
-docker compose down -v && docker compose up -d postgres
-```
+Порядок разделов внутри файла: расширения → схемы → `core` → `ref` → `profile`
+→ `assess` → `hire` → `match` → индексы → справочники → банк заданий →
+настройка `search_path`.
 
-> Том именованный (`fsp-pgdata`), `down` без `-v` его не трогает. `down -v`
-> удаляет данные безвозвратно.
-
-Когда разработка стабилизируется, поверх этой схемы ставится Alembic:
-`alembic stamp head` на развёрнутой базе, дальше изменения идут ревизиями.
+`demo_data.sql` отдельной транзакцией и рассчитан на чистую схему: повторный
+прогон поверх себя упрётся в уникальные ключи, перед ним нужен `schema.sql`.
 
 ## Что должен знать бэкенд
 
-**Схемы.** Таблицы не лежат в `public`. В SQLAlchemy указывайте схему явно:
+**Схемы.** Таблицы не в `public`. В SQLAlchemy указывайте схему явно:
 
 ```python
 class Candidate(Base):
@@ -64,7 +78,12 @@ class Candidate(Base):
     __table_args__ = {"schema": "profile"}
 ```
 
-ENUM-типы тоже живут в схемах своих модулей: `ENUM(..., schema="hire", name="invitation_status")`.
+ENUM-типы тоже живут в схемах своих модулей:
+`ENUM(..., schema="hire", name="invitation_status")`.
+
+`schema.sql` прописывает роли `search_path = public, core, ref, profile, assess,
+hire, match` — это для psql и ad-hoc запросов. На модели не полагаться: без
+явной схемы ORM сгенерирует DDL мимо модуля.
 
 **Никаких триггеров и хранимых функций.** Следствия:
 
@@ -102,14 +121,14 @@ LIMIT 40;
 
 **Другая предметная область.** Чтобы запустить платформу вне ИТ, меняются
 только данные: строка в `ref.industries`, свои `specializations`, `grades`,
-`skills` и собственный файл банка заданий вместо `91_seed_task_bank.sql`.
-DDL при этом не трогается — это проверяется заведённой в сидах отраслью
-«Маркетинг».
+`skills` и свой банк заданий. DDL не трогается — это проверяется заведённой в
+справочниках отраслью «Маркетинг».
 
 ## Проверка развёрнутой базы
 
 ```bash
 docker compose exec postgres psql -U fsp -d fsp -c '\dn'
 docker compose exec postgres psql -U fsp -d fsp -c '\dt profile.*'
-docker compose logs postgres | grep -i error    # пусто после чистого старта
+docker compose exec postgres psql -U fsp -d fsp -c \
+  "SELECT count(*) FROM pg_tables WHERE schemaname IN ('core','ref','profile','assess','hire','match')"
 ```

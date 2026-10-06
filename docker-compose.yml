@@ -18,8 +18,10 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql
-      # Скрипты отрабатывают по возрастанию имени и ТОЛЬКО при пустом томе
-      - ./db/init:/docker-entrypoint-initdb.d:ro
+      # Схема монтируется только для чтения: накатывается явной командой
+      # (docker compose exec -T postgres psql -U fsp -d fsp -f /sql/schema.sql),
+      # а не автоматикой образа при создании тома
+      - ./db:/sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
