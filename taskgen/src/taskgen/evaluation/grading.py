@@ -1,10 +1,21 @@
-"""Грейд по уровням: чистая функция от баллов заданий."""
+"""Грейд по уровням: чистая функция от баллов заданий.
+
+В оценку по уровням входят только задания с кодом и эссе. Тестовая задачка проверяет знание
+одного факта, и угаданный ответ получает полный балл с вероятностью 1/4: такое задание не
+доказывает уровень и не должно ни подтверждать его, ни снимать.
+"""
 
 from __future__ import annotations
 
 from typing import Literal
 
 from pydantic import BaseModel
+
+from taskgen.contracts import TaskKind
+
+Outcome = Literal["passed", "failed", "upgraded", "downgraded", "insufficient"]
+
+GRADED_KINDS = frozenset({TaskKind.CODE, TaskKind.ESSAY})
 
 
 class GradeLevel(BaseModel):
@@ -15,6 +26,7 @@ class GradeLevel(BaseModel):
 class TaskScore(BaseModel):
     grade: str
     score: float
+    kind: TaskKind = TaskKind.CODE
 
 
 class LevelResult(BaseModel):
@@ -36,7 +48,7 @@ class GradeAssessment(BaseModel):
     levels: list[LevelResult]
     claimed: str
     assigned: str | None
-    outcome: Literal["passed", "failed", "upgraded", "downgraded"]
+    outcome: Outcome
     recommendation: Recommendation
 
 
@@ -55,8 +67,12 @@ def assess_grade(
     *,
     solved_threshold: float,
     pass_threshold: float,
+    min_evidence: int,
 ) -> GradeAssessment:
     """Присваивает старший уровень, который подтверждён сам и подкреплён младшими.
+
+    Задания kind=quiz не учитываются. Если заданий заявленного уровня меньше min_evidence,
+    вердикт — insufficient: судить о заявленном грейде не по чему.
 
     Уровень подтверждён, если доля решённых заданий уровня не меньше pass_threshold и доля
     решённых среди всех заданий представленных младших уровней тоже не меньше порога.
@@ -70,6 +86,7 @@ def assess_grade(
     unknown = {task.grade for task in tasks} - position.keys()
     if unknown or claimed not in position:
         raise ValueError(f"Грейды не найдены в справочнике: {sorted(unknown | {claimed})}")
+    tasks = [task for task in tasks if task.kind in GRADED_KINDS]
 
     levels: list[LevelResult] = []
     lower_total = lower_solved = 0
@@ -94,6 +111,24 @@ def assess_grade(
         lower_total += len(scores)
         lower_solved += solved
 
+    evidence = sum(task.grade == claimed for task in tasks)
+    if evidence < min_evidence:
+        return GradeAssessment(
+            levels=levels,
+            claimed=claimed,
+            assigned=None,
+            outcome="insufficient",
+            recommendation=Recommendation(
+                action="take_test",
+                grade=claimed,
+                text=(
+                    f"На заявленном уровне {claimed} заданий с кодом и эссе {evidence}, а для "
+                    f"вердикта нужно не меньше {min_evidence}: грейд не оценён. Рекомендуется "
+                    f"пройти тест на грейд {claimed} ещё раз"
+                ),
+            ),
+        )
+
     confirmed = [level.grade for level in levels if level.confirmed]
     assigned = confirmed[-1] if confirmed else None
     outcome = _outcome(assigned, claimed, position)
@@ -106,9 +141,7 @@ def assess_grade(
     )
 
 
-def _outcome(
-    assigned: str | None, claimed: str, position: dict[str, int]
-) -> Literal["passed", "failed", "upgraded", "downgraded"]:
+def _outcome(assigned: str | None, claimed: str, position: dict[str, int]) -> Outcome:
     if assigned is None:
         return "failed"
     if position[assigned] == position[claimed]:

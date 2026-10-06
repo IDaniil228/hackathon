@@ -261,6 +261,20 @@ def test_score_session_end_to_end(world):
     assert "Тест 1 из 1" in body["text"]
 
 
+def test_session_without_claimed_level_tasks_is_insufficient(world):
+    session_id, task_ids = world.make_session(
+        [{"grade": "junior", "kind": "code"}, {"grade": "senior", "kind": "code"}]
+    )
+    for task_id in task_ids:
+        _answer(world, task_id)
+    result = world.client.post(f"/sessions/{session_id}/score", headers=AUTH).json()
+    assert result["outcome"] == "insufficient"
+    assert result["assigned_grade"] is None
+    recommendation = result["recommendation"]
+    assert (recommendation["action"], recommendation["grade"]) == ("take_test", "middle")
+    assert "middle" in recommendation["text"]
+
+
 def test_zero_pass_rate_scores_zero_without_judge(world):
     session_id, (task_id,) = world.make_session([{"grade": "middle", "kind": "code"}])
     world.state.sandbox = FakeSandbox(_report([False, False]))

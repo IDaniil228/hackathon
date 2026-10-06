@@ -11,7 +11,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any
 
 import httpx
 from pydantic import BaseModel, Field, ValidationError
@@ -43,6 +43,7 @@ from taskgen.evaluation.detector import LLMAIDetector
 from taskgen.evaluation.grading import (
     GradeLevel,
     LevelResult,
+    Outcome,
     Recommendation,
     TaskScore,
     assess_grade,
@@ -196,7 +197,11 @@ class SessionResult(BaseModel):
     session_id: uuid.UUID
     claimed_grade: str
     assigned_grade: str | None = Field(description="Подтверждённый грейд; null — ни один")
-    outcome: Literal["passed", "failed", "upgraded", "downgraded"]
+    outcome: Outcome = Field(
+        description="passed, upgraded, downgraded или failed — вердикт по уровням; "
+        "insufficient — заданий с кодом и эссе заявленного уровня меньше "
+        "min_evidence_per_level, и вердикта нет"
+    )
     recommendation: Recommendation
     levels: list[LevelResult]
     thresholds: Thresholds
@@ -524,11 +529,15 @@ async def score_session(ev: Evaluator, session_id: uuid.UUID) -> SessionResult:
 
     solved = ev.settings.scoring.solved_threshold
     assessment = assess_grade(
-        [TaskScore(grade=outcome.grade, score=outcome.score) for outcome in outcomes],
+        [
+            TaskScore(grade=outcome.grade, score=outcome.score, kind=outcome.kind)
+            for outcome in outcomes
+        ],
         [GradeLevel(code=grade.code, level=grade.level) for grade in grades],
         session.claimed_grade_code,
         solved_threshold=solved,
         pass_threshold=ev.settings.scoring.pass_threshold,
+        min_evidence=ev.settings.scoring.min_evidence_per_level,
     )
     result = SessionResult(
         session_id=session_id,

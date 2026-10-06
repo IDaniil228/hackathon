@@ -2032,9 +2032,11 @@
               "passed",
               "failed",
               "upgraded",
-              "downgraded"
+              "downgraded",
+              "insufficient"
             ],
-            "title": "Outcome"
+            "title": "Outcome",
+            "description": "passed, upgraded, downgraded или failed — вердикт по уровням; insufficient — заданий с кодом и эссе заявленного уровня меньше min_evidence_per_level, и вердикта нет"
           },
           "recommendation": {
             "$ref": "#/components/schemas/Recommendation"

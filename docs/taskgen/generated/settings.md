@@ -57,6 +57,7 @@ OpenAI-совместимый провайдер: Ollama, vLLM или облач
 | `scoring.weight_performance` | `TASKGEN_SCORING__WEIGHT_PERFORMANCE` | number | `0.05` | Вес скорости и памяти относительно эталона |
 | `scoring.pass_threshold` | `TASKGEN_SCORING__PASS_THRESHOLD` | number, ≥ 0.0, ≤ 1.0 | `0.6` | Доля решённых заданий уровня, начиная с которой уровень подтверждён |
 | `scoring.solved_threshold` | `TASKGEN_SCORING__SOLVED_THRESHOLD` | number, ≥ 0.0, ≤ 1.0 | `0.7` | Балл, начиная с которого задание считается решённым. При весах по умолчанию 0.7 недостижим, если упала половина тестов: 0.6·0.5 + 0.4 = 0.7 только при идеальных рубрике, качестве и скорости. Все тесты без замечаний судьи дают 0.6 и тоже не проходят |
+| `scoring.min_evidence_per_level` | `TASKGEN_SCORING__MIN_EVIDENCE_PER_LEVEL` | integer, ≥ 0 | `1` | Сколько заданий с кодом и эссе заявленного уровня нужно для вердикта о грейде; меньше — исход insufficient вместо случайного вердикта. Тестовые задачки не считаются |
 | `scoring.judge_samples` | `TASKGEN_SCORING__JUDGE_SAMPLES` | integer, ≥ 1 | `3` | Сколько раз судья оценивает ответ; итог — нижняя медиана |
 | `scoring.judge_temperature` | `TASKGEN_SCORING__JUDGE_TEMPERATURE` | number, ≥ 0.0, ≤ 2.0 | `0.7` | Температура судьи. Ненулевая нужна, чтобы сэмплы различались и разброс что-то значил |
 | `scoring.analyzer_timeout_seconds` | `TASKGEN_SCORING__ANALYZER_TIMEOUT_SECONDS` | number, > 0.0 | `30.0` | Лимит времени одного статического анализатора, секунды |

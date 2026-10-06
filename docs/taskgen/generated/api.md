@@ -654,7 +654,7 @@
 | `session_id` | string (uuid) | да |  |  |
 | `claimed_grade` | string | да |  |  |
 | `assigned_grade` | string или null | да |  | Подтверждённый грейд; null — ни один |
-| `outcome` | одно из `"passed"`, `"failed"`, `"upgraded"`, `"downgraded"` | да |  |  |
+| `outcome` | одно из `"passed"`, `"failed"`, `"upgraded"`, `"downgraded"`, `"insufficient"` | да |  | passed, upgraded, downgraded или failed — вердикт по уровням; insufficient — заданий с кодом и эссе заявленного уровня меньше min_evidence_per_level, и вердикта нет |
 | `recommendation` | [Recommendation](#recommendation) | да |  |  |
 | `levels` | array из [LevelResult](#levelresult) | да |  |  |
 | `thresholds` | [Thresholds](#thresholds) | да |  |  |
