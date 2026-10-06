@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Витрина стилей ФСП</title>
+  <link rel="stylesheet" href="dist/tokens.css">
+  <link rel="stylesheet" href="dist/base.css">
+  <style>
+    /* Стили самой витрины: только раскладка, цвета из токенов */
+    .pv-section { padding: var(--fsp-space-12) 0; border-top: 1px solid var(--fsp-color-border); }
+    .pv-section > h2 { margin-bottom: var(--fsp-space-6); }
+    .pv-hero { position: relative; padding: var(--fsp-space-12) 0 var(--fsp-space-10); overflow: hidden; }
+    .pv-hero__lines { position: absolute; right: 0; top: var(--fsp-space-2); width: min(360px, 50%); color: var(--fsp-color-link); opacity: 0.7; pointer-events: none; }
+    .pv-hero__lines .pv-dot-accent { color: var(--fsp-color-accent); }
+    .pv-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--fsp-space-3); }
+    .pv-swatch { border: 1px solid var(--fsp-color-border); border-radius: var(--fsp-radius-md); overflow: hidden; background-color: var(--fsp-color-surface); }
+    .pv-swatch__chip { height: 72px; border-bottom: 1px solid var(--fsp-color-border); }
+    .pv-swatch__meta { padding: var(--fsp-space-2) var(--fsp-space-3); font-size: var(--fsp-text-xs-size); line-height: var(--fsp-text-xs-leading); }
+    .pv-swatch__meta b { display: block; font-size: var(--fsp-text-sm-size); }
+    .pv-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--fsp-space-3); margin-bottom: var(--fsp-space-4); }
+    .pv-type-row { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: var(--fsp-space-4); align-items: baseline; padding: var(--fsp-space-3) 0; border-bottom: 1px dashed var(--fsp-color-border); }
+    .pv-type-row > :last-child { margin: 0; }
+    .pv-logo-stage { display: flex; flex-wrap: wrap; gap: var(--fsp-space-6); }
+    .pv-logo-box { display: flex; align-items: center; justify-content: center; max-width: 100%; overflow-x: auto; padding: var(--fsp-space-6); border: 1px solid var(--fsp-color-border); border-radius: var(--fsp-radius-md); }
+    .pv-logo-box--light { background-color: var(--fsp-palette-light); }
+    .pv-logo-box--dark { background-color: var(--fsp-palette-dark); }
+    .pv-logo-box .fsp-logo { outline: 1px dashed var(--fsp-color-accent); }
+    .pv-missing { display: none; padding: var(--fsp-space-4); border: 1px dashed var(--fsp-color-border-strong); border-radius: var(--fsp-radius-sm); font-size: var(--fsp-text-sm-size); }
+    .pv-logos-missing .pv-missing { display: block; }
+    .pv-logos-missing .pv-logo-stage { display: none; }
+    .pv-mock { border: 1px solid var(--fsp-color-border); border-radius: var(--fsp-radius-lg); overflow: hidden; background-color: var(--fsp-color-bg); }
+    .pv-mock__body { padding: var(--fsp-space-6); }
+    .pv-candidate { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--fsp-space-4); }
+    .pv-avatar { display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--fsp-radius-md); background-color: var(--fsp-color-primary-soft); color: var(--fsp-color-link); font-family: var(--fsp-font-family-brand); font-weight: var(--fsp-font-weight-bold); font-size: var(--fsp-text-lg-size); }
+    .pv-meta { display: flex; flex-wrap: wrap; gap: var(--fsp-space-1) var(--fsp-space-4); margin: 0; padding: 0; list-style: none; font-size: var(--fsp-text-sm-size); color: var(--fsp-color-text-muted); }
+    .pv-salary { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--fsp-space-2); }
+    .pv-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--fsp-space-2) var(--fsp-space-4); margin: 0; font-size: var(--fsp-text-sm-size); }
+    .pv-dl dt { color: var(--fsp-color-text-muted); }
+    .pv-dl dd { margin: 0; }
+    .pv-theme { display: inline-flex; gap: var(--fsp-space-1); }
+    .pv-theme [aria-pressed="true"] { background-color: var(--fsp-color-primary-soft); }
+    @media (width < 768px) {
+      .pv-type-row { grid-template-columns: minmax(0, 1fr); gap: var(--fsp-space-1); }
+      .pv-mock__body { padding: var(--fsp-space-4); }
+      .pv-hero__lines { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="fsp-topbar">
+    <a href="#top" aria-label="ФСП, на главную">
+      <span class="fsp-logo fsp-logo--short" style="--fsp-logo-clearspace: 0">
+        <img class="fsp-only-light" src="assets/logo/logo-short-on-light.svg" alt="ФСП" onerror="document.body.classList.add('pv-logos-missing')">
+        <img class="fsp-only-dark" src="assets/logo/logo-short-on-dark.svg" alt="ФСП">
+      </span>
+    </a>
+    <div class="pv-theme" role="group" aria-label="Тема">
+      <button class="fsp-btn fsp-btn--ghost fsp-btn--sm" type="button" data-set-theme="auto" aria-pressed="true">Авто</button>
+      <button class="fsp-btn fsp-btn--ghost fsp-btn--sm" type="button" data-set-theme="light" aria-pressed="false">Светлая</button>
+      <button class="fsp-btn fsp-btn--ghost fsp-btn--sm" type="button" data-set-theme="dark" aria-pressed="false">Тёмная</button>
+    </div>
+  </header>
+
+  <main id="top" class="fsp-container">
+    <section class="pv-hero">
+      <svg class="pv-hero__lines" viewBox="0 0 400 240" fill="none" aria-hidden="true">
+        <path d="M10 70 A60 60 0 0 1 70 10 L70 110 A60 60 0 0 0 130 170 L250 170 A60 60 0 0 1 310 230 L310 230 A60 60 0 0 0 370 170 L370 10" stroke="currentColor" stroke-width="1.5"/>
+        <circle cx="10" cy="70" r="4" fill="currentColor"/>
+        <circle cx="70" cy="10" r="4" fill="currentColor"/>
+        <circle class="pv-dot-accent" cx="310" cy="230" r="4" fill="currentColor"/>
+        <circle cx="370" cy="10" r="4" fill="currentColor"/>
+      </svg>
+      <span class="fsp-overline">Брендбук ФСП · визуальная основа платформы</span>
+      <h1 class="fsp-display">Витрина стилей</h1>
+      <p class="fsp-muted">Токены, базовые стили и два экрана платформы подбора ИТ-кандидатов. Все цвета на странице читаются из <code>dist/tokens.css</code>; переключите тему в шапке</p>
+    </section>
+
+    <section class="pv-section" aria-labelledby="palette">
+      <h2 id="palette">Палитра</h2>
+      <h3>Фирменные цвета</h3>
+      <p class="fsp-muted">Из брендбука ФСП. Белый не входит в фирменную палитру и используется как нейтральная поверхность</p>
+      <div class="pv-swatches" data-swatches="palette" data-names="blue red light gray dark white"></div>
+      <h3 style="margin-top: var(--fsp-space-8)">Семантические цвета текущей темы</h3>
+      <p class="fsp-muted">Производные от фирменных: правило вывода каждого цвета в <code>tokens.json</code></p>
+      <div class="pv-swatches" data-swatches="color" data-names="bg surface surface-muted surface-hover border border-strong text text-muted primary primary-hover primary-soft link accent danger danger-soft danger-text neutral-soft control focus selection"></div>
+    </section>
+
+    <section class="pv-section" aria-labelledby="type">
+      <h2 id="type">Типографика</h2>
+      <p class="fsp-muted">JetBrains Mono, единственный шрифт брендбука ФСП</p>
+      <div class="pv-type-row"><span class="fsp-caption fsp-muted">display 48</span><p class="fsp-display">Подбор ИТ</p></div>
+      <div class="pv-type-row"><span class="fsp-caption fsp-muted">h1 36</span><h1>Банк кандидатов</h1></div>
+      <div class="pv-type-row"><span class="fsp-caption fsp-muted">h2 28</span><h2>Приглашения</h2></div>
+      <div class="pv-type-row"><span class="fsp-caption fsp-muted">h3 22</span><h3>Python-разработчик</h3></div>
+      <div class="pv-type-row"><span class="fsp-caption fsp-muted">h4 18</span><h4>Подтверждённые достижения</h4></div>
+      <div class="pv-type-row"><span class="fsp-caption fsp-muted">текст 16</span><p>Работодатель сам находит кандидата в нужной категории и отправляет приглашение с зарплатной вилкой. Кандидат видит условия до начала общения</p></div>
+      <div class="pv-type-row"><span class="fsp-caption fsp-muted">подпись 14</span><p class="fsp-caption fsp-muted">Обновлено 3 дня назад · категория подтверждена тестом</p></div>
+      <div class="pv-type-row"><span class="fsp-caption fsp-muted">надстрочник 12</span><span class="fsp-overline">Категория и грейд</span></div>
+      <div class="pv-type-row"><span class="fsp-caption fsp-muted">цифры</span><span class="fsp-figure">180&nbsp;000 –&nbsp;240&nbsp;000&nbsp;₽</span></div>
+      <div class="pv-type-row"><span class="fsp-caption fsp-muted">ссылка, код</span><p><a href="#type">Открыть профиль</a> · <code>invitation.status = 'sent'</code></p></div>
+      <hr class="fsp-rule">
+    </section>
+
+    <section class="pv-section" aria-labelledby="logo">
+      <h2 id="logo">Логотип</h2>
+      <p class="fsp-muted">Пунктир показывает охранное поле, размеры минимальные. Версия для светлого фона и версия для тёмного фона из брендбука. Полная версия в минимальном размере шире телефона: на узком экране ставьте короткую</p>
+      <div class="pv-missing">Логотипы не скачаны: выполните <code>python3 brand/fetch_logos.py</code>. Брендбук не разрешает явно распространять логотипы, поэтому их нет в репозитории</div>
+      <div class="pv-logo-stage">
+        <div class="pv-logo-box pv-logo-box--light">
+          <span class="fsp-logo"><img src="assets/logo/logo-full-on-light.svg" alt="Федерация спортивного программирования России"></span>
+        </div>
+        <div class="pv-logo-box pv-logo-box--dark">
+          <span class="fsp-logo"><img src="assets/logo/logo-full-on-dark.svg" alt="Федерация спортивного программирования России"></span>
+        </div>
+        <div class="pv-logo-box pv-logo-box--light">
+          <span class="fsp-logo fsp-logo--short"><img src="assets/logo/logo-short-on-light.svg" alt="ФСП"></span>
+        </div>
+        <div class="pv-logo-box pv-logo-box--dark">
+          <span class="fsp-logo fsp-logo--short"><img src="assets/logo/logo-short-on-dark.svg" alt="ФСП"></span>
+        </div>
+        <div class="pv-logo-box pv-logo-box--light">
+          <span class="fsp-logo fsp-logo--short"><img src="assets/logo/logo-sign-on-light.svg" alt="Знак ФСП"></span>
+        </div>
+        <div class="pv-logo-box pv-logo-box--dark">
+          <span class="fsp-logo fsp-logo--short"><img src="assets/logo/logo-sign-on-dark.svg" alt="Знак ФСП"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section" aria-labelledby="buttons">
+      <h2 id="buttons">Кнопки</h2>
+      <div class="pv-row">
+        <button class="fsp-btn fsp-btn--primary" type="button">Пригласить</button>
+        <button class="fsp-btn fsp-btn--secondary" type="button">В избранное</button>
+        <button class="fsp-btn fsp-btn--ghost" type="button">Подробнее</button>
+        <button class="fsp-btn fsp-btn--danger" type="button">Удалить вакансию</button>
+      </div>
+      <div class="pv-row">
+        <button class="fsp-btn fsp-btn--primary fsp-btn--sm" type="button">Маленькая</button>
+        <button class="fsp-btn fsp-btn--primary" type="button">Обычная</button>
+        <button class="fsp-btn fsp-btn--primary fsp-btn--lg" type="button">Крупная</button>
+      </div>
+      <div class="pv-row">
+        <button class="fsp-btn fsp-btn--primary" type="button" disabled>Неактивна</button>
+        <button class="fsp-btn fsp-btn--secondary" type="button" disabled>Неактивна</button>
+        <button class="fsp-btn fsp-btn--danger" type="button" disabled>Неактивна</button>
+        <a class="fsp-btn fsp-btn--secondary" href="#buttons">Ссылка-кнопка</a>
+      </div>
+      <p class="fsp-caption fsp-muted">Наведение, нажатие и фокус с клавиатуры (Tab) видны вживую</p>
+    </section>
+
+    <section class="pv-section" aria-labelledby="forms">
+      <h2 id="forms">Формы</h2>
+      <div class="fsp-grid">
+        <div class="fsp-card">
+          <div class="fsp-field">
+            <label class="fsp-label" for="f-email">Электронная почта</label>
+            <input class="fsp-input" id="f-email" type="email" placeholder="name@example.com" aria-describedby="f-email-hint">
+            <span class="fsp-hint" id="f-email-hint">Придёт письмо для подтверждения адреса</span>
+          </div>
+          <div class="fsp-field">
+            <label class="fsp-label" for="f-salary">Зарплата от, ₽</label>
+            <input class="fsp-input" id="f-salary" inputmode="numeric" value="240 000" aria-invalid="true" aria-describedby="f-salary-err">
+            <span class="fsp-error-text" id="f-salary-err">Нижняя граница больше верхней</span>
+          </div>
+          <div class="fsp-field">
+            <label class="fsp-label" for="f-grade">Грейд</label>
+            <div class="fsp-select-wrap">
+              <select class="fsp-select" id="f-grade">
+                <option>Junior</option>
+                <option selected>Middle</option>
+                <option>Senior</option>
+              </select>
+            </div>
+          </div>
+          <div class="fsp-field">
+            <label class="fsp-label" for="f-disabled">ID участника ФСП</label>
+            <input class="fsp-input" id="f-disabled" value="FSP-000000" disabled>
+          </div>
+        </div>
+        <div class="fsp-card">
+          <div class="fsp-field">
+            <label class="fsp-label" for="f-offer">Описание предложения</label>
+            <textarea class="fsp-textarea" id="f-offer" placeholder="Задачи, команда, формат работы"></textarea>
+          </div>
+          <fieldset class="fsp-fieldset">
+            <legend>Формат работы</legend>
+            <div class="fsp-cluster">
+              <label class="fsp-choice"><input type="radio" name="f-format" checked> Удалённо</label>
+              <label class="fsp-choice"><input type="radio" name="f-format"> Гибрид</label>
+              <label class="fsp-choice"><input type="radio" name="f-format"> Офис</label>
+            </div>
+          </fieldset>
+          <fieldset class="fsp-fieldset">
+            <legend>Фильтры поиска</legend>
+            <label class="fsp-choice"><input type="checkbox" checked> Есть подтверждённые достижения ФСП</label>
+            <label class="fsp-choice"><input type="checkbox"> Готов к релокации</label>
+          </fieldset>
+          <label class="fsp-choice"><input class="fsp-switch" type="checkbox" role="switch" checked> Показывать профиль работодателям</label>
+          <label class="fsp-choice"><input class="fsp-switch" type="checkbox" role="switch"> Уведомления на почту</label>
+          <label class="fsp-choice"><input class="fsp-switch" type="checkbox" role="switch" disabled> Недоступно</label>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section" aria-labelledby="badges">
+      <h2 id="badges">Статусы и метки</h2>
+      <p class="fsp-muted">Статусы приглашений и откликов по ТЗ и <code>hire.invitation_status</code>: цвет дублирован подписью</p>
+      <div class="pv-row">
+        <span class="fsp-badge fsp-badge--sent">Отправлено</span>
+        <span class="fsp-badge fsp-badge--viewed">Просмотрено</span>
+        <span class="fsp-badge fsp-badge--accepted">Принято</span>
+        <span class="fsp-badge fsp-badge--declined">Отклонено</span>
+        <span class="fsp-badge fsp-badge--withdrawn">Отозвано</span>
+        <span class="fsp-badge fsp-badge--expired">Истекло</span>
+      </div>
+      <ul class="fsp-tags">
+        <li class="fsp-tag">Python</li>
+        <li class="fsp-tag">PostgreSQL</li>
+        <li class="fsp-tag">Docker</li>
+        <li class="fsp-tag fsp-tag--verified">Призёр чемпионата ФСП</li>
+      </ul>
+    </section>
+
+    <section class="pv-section" aria-labelledby="table">
+      <h2 id="table">Таблица</h2>
+      <div class="fsp-table-wrap">
+        <table class="fsp-table">
+          <thead>
+            <tr><th scope="col">Кандидат</th><th scope="col">Позиция</th><th scope="col" class="fsp-num">Вилка, ₽</th><th scope="col">Статус</th><th scope="col">Отправлено</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Алексей К.</td><td>Backend, Middle</td><td class="fsp-num">180 000 – 240 000</td><td><span class="fsp-badge fsp-badge--accepted">Принято</span></td><td>02.10</td></tr>
+            <tr><td>Мария С.</td><td>Frontend, Senior</td><td class="fsp-num">280 000 – 350 000</td><td><span class="fsp-badge fsp-badge--viewed">Просмотрено</span></td><td>04.10</td></tr>
+            <tr><td>Иван П.</td><td>ML, Junior</td><td class="fsp-num">90 000 – 130 000</td><td><span class="fsp-badge fsp-badge--sent">Отправлено</span></td><td>06.10</td></tr>
+            <tr><td>Ольга Д.</td><td>QA, Middle</td><td class="fsp-num">150 000 – 190 000</td><td><span class="fsp-badge fsp-badge--declined">Отклонено</span></td><td>28.09</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="pv-section" aria-labelledby="alerts">
+      <h2 id="alerts">Уведомления</h2>
+      <div class="fsp-stack">
+        <div class="fsp-alert fsp-alert--info" role="status">
+          <span class="fsp-alert__icon" aria-hidden="true">i</span>
+          <p class="fsp-alert__title">Категория обновлена</p>
+          <p class="fsp-alert__body">Тест на грейд можно пересдать через 30 дней</p>
+        </div>
+        <div class="fsp-alert fsp-alert--success" role="status">
+          <span class="fsp-alert__icon" aria-hidden="true">✓</span>
+          <p class="fsp-alert__title">Приглашение отправлено</p>
+          <p class="fsp-alert__body">Кандидат увидит вилку и описание предложения</p>
+        </div>
+        <div class="fsp-alert fsp-alert--danger" role="alert">
+          <span class="fsp-alert__icon" aria-hidden="true">!</span>
+          <p class="fsp-alert__title">Не удалось сохранить профиль</p>
+          <p class="fsp-alert__body">Проверьте поля, отмеченные красным</p>
+        </div>
+        <div class="fsp-alert fsp-alert--neutral">
+          <span class="fsp-alert__icon" aria-hidden="true">·</span>
+          <p class="fsp-alert__title">Контакты скрыты</p>
+          <p class="fsp-alert__body">Они откроются, когда кандидат примет приглашение</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section" aria-labelledby="mock-employer">
+      <h2 id="mock-employer">Макет: кандидат в выдаче работодателя</h2>
+      <div class="pv-mock">
+        <div class="fsp-topbar">
+          <strong>Кабинет работодателя</strong>
+          <span class="fsp-caption fsp-muted">ООО «Северный код»</span>
+        </div>
+        <div class="pv-mock__body fsp-app">
+          <nav class="fsp-sidebar" aria-label="Разделы кабинета работодателя">
+            <ul class="fsp-nav">
+              <li><a class="fsp-nav__link" href="#mock-employer" aria-current="page">Банк кандидатов</a></li>
+              <li><a class="fsp-nav__link" href="#mock-employer">Приглашения <span class="fsp-count" aria-label="3 новых">3</span></a></li>
+              <li><a class="fsp-nav__link" href="#mock-employer">Вакансии</a></li>
+              <li><a class="fsp-nav__link" href="#mock-employer">Профиль компании</a></li>
+            </ul>
+          </nav>
+          <div class="fsp-stack">
+            <div class="fsp-cluster">
+              <span class="fsp-overline" style="margin: 0">Backend · Middle · 42 кандидата</span>
+            </div>
+            <article class="fsp-card fsp-card--interactive fsp-card--accent">
+              <div class="fsp-card__header">
+                <div class="pv-candidate">
+                  <span class="pv-avatar" aria-hidden="true">АК</span>
+                  <div>
+                    <h3 class="fsp-card__title">Алексей К.</h3>
+                    <ul class="pv-meta">
+                      <li>Backend-разработчик</li>
+                      <li>Middle, подтверждён тестом</li>
+                      <li>Стаж 4 года</li>
+                      <li>Удалённо</li>
+                    </ul>
+                  </div>
+                </div>
+                <span class="fsp-badge fsp-badge--sent">Приглашение отправлено</span>
+              </div>
+              <ul class="fsp-tags" aria-label="Стек">
+                <li class="fsp-tag">Python</li>
+                <li class="fsp-tag">FastAPI</li>
+                <li class="fsp-tag">PostgreSQL</li>
+                <li class="fsp-tag">Kafka</li>
+                <li class="fsp-tag fsp-tag--verified">Финалист чемпионата ФСП 2025</li>
+              </ul>
+              <dl class="pv-dl">
+                <dt>Ожидания</dt><dd>от&nbsp;200&nbsp;000&nbsp;₽</dd>
+                <dt>Тест на грейд</dt><dd>86 из 100, сентябрь 2026</dd>
+                <dt>Контакты</dt><dd class="fsp-muted">Откроются после принятия приглашения</dd>
+              </dl>
+              <div class="fsp-card__footer">
+                <button class="fsp-btn fsp-btn--primary" type="button" disabled>Приглашение отправлено</button>
+                <button class="fsp-btn fsp-btn--secondary" type="button">Открыть профиль</button>
+                <button class="fsp-btn fsp-btn--ghost" type="button">В избранное</button>
+              </div>
+            </article>
+            <article class="fsp-card fsp-card--interactive">
+              <div class="fsp-card__header">
+                <div class="pv-candidate">
+                  <span class="pv-avatar" aria-hidden="true">МС</span>
+                  <div>
+                    <h3 class="fsp-card__title">Мария С.</h3>
+                    <ul class="pv-meta">
+                      <li>Backend-разработчик</li>
+                      <li>Middle, подтверждён тестом</li>
+                      <li>Стаж 3 года</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              <ul class="fsp-tags" aria-label="Стек">
+                <li class="fsp-tag">Go</li>
+                <li class="fsp-tag">gRPC</li>
+                <li class="fsp-tag">Redis</li>
+              </ul>
+              <div class="fsp-card__footer">
+                <button class="fsp-btn fsp-btn--primary" type="button">Пригласить</button>
+                <button class="fsp-btn fsp-btn--secondary" type="button">Открыть профиль</button>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="pv-section" aria-labelledby="mock-candidate">
+      <h2 id="mock-candidate">Макет: входящее приглашение у кандидата</h2>
+      <div class="pv-mock">
+        <div class="fsp-topbar">
+          <strong>Кабинет кандидата</strong>
+          <span class="fsp-caption fsp-muted">Алексей К. · Backend, Middle</span>
+        </div>
+        <div class="pv-mock__body fsp-app">
+          <nav class="fsp-sidebar" aria-label="Разделы кабинета кандидата">
+            <ul class="fsp-nav">
+              <li><a class="fsp-nav__link" href="#mock-candidate">Профиль и резюме</a></li>
+              <li><a class="fsp-nav__link" href="#mock-candidate">Категория и грейд</a></li>
+              <li><a class="fsp-nav__link" href="#mock-candidate" aria-current="page">Приглашения <span class="fsp-count" aria-label="1 новое">1</span></a></li>
+              <li><a class="fsp-nav__link" href="#mock-candidate">Вакансии и отклики</a></li>
+              <li><a class="fsp-nav__link" href="#mock-candidate">Настройки</a></li>
+            </ul>
+          </nav>
+          <div class="fsp-stack">
+            <article class="fsp-card fsp-card--accent">
+              <div class="fsp-card__header">
+                <div>
+                  <span class="fsp-overline">ООО «Северный код» · финтех</span>
+                  <h3 class="fsp-card__title">Python-разработчик в команду платежей</h3>
+                </div>
+                <span class="fsp-badge fsp-badge--viewed">Просмотрено</span>
+              </div>
+              <div>
+                <span class="fsp-overline">Зарплата на руки, в месяц</span>
+                <div class="pv-salary">
+                  <span class="fsp-figure">от&nbsp;180&nbsp;000 до&nbsp;240&nbsp;000&nbsp;₽</span>
+                </div>
+              </div>
+              <p style="margin: 0">Развиваем сервис платежей для 2 млн пользователей. Нужен инженер, который возьмёт на себя интеграции с банками и очередь событий. Команда из 6 человек, релизы каждую неделю</p>
+              <dl class="pv-dl">
+                <dt>Формат</dt><dd>Удалённо или офис в Москве</dd>
+                <dt>Связь</dt><dd>Telegram рекрутера откроется после принятия</dd>
+                <dt>Получено</dt><dd>6 октября 2026</dd>
+              </dl>
+              <div class="fsp-alert fsp-alert--neutral">
+                <span class="fsp-alert__icon" aria-hidden="true">·</span>
+                <p class="fsp-alert__title">Ваши контакты скрыты</p>
+                <p class="fsp-alert__body">Компания увидит их, только если вы примете приглашение</p>
+              </div>
+              <div class="fsp-card__footer">
+                <button class="fsp-btn fsp-btn--primary" type="button">Принять</button>
+                <button class="fsp-btn fsp-btn--secondary" type="button">Отклонить</button>
+                <button class="fsp-btn fsp-btn--ghost" type="button">О компании</button>
+              </div>
+            </article>
+            <article class="fsp-card">
+              <div class="fsp-card__header">
+                <div>
+                  <span class="fsp-overline">АО «Лента данных» · ритейл</span>
+                  <h3 class="fsp-card__title">Backend-инженер, Data Platform</h3>
+                </div>
+                <span class="fsp-badge fsp-badge--declined">Отклонено</span>
+              </div>
+              <span class="fsp-figure">от&nbsp;160&nbsp;000 до&nbsp;200&nbsp;000&nbsp;₽</span>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Образцы цветов: значение читается из CSS-переменной, а не дублируется в разметке
+    function renderSwatches() {
+      const styles = getComputedStyle(document.documentElement);
+      const probe = document.createElement("span");
+      document.body.appendChild(probe);
+      document.querySelectorAll("[data-swatches]").forEach((box) => {
+        const group = box.dataset.swatches;
+        box.replaceChildren(...box.dataset.names.split(" ").map((name) => {
+          const variable = `--fsp-${group}-${name}`;
+          probe.style.color = `var(${variable})`;
+          const rgb = getComputedStyle(probe).color.match(/\d+(\.\d+)?/g).map(Number);
+          const hex = rgb.length > 3 && rgb[3] < 1
+            ? `альфа ${rgb[3]}`
+            : "#" + rgb.slice(0, 3).map((c) => c.toString(16).padStart(2, "0")).join("").toUpperCase();
+          const item = document.createElement("div");
+          item.className = "pv-swatch";
+          item.innerHTML = `<div class="pv-swatch__chip" style="background-color: var(${variable})"></div>
+            <div class="pv-swatch__meta"><b>${name}</b><code>${variable}</code><br>${hex}</div>`;
+          return item;
+        }));
+      });
+      probe.remove();
+    }
+
+    // Тема: auto следует системной настройке, выбор запоминается в браузере
+    function applyTheme(theme) {
+      if (theme === "auto") delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = theme;
+      document.querySelectorAll("[data-set-theme]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.setTheme === theme)));
+      try { localStorage.setItem("fsp-theme", theme); } catch (e) {}
+      renderSwatches();
+    }
+
+    let saved = "auto";
+    try { saved = localStorage.getItem("fsp-theme") || "auto"; } catch (e) {}
+    document.querySelectorAll("[data-set-theme]").forEach((b) => b.addEventListener("click", () => applyTheme(b.dataset.setTheme)));
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderSwatches);
+    applyTheme(saved);
+  </script>
+</body>
+</html>
