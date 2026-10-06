@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from taskgen.generation.textcheck import text_problems
+from taskgen.markers import markers, new_nonce
 
 ROOT = Path(__file__).resolve().parents[2]
 TEMPLATES = sorted((ROOT / "seed" / "templates").rglob("*.md"))
@@ -64,6 +65,36 @@ def test_text_cut_off_outside_code_block_is_rejected(text):
 
 @pytest.mark.parametrize("text", HONEST_ENDINGS.values(), ids=HONEST_ENDINGS.keys())
 def test_honest_last_line_is_not_a_cut_off(text):
+    assert text_problems(text) == []
+
+
+# --- Служебные маркеры промпта в тексте ------------------------------------------------------
+
+ECHOED_MARKERS = {
+    # Настоящий вывод Saiga: начало ситуации эссе algo-shortest-path-choice-essay с профилем.
+    "saiga-profile": "<<ПРОФИЛЬ-5519fed5cdaabc35>>><<КОНЕЦ-ПРОФИЛЯ-5519fed5cdaabc35>>>\n\n"
+    "Представлена ситуация с сетью",
+    "this-call": f"Условие.\n{markers('ПРОФИЛЬ', new_nonce(), end_label='КОНЕЦ-ПРОФИЛЯ')[1]}",
+    "without-nonce": "Конец данных <<<КОНЕЦ ОТВЕТА>>> и текст",
+    "spaced": "<<< СИТУАЦИЯ-ab12cd34 >>>",
+}
+
+HONEST_ANGLES = {
+    "shift-operators": "Выражение `a << 2 >> 1` и a << 2 >> 1 сдвигают биты",
+    "nested-template": "Тип vector<vector<int>> хранит матрицу",
+    "stream": "Вывод: std::cout << x << std::endl; ввод: std::cin >> x",
+    "guillemets": "Поле «Резюме» и <<кавычки>> в тексте",
+}
+
+
+@pytest.mark.parametrize("text", ECHOED_MARKERS.values(), ids=ECHOED_MARKERS.keys())
+def test_echoed_service_marker_is_rejected(text):
+    [problem] = text_problems(text)
+    assert "маркер" in problem
+
+
+@pytest.mark.parametrize("text", HONEST_ANGLES.values(), ids=HONEST_ANGLES.keys())
+def test_angle_brackets_that_are_not_markers_are_not_rejected(text):
     assert text_problems(text) == []
 
 

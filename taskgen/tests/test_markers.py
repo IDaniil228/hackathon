@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from taskgen.markers import find_nonce, markers, new_nonce
+from taskgen.markers import find_nonce, has_marker, marker, markers, new_nonce
 
 
 def test_pair_shares_nonce_and_nonce_is_found_back():
@@ -14,6 +14,11 @@ def test_pair_shares_nonce_and_nonce_is_found_back():
     assert find_nonce("ПРОФИЛЬ", f"текст\n{start}\nданные\n{end}") == nonce
     assert find_nonce("ОТВЕТ", start) is None
     assert new_nonce() != nonce
+
+
+@pytest.mark.parametrize("label", ["ОТВЕТ", "КОД", "СИТУАЦИЯ", "ПРОФИЛЬ", "КОНЕЦ-ПРОФИЛЯ"])
+def test_every_built_marker_is_recognized_in_text(label):
+    assert has_marker(f"текст {marker(label, new_nonce())} текст")
 
 
 def test_label_outside_format_is_refused():

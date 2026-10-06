@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 
 from taskgen.bank.parser import FENCE, closes_fence, unclosed_fence
+from taskgen.markers import has_marker
 
 # Управляющие символы, кроме табуляции и переводов строк. В Markdown им не место, а \b и \f
 # получаются из LaTeX-команд вроде \beta и \frac, записанных в JSON одним обратным слэшем.
@@ -89,4 +90,9 @@ def text_problems(text: str) -> list[str]:
         )
     if spoiled_escapes(text):
         problems.append(SPOILED_ESCAPES)
+    if has_marker(text):
+        problems.append(
+            "в тексте есть служебный маркер вида <<<МЕТКА-…>>> из запроса; маркеры только "
+            "отделяют данные в запросе, не переноси их в текст"
+        )
     return problems
