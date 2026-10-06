@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
@@ -55,14 +56,20 @@ def test_changed_pin_changes_description(tmp_path):
     packages = tmp_path / "packages"
     shutil.copytree(PACKAGES_DIR, packages)
     requirements = packages / "python-ml" / "3.12.0" / "requirements.txt"
+    name, version = _pins(requirements)[-1]
     requirements.write_text(
-        requirements.read_text(encoding="utf-8").replace("numpy==1.26.1", "numpy==2.0.0"),
+        re.sub(
+            rf"^{re.escape(name)}==.*$",
+            f"{name}==99.0.0",
+            requirements.read_text(encoding="utf-8"),
+            flags=re.MULTILINE,
+        ),
         encoding="utf-8",
     )
     registry = RuntimeRegistry.load(packages_dir=packages)
     text = describe_runtime("python-ml", registry)
-    assert "numpy 2.0.0" in text
-    assert "numpy 1.26.1" not in text
+    assert f"{name} 99.0.0" in text
+    assert f"{name} {version}" not in text
 
 
 def test_unpinned_requirement_is_rejected(tmp_path):
