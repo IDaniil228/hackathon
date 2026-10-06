@@ -727,7 +727,7 @@
           "Оценка"
         ],
         "summary": "Отправить ответ на задание",
-        "description": "Сохраняет ответ кандидата и поведенческие сигналы фронтенда. Код сразу прогоняется на скрытых тестах в песочнице и статическими анализаторами; результат прогона в ответе не раскрывается. Повторная отправка до оценки сессии заменяет ответ",
+        "description": "Сохраняет ответ кандидата и поведенческие сигналы фронтенда. Код сразу прогоняется на скрытых тестах в песочнице и статическими анализаторами; результат прогона в ответе не раскрывается. На тестовую задачку отвечают полем choice — id варианта, на остальные задания — полем content. Повторная отправка до оценки сессии заменяет ответ",
         "operationId": "submit_answer_tasks__task_id__answer_post",
         "security": [
           {
@@ -780,7 +780,7 @@
             "description": "Сессия уже оценена или задание ещё не готово"
           },
           "422": {
-            "description": "Язык ответа не совпадает с языком задания"
+            "description": "Язык ответа не совпадает с языком задания, вариант задачки неизвестен или вместо choice передан content и наоборот"
           },
           "500": {
             "description": "Скрытые данные задания повреждены"
@@ -1033,11 +1033,32 @@
       "AnswerSubmit": {
         "properties": {
           "content": {
-            "type": "string",
-            "maxLength": 200000,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Content",
-            "description": "Текст ответа или код"
+            "description": "Текст ответа или код; для тестовой задачки не передаётся"
+          },
+          "choice": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choice",
+            "description": "Только для тестовой задачки: id выбранного варианта из public.options"
           },
           "language": {
             "anyOf": [
@@ -1092,9 +1113,6 @@
           }
         },
         "type": "object",
-        "required": [
-          "content"
-        ],
         "title": "AnswerSubmit"
       },
       "Behavior": {
@@ -1500,6 +1518,15 @@
             "description": "Публичные примеры; остальные скрыты",
             "default": []
           },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/QuizOption"
+            },
+            "type": "array",
+            "title": "Options",
+            "description": "Только для тестовых задачек: варианты ответа в порядке показа. Кандидат отвечает id варианта, верный ответ не помечен",
+            "default": []
+          },
           "expected_minutes": {
             "type": "integer",
             "title": "Expected Minutes",
@@ -1525,6 +1552,51 @@
         ],
         "title": "PublicPayload",
         "description": "То, что видит кандидат помимо текста условия. Хранится в tasks.public_payload."
+      },
+      "QuizBlock": {
+        "properties": {
+          "correct": {
+            "type": "integer",
+            "title": "Correct",
+            "description": "Сколько тестовых задачек решено верно"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Сколько тестовых задачек было в сессии"
+          },
+          "share": {
+            "type": "number",
+            "title": "Share",
+            "description": "Доля верных ответов"
+          }
+        },
+        "type": "object",
+        "required": [
+          "correct",
+          "total",
+          "share"
+        ],
+        "title": "QuizBlock"
+      },
+      "QuizOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Непрозрачный id ответа; его кандидат и присылает"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "QuizOption"
       },
       "Recommendation": {
         "properties": {
@@ -2046,10 +2118,15 @@
               "$ref": "#/components/schemas/LevelResult"
             },
             "type": "array",
-            "title": "Levels"
+            "title": "Levels",
+            "description": "Уровни по заданиям с кодом и эссе; тестовые задачки сюда не входят"
           },
           "thresholds": {
             "$ref": "#/components/schemas/Thresholds"
+          },
+          "score": {
+            "$ref": "#/components/schemas/SessionScore",
+            "description": "Общий балл: средний балл заданий с кодом и эссе и блок тестовых задачек с весом weight_quiz"
           },
           "tasks": {
             "items": {
@@ -2068,9 +2145,59 @@
           "recommendation",
           "levels",
           "thresholds",
+          "score",
           "tasks"
         ],
         "title": "SessionResult"
+      },
+      "SessionScore": {
+        "properties": {
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "description": "Общий балл сессии от 0 до 1"
+          },
+          "tasks": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tasks",
+            "description": "Средний балл заданий с кодом и эссе; null — таких заданий нет"
+          },
+          "quiz": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuizBlock"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Блок тестовых задачек; null — задачек нет"
+          },
+          "weights": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Weights",
+            "description": "Веса блоков tasks и quiz, которые вошли в балл"
+          }
+        },
+        "type": "object",
+        "required": [
+          "score",
+          "tasks",
+          "quiz",
+          "weights"
+        ],
+        "title": "SessionScore",
+        "description": "Общий балл сессии: средний балл заданий с кодом и эссе и доля верных задачек."
       },
       "SessionStatus": {
         "type": "string",

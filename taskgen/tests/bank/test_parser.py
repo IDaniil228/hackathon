@@ -4,7 +4,7 @@ import pytest
 
 from taskgen.bank.parser import TemplateError, content_hash, parse_template, unclosed_fence
 from taskgen.contracts import TaskKind
-from tests.bank.factory import make_essay, make_template
+from tests.bank.factory import make_essay, make_quiz, make_template
 
 CYRILLIC = re.compile(r"[а-яё]", re.IGNORECASE)
 
@@ -108,6 +108,8 @@ def test_broken_yaml_is_reported():
         ({"description": "  "}, "description"),
         ({"skills": ["python", "python"]}, "skills"),
         ({"scoring": {"weight_magic": 1.0}}, "scoring"),
+        # Вес блока задачек — настройка сессии, шаблон задания его не меняет.
+        ({"scoring": {"weight_quiz": 1.0}}, "scoring"),
         ({"params": {"n": {"type": "int", "min": 5}}}, "params.n"),
         ({"params": {"n": {"type": "int", "min": 5, "max": 1}}}, "params.n"),
         ({"params": {"n": {"type": "choice", "choices": []}}}, "params.n"),
@@ -307,3 +309,141 @@ def test_error_text_names_source_and_location():
 )
 def test_unclosed_fence(text, unclosed):
     assert unclosed_fence(text) is unclosed
+
+
+# --- Тестовые задачки ----------------------------------------------------------------------
+
+VARIANT_POSITIVE = """### positive
+
+Факты:
+- weights: время проезда по каждой дороге — положительное число минут
+
+Ответ:
++ Алгоритм Дейкстры
+- Обход в ширину
+- Алгоритм Беллмана — Форда
+- Алгоритм Флойда — Уоршелла"""
+
+VARIANT_NEGATIVE = """### negative
+
+Факты:
+- weights: у части дорог время отрицательное: там платят за проезд
+
+Ответ:
++ Алгоритм Беллмана — Форда
+- Алгоритм Дейкстры
+- Обход в ширину
+- Алгоритм Флойда — Уоршелла"""
+
+
+def quiz(variants: str | None = None, **sections) -> str:
+    merged = {"Варианты": variants} if variants is not None else {}
+    return make_quiz(sections=merged | sections)
+
+
+def test_valid_quiz_template_is_parsed_into_variants():
+    spec = parse_template(make_quiz(), source="t.md")
+    assert spec.kind is TaskKind.QUIZ
+    assert spec.question.startswith("Какой алгоритм")
+    assert [variant.id for variant in spec.variants] == ["positive", "unit"]
+    positive = spec.variants[0]
+    assert [fact.id for fact in positive.facts] == ["weights", "size"]
+    assert positive.facts[1].text == "в городе {n} перекрёстков"
+    assert positive.correct == "Алгоритм Дейкстры"
+    assert positive.wrong == [
+        "Обход в ширину",
+        "Алгоритм Беллмана — Форда",
+        "Алгоритм Флойда — Уоршелла",
+    ]
+    assert spec.forbidden == ["дейкстр", "в ширину"]
+    # Рубрики, эталона и вопросов эссе у задачки нет: ответ сверяется с ключом варианта.
+    assert spec.rubric == [] and spec.entrypoint is None and spec.questions is None
+
+
+def test_quiz_requires_question_and_variants():
+    found = locations(make_quiz(sections={"Вопрос": None, "Варианты": None}))
+    assert {"раздел «Вопрос»", "раздел «Варианты»"} <= found
+
+
+@pytest.mark.parametrize("section", ["Рубрика", "Эталон", "Вопросы", "Факты"])
+def test_quiz_must_not_carry_other_kinds_sections(section):
+    assert f"раздел «{section}»" in locations(make_quiz(sections={section: "- a: b"}))
+
+
+def test_quiz_sections_belong_only_to_quiz():
+    assert "раздел «Вопрос»" in locations(make_essay(sections={"Вопрос": "Что выбрать?"}))
+    assert "раздел «Варианты»" in locations(make_template(sections={"Варианты": VARIANT_POSITIVE}))
+
+
+def test_quiz_needs_two_variants():
+    found = issues_of(quiz(VARIANT_POSITIVE))
+    assert any("не меньше 2 вариантов" in issue.message for issue in found)
+
+
+@pytest.mark.parametrize(
+    ("variant", "fragment"),
+    [
+        # Два верных ответа: ключ неоднозначен.
+        (VARIANT_NEGATIVE.replace("- Алгоритм Дейкстры", "+ Алгоритм Дейкстры"), "ровно один"),
+        # Без верного ответа.
+        (VARIANT_NEGATIVE.replace("+ Алгоритм Беллмана", "- Алгоритм Беллмана"), "ровно один"),
+        # Двух неверных мало: угадать проще, чем при четырёх вариантах.
+        (VARIANT_NEGATIVE.replace("- Алгоритм Флойда — Уоршелла", ""), "не меньше 3"),
+        # Повтор ответа внутри варианта.
+        (VARIANT_NEGATIVE.replace("- Обход в ширину", "- Алгоритм Дейкстры"), "повторя"),
+        # Вариант без фактов: из пустого кейса ответ не следует.
+        (
+            VARIANT_NEGATIVE.replace(
+                "- weights: у части дорог время отрицательное: там платят за проезд", ""
+            ),
+            "факт",
+        ),
+        # Строка, которая не факт и не ответ.
+        (VARIANT_NEGATIVE.replace("Ответ:", "Ответ:\nпросто строка"), "строка"),
+    ],
+)
+def test_malformed_variant_is_reported(variant, fragment):
+    found = issues_of(quiz(f"{VARIANT_POSITIVE}\n\n{variant}"))
+    messages = [issue.message for issue in found if issue.location == "раздел «Варианты»"]
+    assert any(fragment in message for message in messages), messages
+
+
+def test_duplicate_variant_ids_are_reported():
+    twin = VARIANT_NEGATIVE.replace("### negative", "### positive")
+    found = issues_of(quiz(f"{VARIANT_POSITIVE}\n\n{twin}"))
+    assert any("positive" in issue.message and "повторя" in issue.message for issue in found)
+
+
+def test_variants_with_one_and_the_same_answer_are_reported():
+    # Утёкший ответ одного экземпляра подходит к любому другому: смысл вариантов потерян.
+    same = VARIANT_POSITIVE.replace("### positive", "### positive-2")
+    found = issues_of(quiz(f"{VARIANT_POSITIVE}\n\n{same}"))
+    assert any("верный ответ" in issue.message for issue in found)
+
+
+def test_text_before_first_variant_is_reported():
+    found = issues_of(quiz(f"Пояснение\n\n{VARIANT_POSITIVE}\n\n{VARIANT_NEGATIVE}"))
+    assert any("до первого варианта" in issue.message for issue in found)
+
+
+def test_forbidden_phrase_in_quiz_question_or_facts_is_reported():
+    in_question = make_quiz(sections={"Вопрос": "Подойдёт ли алгоритм Дейкстры?"})
+    assert "раздел «Вопрос»" in locations(in_question)
+    in_facts = quiz(
+        f"{VARIANT_POSITIVE}\n\n{VARIANT_NEGATIVE}", **{"Нельзя раскрывать": "- платят за проезд"}
+    )
+    assert "раздел «Варианты»" in locations(in_facts)
+
+
+def test_forbidden_phrase_may_appear_in_answer_options():
+    # Названия алгоритмов — сами варианты ответа, их видит кандидат. Запрет действует на
+    # кейс: он не должен назвать верный ответ.
+    spec = parse_template(make_quiz(), source="t.md")
+    assert "дейкстр" in spec.forbidden
+    assert any("Дейкстр" in variant.correct for variant in spec.variants)
+
+
+def test_unknown_placeholder_in_question_or_variants_is_reported():
+    assert "раздел «Вопрос»" in locations(make_quiz(sections={"Вопрос": "Что при {m}?"}))
+    bad = VARIANT_NEGATIVE.replace("отрицательное", "отрицательное у {m} дорог")
+    assert "раздел «Варианты»" in locations(quiz(f"{VARIANT_POSITIVE}\n\n{bad}"))

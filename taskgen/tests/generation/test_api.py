@@ -78,6 +78,50 @@ def test_session_with_code_and_essay(world, client_headers):
             assert secret not in text
 
 
+def test_quiz_session_end_to_end_keeps_answer_key_hidden(world, client_headers):
+    world.add_templates(world.code(), world.quiz())
+    created = world.create_ready(headers=client_headers, seed=5)
+    assert created["status"] == "ready"
+    quiz = next(task for task in created["tasks"] if task["kind"] == "quiz")
+    options = quiz["public"]["options"]
+    assert [option["id"] for option in options] == ["a", "b", "c", "d"]
+    [row] = [row for row in world.tasks(created["id"]) if row.kind == "quiz"]
+    key = row.hidden_payload["answer_key"]
+    variant = row.hidden_payload["quiz_variant"]
+
+    texts = [
+        world.client.get(f"/sessions/{created['id']}", headers=client_headers).text,
+        world.client.get(f"/tasks/{row.id}", headers=client_headers).text,
+        world.client.get(f"/sessions/{created['id']}/selection", headers=client_headers).text,
+    ]
+    for text in texts:
+        for secret in ("answer_key", "quiz_variant", f'"{variant}"', "correct"):
+            assert secret not in text
+
+    answered = world.client.post(
+        f"/tasks/{row.id}/answer", json={"choice": key}, headers=client_headers
+    )
+    assert answered.status_code == 200, answered.text
+    scored = world.client.post(f"/sessions/{created['id']}/score", headers=client_headers)
+    assert scored.status_code == 200, scored.text
+    result = scored.json()
+    assert result["score"]["quiz"] == {"correct": 1, "total": 1, "share": 1.0}
+    assert all(level["total"] == 1 for level in result["levels"])
+
+
+def test_background_quiz_needs_two_model_calls(world):
+    # Первое задание — код (один вызов), задачка в фоне ждёт свои два вызова: кейс и
+    # проверку фактов. free=1 держит её, пока тест не откроет модель.
+    world.add_templates(world.code(), world.quiz())
+    gated = world.gate(free=1)
+    created = world.create(selection_override={"code_tasks": 1, "quiz_tasks": 1}).json()
+    assert [task["kind"] for task in created["tasks"]] == ["code", "quiz"]
+    assert [task["status"] for task in created["tasks"]] == ["ready", "pending"]
+    world.open(gated)
+    world.wait()
+    assert [task["status"] for task in world.view(created["id"])["tasks"]] == ["ready", "ready"]
+
+
 def test_first_task_is_ready_at_once_and_rest_arrive_in_background(world):
     # Только задания с кодом: каждому нужен ровно один вызов модели, и free=1 пропускает
     # ровно первое задание. Эссе нужно два вызова (ситуация и проверка фактов): выпади оно

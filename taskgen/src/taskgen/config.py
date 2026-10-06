@@ -61,6 +61,15 @@ class LLMSettings(BaseModel):
     checker_reasoning_effort: ReasoningEffort | None = Field(
         default=None, description=_REASONING.format(role="проверяльщика ситуации эссе")
     )
+    solver_model: str | None = Field(
+        default=None,
+        description="Слепой решатель: решает экземпляр по тому, что увидит кандидат, до "
+        "выдачи. null — модель проверяльщика, а без неё — модель генерации. Слабая модель "
+        "решателя чаще отклоняет годные экземпляры",
+    )
+    solver_reasoning_effort: ReasoningEffort | None = Field(
+        default=None, description=_REASONING.format(role="слепого решателя")
+    )
     timeout_seconds: float = Field(
         default=120.0, description="Таймаут одного HTTP-запроса к провайдеру, секунды"
     )
@@ -97,7 +106,12 @@ class SelectionSettings(BaseModel):
         "машине каждое из них — минуты генерации и десятки минут работы кандидата",
     )
     essay_tasks: int = Field(default=2, ge=0, description="Число эссе в тесте")
-    quiz_tasks: int = Field(default=0, ge=0, description="Число тестовых задачек")
+    quiz_tasks: int = Field(
+        default=0,
+        ge=0,
+        description="Число тестовых задачек с выбором ответа. Задачка занимает у кандидата "
+        "пару минут, поэтому их больше, чем остальных заданий",
+    )
     min_claimed_per_kind: int = Field(
         default=1,
         ge=0,
@@ -132,6 +146,16 @@ class ScoringSettings(BaseModel):
     )
     weight_performance: float = Field(
         default=0.05, description="Вес скорости и памяти относительно эталона"
+    )
+    weight_quiz: float = Field(
+        default=0.1,
+        ge=0.0,
+        le=1.0,
+        description="Вес блока тестовых задачек в общем балле сессии; остальное — средний балл "
+        "заданий с кодом и эссе. Пять задачек — минуты работы против часов на практические "
+        "задания, а угаданный ответ даёт 1 с вероятностью 1/4: при 0.1 одни задачки дают не "
+        "больше 0.1 общего балла, а угадывание в среднем 0.025. В грейд по уровням задачки "
+        "не входят",
     )
     pass_threshold: float = Field(
         default=0.6,
@@ -227,6 +251,20 @@ class GenerationSettings(BaseModel):
         le=2.0,
         description="Температура легенды. Легенда — творческий текст: при нулевой температуре "
         "экземпляры звучат одинаково",
+    )
+    solver_enabled: bool = Field(
+        default=False,
+        description="Проверять экземпляр слепым решателем до выдачи: задачку он решает по "
+        "кейсу и вариантам, задание с кодом — по условию и примерам, а решение идёт на все "
+        "кейсы. Без решателя не проверены полнота условия и отсутствие второго верного ответа "
+        "в кейсе. Включать стоит с сильной моделью решателя, например облачной: на слабой "
+        "машине это ещё один вызов модели на задание и ложные отказы",
+    )
+    solver_attempts: int = Field(
+        default=1,
+        ge=1,
+        description="Сколько раз решатель пробует решить один черновик, прежде чем признать "
+        "его нерешаемым и отправить на переписывание",
     )
     public_examples: int = Field(
         default=2,

@@ -48,6 +48,31 @@ def essay_reply(messages, schema, *, keep_facts: bool = True) -> str | None:
     return None
 
 
+_SOLVER_OPTION = re.compile(r"^- (?P<id>[a-z]): (?P<text>.+)$", re.MULTILINE)
+
+
+def quiz_solver_reply(
+    messages, schema, *, pick: str, also_correct: tuple[str, ...] = ()
+) -> str | None:
+    """Ответ решателя задачки; None — запрос не к решателю.
+
+    Решатель выбирает вариант с текстом pick и называет верными его и варианты also_correct.
+    Ключа он не видит: идентификаторы берёт из списка вариантов в запросе.
+    """
+    if "choice" not in (schema or {}).get("properties", {}):
+        return None
+    ids = {m["text"]: m["id"] for m in _SOLVER_OPTION.finditer(messages[-1].content)}
+    correct = [ids[pick], *(ids[text] for text in also_correct)]
+    return json.dumps({"choice": ids[pick], "correct": correct}, ensure_ascii=False)
+
+
+def code_solver_reply(messages, schema, *, solution: str) -> str | None:
+    """Ответ решателя задания с кодом; None — запрос не к решателю."""
+    if "solution" not in (schema or {}).get("properties", {}):
+        return None
+    return json.dumps({"solution": solution}, ensure_ascii=False)
+
+
 class GatedLLM:
     """LLMClient, который пропускает первые free вызовов, а остальные держит до open().
 

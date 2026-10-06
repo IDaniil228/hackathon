@@ -220,6 +220,14 @@ class SandboxRunner(Protocol):
     async def run_tests(self, request: TestRunRequest) -> TestReport: ...
 
 
+class SolverRecord(BaseModel):
+    """Как слепой решатель принял экземпляр: сколько раз решал и сколько черновиков отклонил."""
+
+    passed: bool
+    attempts: int
+    rejected_drafts: int
+
+
 class HiddenPayload(BaseModel):
     """Содержимое tasks.hidden_payload: пишет генерация, читает оценка, наружу не уходит.
 
@@ -234,6 +242,11 @@ class HiddenPayload(BaseModel):
     rubric: list[RubricItem] = []
     reference_report: TestReport | None = None
     scoring: dict[str, float] = {}
+    # Для kind=quiz: id верного ответа среди публичных вариантов и вариант кейса шаблона.
+    answer_key: str | None = None
+    quiz_variant: str | None = None
+    # Итог слепого решателя для статистики ложных отказов; None — решатель не запускался.
+    solver: SolverRecord | None = None
 
 
 # --- Оценка -----------------------------------------------------------------------------
