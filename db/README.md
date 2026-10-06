@@ -1,76 +1,105 @@
 # Слой хранения
 
-PostgreSQL 18 + pgvector. Схема накатывается одним SQL-файлом явной командой —
-никакой автоматики образа при создании тома.
+PostgreSQL 18 + pgvector в своём контейнере, приложение и вся работа с базой —
+в соседнем. Схема описана моделями SQLAlchemy и разворачивается Alembic;
+файлы в этом каталоге — **выгрузка**, а не источник правды.
 
-| Файл | Что делает |
+| Что | Где |
 |---|---|
-| `schema.sql` | расширения, шесть схем, 62 таблицы, 182 индекса, справочники, банк шаблонов заданий |
-| `demo_data.sql` | демо-данные под сквозной сценарий из ТЗ |
+| источник правды по схеме | `api/app/db/models/` |
+| миграции | `api/migrations/versions/` |
+| бэкап DDL | `db/backup/schema.sql` (генерируется) |
+| бэкап содержимого | `db/backup/data.sql` (генерируется) |
 
 ## Запуск
 
 ```bash
 cp .env.example .env     # пароль поменять
-docker compose up -d postgres
+docker compose up -d
 ```
 
-Контейнер поднимается с пустой базой. Схема:
+Поднимается два контейнера: `postgres` (образ `pgvector/pgvector:pg18` с Docker
+Hub) и `api` (официальный `python:3.13-slim`, без своего Dockerfile). Контейнер
+`api` при старте доустанавливает зависимости в `api/.venv-docker`, накатывает
+`alembic upgrade head` и поднимает uvicorn на `localhost:8000`.
+
+Наполнение:
 
 ```bash
-docker compose exec -T postgres psql -U fsp -d fsp -v ON_ERROR_STOP=1 -f /sql/schema.sql
+docker compose exec api fspdb seed        # справочники и банк шаблонов заданий
+docker compose exec api fspdb seed-demo   # демо-данные под сквозной сценарий
+docker compose exec api fspdb relevance   # посчитать веса навыков
 ```
 
-Демо-данные (опционально):
+Проверка: `curl localhost:8000/health` → `{"status":"ok","candidates":6,...}`.
 
-```bash
-docker compose exec -T postgres psql -U fsp -d fsp -v ON_ERROR_STOP=1 -f /sql/demo_data.sql
-```
-
-Каталог `db/` смонтирован в контейнер как `/sql` только для чтения. С хоста,
-если установлен psql, то же самое без контейнера:
-
-```bash
-psql "postgresql://fsp:ПАРОЛЬ@localhost:5432/fsp" -v ON_ERROR_STOP=1 -f db/schema.sql
-```
-
-Подключиться руками:
-
-```bash
-docker compose exec postgres psql -U fsp -d fsp
-```
-
-Веб-клиент для демо (http://localhost:8081, система PostgreSQL, сервер `postgres`):
+Веб-клиент к базе для демонстрации (http://localhost:8081, сервер `postgres`):
 
 ```bash
 docker compose --profile tools up -d adminer
 ```
 
-## Как устроен `schema.sql`
+## Команды `fspdb`
 
-Файл **самодостаточен и применим повторно**: он начинается с
-`DROP SCHEMA ... CASCADE` по своим шести схемам и создаёт их заново вместе со
-справочниками. Поменяли схему — просто накатили файл ещё раз, пересоздавать
-том не нужно.
+| Команда | Что делает |
+|---|---|
+| `seed` | справочники и банк шаблонов заданий, идемпотентно |
+| `seed-demo` | демо-данные; сносит предыдущие демо-строки и создаёт заново |
+| `relevance` | пересчитать веса навыков из наблюдаемого спроса |
+| `dump-schema` | DDL из моделей → `db/backup/schema.sql` |
+| `dump-data` | содержимое таблиц → `db/backup/data.sql` |
+| `stats` | что сейчас в базе |
 
-Всё обёрнуто в одну транзакцию. DDL в PostgreSQL транзакционный, поэтому при
-любой ошибке посреди файла база остаётся ровно в прежнем состоянии: не будет
-«половины схемы». Проверено специально сломанным прогоном.
+## Миграции
 
-> [!] `DROP SCHEMA ... CASCADE` сносит данные в этих схемах. Это не «миграция»,
-> а пересоздание. Как только появятся данные, которые жалко, схема переезжает
-> на Alembic: `alembic stamp head` на развёрнутой базе, дальше ревизиями.
+```bash
+docker compose exec api alembic upgrade head          # накатить
+docker compose exec api alembic check                 # модели и база совпадают?
+docker compose exec api alembic revision --autogenerate -m "что меняем"
+docker compose exec api alembic downgrade -1          # откатить одну
+```
 
-Порядок разделов внутри файла: расширения → схемы → `core` → `ref` → `profile`
-→ `assess` → `hire` → `match` → индексы → справочники → банк заданий →
-настройка `search_path`.
+Контейнер `api` работает от UID хозяина, поэтому новые файлы ревизий остаются
+доступными на правку, а не появляются от root.
 
-`demo_data.sql` отдельной транзакцией и рассчитан на чистую схему: повторный
-прогон поверх себя упрётся в уникальные ключи, перед ним нужен `schema.sql`.
+> [!] **Автогенерация и `search_path`.** Не прописывайте роли
+> `search_path` со всеми шестью схемами: PostgreSQL начнёт отдавать имена без
+> квалификации, и `alembic check` будет видеть фантомные различия в каждом
+> внешнем ключе и каждом ENUM. Схема указывается явно в моделях.
+
+Что автогенерация **не видит** и что дописано в первую ревизию руками: создание
+схем, расширений (`vector`, `citext`, `pg_trgm`) и ENUM-типов. У типов в моделях
+стоит `create_type=False`, иначе SQLAlchemy пытался бы создать один и тот же тип
+при каждой использующей его таблице.
+
+## Бэкап в .sql
+
+```bash
+docker compose exec api fspdb dump-schema
+docker compose exec api fspdb dump-data
+```
+
+Оба файла собираются **чистым Python из моделей и текущей базы**, без `pg_dump`:
+`schema.sql` компилируется из той же `MetaData`, по которой Alembic строит
+миграции, поэтому разойтись со схемой он не может.
+
+Восстановление в пустую базу:
+
+```bash
+docker compose exec postgres createdb -U fsp fsp_copy
+docker compose exec -T postgres psql -U fsp -d fsp_copy -v ON_ERROR_STOP=1 -f /sql/backup/schema.sql
+docker compose exec -T postgres psql -U fsp -d fsp_copy -v ON_ERROR_STOP=1 -f /sql/backup/data.sql
+```
+
+Проверено: восстановленная копия совпадает с оригиналом по всем таблицам.
+В `data.sql` учтены две тонкости — `OVERRIDING SYSTEM VALUE` для
+`GENERATED ALWAYS AS IDENTITY` (иначе исходные id не сохранить и разъедутся
+внешние ключи) и выравнивание последовательностей в конце (иначе первый же
+INSERT из приложения упал бы на дубликате ключа).
 
 ## Что должен знать бэкенд
 
-**Схемы.** Таблицы не в `public`. В SQLAlchemy указывайте схему явно:
+**Схемы указываются явно.** Таблицы не в `public`:
 
 ```python
 class Candidate(Base):
@@ -78,57 +107,52 @@ class Candidate(Base):
     __table_args__ = {"schema": "profile"}
 ```
 
-ENUM-типы тоже живут в схемах своих модулей:
-`ENUM(..., schema="hire", name="invitation_status")`.
-
-`schema.sql` прописывает роли `search_path = public, core, ref, profile, assess,
-hire, match` — это для psql и ad-hoc запросов. На модели не полагаться: без
-явной схемы ORM сгенерирует DDL мимо модуля.
-
-**Никаких триггеров и хранимых функций.** Следствия:
+**Никаких триггеров и хранимых функций** — проверяется в базе, `pg_proc` и
+`pg_trigger` по нашим схемам пустые. Следствия:
 
 * `updated_at` проставляет приложение при каждом UPDATE;
-* `current_category_id` у кандидата обновляет бэкенд одновременно со вставкой в
-  `assess.grade_assignments`; источник истины — запись с `is_current = true`;
-* кулдаун смены грейда проверяется сравнением `now()` с
-  `grade_assignments.next_change_allowed_at` (интервал берётся из
-  `ref.grades.cooldown_days`);
-* `search_vector` и UUID-дефолты — исключение: это генерируемые колонки и
-  встроенные функции PostgreSQL, а не наш код в базе.
-
-**Снятие флага `is_current`.** Партиальный уникальный индекс не даст двум
-записям быть текущими одновременно, поэтому смена грейда — одна транзакция:
-`UPDATE ... SET is_current = false WHERE candidate_id = ? AND is_current` затем
-`INSERT`.
+* `current_category_id` у кандидата обновляется в одной транзакции со вставкой
+  в `assess.grade_assignments`; источник истины — запись с `is_current = true`;
+* смена грейда: `UPDATE ... SET is_current = false` → `INSERT` → обновление
+  `current_category_id`, всё одной транзакцией (партиальный уникальный индекс
+  не даст двум записям быть текущими);
+* кулдаун проверяется сравнением `now()` с
+  `grade_assignments.next_change_allowed_at` (интервал — из `ref.grades.cooldown_days`).
 
 **Контакты кандидата** отдаются только при наличии живой строки в
 `hire.contact_disclosures` (`revoked_at IS NULL`). Строка создаётся в той же
 транзакции, что и принятие приглашения или создание отклика.
 
+**Веса навыков не вводятся руками.** В справочнике `ref.specialization_skills`
+только булево `is_core`; числовой вес считает `fspdb relevance` из наблюдаемого
+спроса и кладёт в `match.skill_relevance`. Формула и обоснование —
+в `api/app/db/relevance.py`.
+
 **pgvector.** HNSW-индекс работает, только если вектор для сравнения —
-константа, параметр запроса или скалярный подзапрос. Если вектор берётся из
-JOIN, планировщик уходит в seq scan:
+константа, параметр запроса или скалярный подзапрос. Вектор из JOIN уводит
+планировщик в seq scan **молча**, без ошибки:
 
 ```sql
--- индекс используется
 SELECT candidate_id FROM match.candidate_embeddings
 ORDER BY embedding <=> (SELECT embedding FROM match.need_embeddings WHERE need_id = :need)
 LIMIT 40;
 ```
 
 Размерность зафиксирована: `vector(1024)` под multilingual-e5-large / bge-m3.
-Другая модель — другая размерность и миграция колонки.
 
 **Другая предметная область.** Чтобы запустить платформу вне ИТ, меняются
-только данные: строка в `ref.industries`, свои `specializations`, `grades`,
-`skills` и свой банк заданий. DDL не трогается — это проверяется заведённой в
-справочниках отраслью «Маркетинг».
+только данные: строка в `ref.industries`, свои специализации, грейды, навыки и
+свой `app/db/seeds/task_bank.py`. Модели не трогаются — это проверяется
+заведённой в справочниках отраслью «Маркетинг».
 
-## Проверка развёрнутой базы
+## Если первый запуск не поднимается
+
+Контейнер `api` ставит зависимости с PyPI при первом старте. Нет доступа к
+PyPI из контейнера — venv останется пустым и uvicorn не запустится. Разовое
+решение:
 
 ```bash
-docker compose exec postgres psql -U fsp -d fsp -c '\dn'
-docker compose exec postgres psql -U fsp -d fsp -c '\dt profile.*'
-docker compose exec postgres psql -U fsp -d fsp -c \
-  "SELECT count(*) FROM pg_tables WHERE schemaname IN ('core','ref','profile','assess','hire','match')"
+docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -v "$PWD/api/.venv-docker":/opt/venv -v "$PWD/api":/app -w /app \
+  python:3.13-slim bash -c '/opt/venv/bin/pip install -e . || (python -m venv /opt/venv && /opt/venv/bin/pip install -e .)'
 ```
