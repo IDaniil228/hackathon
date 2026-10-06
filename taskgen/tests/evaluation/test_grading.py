@@ -36,6 +36,16 @@ def test_order_follows_level_not_list_order_or_name():
     assert levels == ["junior", "middle", "senior"]
 
 
+def test_order_follows_level_even_when_names_sort_otherwise():
+    # trainee по алфавиту последний, но по level самый младший.
+    grades = [*GRADES, GradeLevel(code="trainee", level=5)]
+    tasks = [TaskScore(grade="trainee", score=1.0), TaskScore(grade="junior", score=1.0)]
+    result = assess_grade(tasks, grades, "trainee", solved_threshold=SOLVED, pass_threshold=PASS)
+    assert [item.grade for item in result.levels] == ["trainee", "junior"]
+    assert result.assigned == "junior"
+    assert result.outcome == "upgraded"
+
+
 def test_score_exactly_at_solved_threshold_counts_as_solved():
     result = _assess([("junior", SOLVED)], "junior")
     assert result.levels[0].solved == 1
