@@ -1,20 +1,23 @@
 # Окружения песочницы: имя runtime из шаблона задания -> пакет Piston и обвязка тестов.
 # Новое окружение для уже поддержанного языка добавляется записью сюда, без правки кода.
-# harness — язык обвязки тестов, список допустимых значений задан в registry.py.
+# Поля и допустимые значения задаёт RuntimeSpec в registry.py. Отсюда же скрипт
+# taskgen/sandbox/piston-packages.sh узнаёт, какие пакеты ставить в Piston.
 python:
   language: python
   version: 3.12.0
   harness: python
 
-# Собирается из taskgen/sandbox/packages/python-ml, официального пакета у Piston нет.
 python-ml:
   language: python-ml
   version: 3.12.0
   harness: python
+  # У Piston нет такого пакета, он собирается из taskgen/sandbox/packages/python-ml.
+  source: local
 
 cpp:
   language: c++
   version: 10.2.0
   harness: cpp
+  package: gcc
   # Без лимита Piston не ограничивает память компилятора, а шаблонный код раздувает её легко.
   compile_memory_bytes: 1073741824

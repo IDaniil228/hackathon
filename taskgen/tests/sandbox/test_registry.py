@@ -25,6 +25,31 @@ def test_new_runtime_is_added_by_data_only(tmp_path):
     assert (spec.language, spec.version, spec.harness) == ("python", "3.10.0", "python")
 
 
+def test_packages_name_what_to_install_in_piston():
+    packages = RuntimeRegistry.load().packages()
+
+    assert ("official", "python", "3.12.0") in packages
+    # Язык c++ Piston получает из пакета gcc.
+    assert ("official", "gcc", "10.2.0") in packages
+    assert ("local", "python-ml", "3.12.0") in packages
+    assert len(packages) == len(set(packages))
+
+
+def test_registry_module_prints_packages_for_the_installer():
+    import subprocess
+    import sys
+
+    printed = subprocess.run(
+        [sys.executable, "-m", "taskgen.sandbox.registry"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+    assert "official gcc 10.2.0\n" in printed
+    assert "local python-ml 3.12.0\n" in printed
+
+
 def test_unknown_runtime_is_a_sandbox_error():
     with pytest.raises(SandboxError, match="rust"):
         RuntimeRegistry.load().get("rust")

@@ -22,6 +22,14 @@ class RuntimeSpec(BaseModel):
     version: str
     harness: Literal["python", "cpp"]
     compile_memory_bytes: int | None = None
+    # Пакет Piston, который даёт язык; один пакет может давать несколько языков.
+    package: str | None = None
+    # official ставится из репозитория Piston, local собирается из taskgen/sandbox/packages.
+    source: Literal["official", "local"] = "official"
+
+    @property
+    def package_name(self) -> str:
+        return self.package or self.language
 
 
 class RuntimeRegistry:
@@ -52,3 +60,15 @@ class RuntimeRegistry:
 
     def names(self) -> list[str]:
         return sorted(self._runtimes)
+
+    def packages(self) -> list[tuple[str, str, str]]:
+        """Пакеты Piston, нужные окружениям: (source, package, version) без повторов."""
+        return sorted(
+            {(spec.source, spec.package_name, spec.version) for spec in self._runtimes.values()}
+        )
+
+
+if __name__ == "__main__":
+    # Список читает скрипт установки пакетов, поэтому версии заданы только в runtimes.yaml.
+    for source, package, version in RuntimeRegistry.load().packages():
+        print(source, package, version)
