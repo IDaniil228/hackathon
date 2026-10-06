@@ -142,12 +142,17 @@ load_local() {
 }
 
 restart_and_wait() {
-  local tries=0
   say "перезапускаю $container, Piston читает пакеты только при старте"
   docker restart "$container" >/dev/null || fail "не удалось перезапустить $container"
+  wait_ready
+}
+
+# Контейнер, только что поднятый docker compose up, отвечает на запросы через несколько секунд.
+wait_ready() {
+  local tries=0
   until curl -sSf -o "$TMP/runtimes" "$url/api/v2/runtimes" 2>/dev/null; do
     tries=$((tries + 1))
-    ((tries < 60)) || fail "Piston не поднялся за 60 с после перезапуска"
+    ((tries < 60)) || fail "Piston не ответил по адресу $url за 60 с"
     sleep 1
   done
 }
@@ -218,6 +223,7 @@ cmd_install() {
     esac
   done
   list=$(packages) || fail "не удалось прочитать реестр окружений"
+  wait_ready
   while read -r origin name version; do
     case "$origin" in
       official) install_official "$name" "$version" ;;
