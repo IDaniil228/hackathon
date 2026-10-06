@@ -158,6 +158,9 @@ class TestSession(Base):
     skills: Mapped[list[str]] = mapped_column(ARRAY(String(64)))
     temperature: Mapped[float] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String(16), default="created")
+    # Как отбирались шаблоны: режим, параметры, расстояния и вероятности. Пишет генерация при
+    # создании сессии; это основа объяснимости выдачи, а result пишет оценка позже.
+    selection: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = _now()
     scored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
