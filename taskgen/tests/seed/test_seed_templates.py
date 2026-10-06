@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 import random
 import re
@@ -19,7 +20,7 @@ import yaml
 from sqlalchemy import select
 
 from taskgen.bank.importer import import_documents, read_directory
-from taskgen.bank.parser import parse_template
+from taskgen.bank.parser import find_phrases, parse_template
 from taskgen.config import SandboxSettings
 from taskgen.contracts import (
     ParamSpec,
@@ -32,6 +33,7 @@ from taskgen.contracts import (
     TestRunRequest,
 )
 from taskgen.db import Area, AreaSkill, Grade
+from taskgen.generation.params import fill_placeholders
 from taskgen.sandbox.piston import PistonRunner
 from tests.seed.mutants import MUTANTS
 
@@ -72,6 +74,7 @@ def _spec(path: Path) -> TemplateSpec:
 
 
 CODE_PATHS = [p for p in PATHS if _spec(p).kind is TaskKind.CODE]
+ESSAY_PATHS = [p for p in PATHS if _spec(p).kind is TaskKind.ESSAY]
 
 
 def draw_params(specs: dict[str, ParamSpec], rng: random.Random) -> dict[str, Any]:
@@ -163,6 +166,33 @@ def constant_solutions(spec: TemplateSpec, cases: list[TestCase]) -> dict[str, s
         f"    return json.loads({json.dumps(json.dumps(value))})\n"
         for name, value in (("default", default), ("first-example", first))
     }
+
+
+def param_variants(specs: dict[str, ParamSpec]) -> list[dict[str, Any]]:
+    """Все сочетания значений choice и границы числовых параметров: у эссе их единицы."""
+    names = sorted(specs)
+    values = [
+        specs[name].choices if specs[name].type == "choice" else [specs[name].min, specs[name].max]
+        for name in names
+    ]
+    return [dict(zip(names, combo, strict=True)) for combo in itertools.product(*values)]
+
+
+@pytest.mark.parametrize("path", ESSAY_PATHS, ids=_source)
+def test_essay_questions_do_not_reveal_forbidden_phrases(path: Path):
+    spec = _spec(path)
+
+    # В банке «Нельзя раскрывать» обязателен: без него проверка ситуации ловит только
+    # пропущенные факты, а подсказки в ситуации проходят.
+    assert spec.questions and spec.scenario_facts and spec.forbidden
+    # Разбор сверяет сырой текст вопросов и значения параметров по отдельности, а фраза
+    # может сложиться только после подстановки, поэтому шлюз сверяет готовый текст.
+    revealed = {
+        phrase
+        for params in param_variants(spec.params)
+        for phrase in find_phrases(fill_placeholders(spec.questions, params), spec.forbidden)
+    }
+    assert not revealed, f"вопросы сами раскрывают ответ: {sorted(revealed)}"
 
 
 @pytest.mark.parametrize("path", PATHS, ids=_source)
