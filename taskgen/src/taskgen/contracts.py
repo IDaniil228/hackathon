@@ -38,6 +38,13 @@ class RubricItem(BaseModel):
     failing_example: str | None = None
 
 
+class ScenarioFact(BaseModel):
+    """Элемент сценария эссе, который обязан попасть в ситуацию: на него опирается рубрика."""
+
+    id: str
+    text: str
+
+
 class TemplateSpec(BaseModel):
     """Разобранный md-шаблон. Формат файла описан в taskgen/TEMPLATE_FORMAT.md."""
 
@@ -58,6 +65,11 @@ class TemplateSpec(BaseModel):
     entrypoint: str | None = None
     reference_solution: str | None = None
     test_generator: str | None = None
+    # Только для kind=essay: вопросы идут в условие дословно, ситуацию пишет LLM по фактам,
+    # а запрещённые фразы не должны появиться в ситуации.
+    questions: str | None = None
+    scenario_facts: list[ScenarioFact] = []
+    forbidden: list[str] = []
     rubric: list[RubricItem]
 
 

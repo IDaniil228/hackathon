@@ -48,6 +48,34 @@ def test_valid_essay_template_has_no_code_parts():
     assert spec.test_generator is None and spec.runtime is None
 
 
+def test_essay_sections_are_parsed():
+    text = make_essay(
+        params={"lang": {"type": "choice", "choices": ["Python", "Go"]}},
+        sections={
+            "Вопросы": "1. Что выбрать на {lang}?\n2. Почему?",
+            "Факты": "- cpu: сервис на {lang} считает на процессоре\n- cores: на машине 8 ядер",
+            "Нельзя раскрывать": "- общая память\n- GIL",
+        },
+    )
+    spec = parse_template(text, source="e.md")
+    assert spec.questions == "1. Что выбрать на {lang}?\n2. Почему?"
+    assert [(f.id, f.text) for f in spec.scenario_facts] == [
+        ("cpu", "сервис на {lang} считает на процессоре"),
+        ("cores", "на машине 8 ядер"),
+    ]
+    assert spec.forbidden == ["общая память", "GIL"]
+
+
+def test_forbidden_section_is_optional_for_essay():
+    spec = parse_template(make_essay(sections={"Нельзя раскрывать": None}), source="e.md")
+    assert spec.forbidden == []
+
+
+def test_code_template_has_no_essay_parts():
+    spec = parse_template(make_template(), source="t.md")
+    assert spec.questions is None and spec.scenario_facts == [] and spec.forbidden == []
+
+
 def test_scoring_override_with_known_weight_is_accepted():
     spec = parse_template(make_template(scoring={"weight_performance": 0.15}), source="t.md")
     assert spec.scoring == {"weight_performance": 0.15}
@@ -115,6 +143,74 @@ def test_essay_must_not_carry_code_sections(section):
 
     text = make_essay() + f"\n## {section}\n\n{CODE_SECTIONS[section]}\n"
     assert f"раздел «{section}»" in locations(text)
+
+
+@pytest.mark.parametrize("section", ["Вопросы", "Факты"])
+def test_essay_requires_questions_and_facts(section):
+    assert f"раздел «{section}»" in locations(make_essay(sections={section: None}))
+
+
+@pytest.mark.parametrize(
+    ("section", "text"),
+    [
+        ("Вопросы", "1. Что выбрать?"),
+        ("Факты", "- cpu: сервис считает"),
+        ("Нельзя раскрывать", "- GIL"),
+    ],
+)
+def test_code_template_must_not_carry_essay_sections(section, text):
+    assert f"раздел «{section}»" in locations(make_template(sections={section: text}))
+
+
+@pytest.mark.parametrize(
+    ("section", "text"),
+    [
+        ("Вопросы", ""),
+        ("Факты", ""),
+        ("Факты", "просто текст без пунктов"),
+        ("Факты", "- без идентификатора"),
+        ("Факты", "- a: x\n- a: y"),
+        ("Факты", "- a: x\n  + пример"),
+        ("Нельзя раскрывать", ""),
+        ("Нельзя раскрывать", "просто текст"),
+        ("Нельзя раскрывать", "- ---"),
+    ],
+)
+def test_malformed_essay_section_is_reported(section, text):
+    assert f"раздел «{section}»" in locations(make_essay(sections={section: text}))
+
+
+@pytest.mark.parametrize("section", ["Вопросы", "Факты"])
+def test_unknown_placeholder_in_essay_section_is_reported(section):
+    text = {"Вопросы": "1. Что на {lang}?", "Факты": "- cpu: сервис на {lang}"}[section]
+    assert f"раздел «{section}»" in locations(make_essay(sections={section: text}))
+
+
+@pytest.mark.parametrize(
+    ("section", "text"),
+    [
+        # Регистр, пробелы и пунктуация не прячут совпадение.
+        ("Вопросы", "1. Где здесь ОБЩАЯ  память?"),
+        ("Вопросы", "1. Нужен ли тут МЬЮТЕКС?"),
+        ("Факты", "- shared: у потоков процесса Общая—память"),
+    ],
+)
+def test_forbidden_phrase_in_questions_or_facts_is_reported(section, text):
+    # Вопрос, который сам называет ответ, обесценивает рубрику; факт с запрещённой фразой
+    # противоречит проверке ситуации, и шаблон никогда не даст экземпляра.
+    assert f"раздел «{section}»" in locations(make_essay(sections={section: text}))
+
+
+def test_forbidden_phrase_in_param_choice_is_reported():
+    params = {"lang": {"type": "choice", "choices": ["Python с мьютексом", "Go"]}}
+    assert "params.lang" in locations(make_essay(params=params))
+
+
+def test_forbidden_phrase_matches_yo_as_ye():
+    text = make_essay(
+        sections={"Вопросы": "1. Что ещё мешает?", "Нельзя раскрывать": "- ЕЩЕ мешает"}
+    )
+    assert "раздел «Вопросы»" in locations(text)
 
 
 @pytest.mark.parametrize("section", ["Генерация", "Рубрика"])
