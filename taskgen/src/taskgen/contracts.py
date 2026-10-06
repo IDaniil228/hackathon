@@ -280,6 +280,8 @@ class JudgeResult(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
     # Разброс между сэмплами судьи; высокий разброс — повод для ручной проверки.
     spread: float = 0.0
+    # Замечания проверки: какие вердикты сняты проверкой смысла цитат и почему она пропущена.
+    notes: list[str] = []
 
 
 class JudgeRequest(BaseModel):

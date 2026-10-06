@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from dataclasses import dataclass, field
 
+from taskgen.bank.selection import cosine_similarity
 from taskgen.contracts import Embedder
 
 
@@ -50,3 +52,40 @@ class EmbeddingCache:
             while len(self._vectors) > self.max_items:
                 self._vectors.popitem(last=False)
         return [found[text] for text in texts]
+
+
+class RelevanceUnavailableError(Exception):
+    """Проверку смысла нельзя выполнить: эмбеддера нет или он вернул ошибку."""
+
+
+@dataclass
+class QuoteRelevance:
+    """Проверка смысла цитат: цитаты вместе похожи на текст пункта рубрики или факта.
+
+    Дословная цитата доказывает только наличие текста в ответе. Кандидат может дописать
+    фразу, в которой сам заявляет о выполнении пункта, и обманутая модель её процитирует.
+    Порог косинусного сходства отсекает цитату не по теме пункта.
+    """
+
+    threshold: float
+    embedder: Embedder | None
+    cache: EmbeddingCache = field(default_factory=EmbeddingCache)
+
+    async def similarities(self, pairs: list[tuple[str, list[str]]]) -> list[float]:
+        """Сходство каждой пары "текст пункта, цитаты"; цитаты пары склеиваются в один текст.
+
+        Векторы пунктов берутся из кэша: они одинаковы для всех ответов на шаблон.
+        """
+        if not pairs:
+            return []
+        if self.embedder is None:
+            raise RelevanceUnavailableError("эмбеддер не настроен")
+        try:
+            references = await self.cache.vectors(self.embedder, [text for text, _ in pairs])
+            quoted = await self.embedder.embed([" ".join(quotes) for _, quotes in pairs])
+        except Exception as error:
+            raise RelevanceUnavailableError(f"эмбеддер вернул ошибку: {error}") from error
+        return [
+            cosine_similarity(reference, quote)
+            for reference, quote in zip(references, quoted, strict=True)
+        ]

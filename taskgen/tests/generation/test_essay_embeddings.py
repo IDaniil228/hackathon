@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import json
-import math
 from typing import Any
 
 import pytest
@@ -21,7 +20,7 @@ from taskgen.generation.essay import (
     generate_essay,
     split_sentences,
 )
-from tests.evaluation.fakes import FakeLLM
+from tests.evaluation.fakes import FakeLLM, TableEmbedder, unit
 from tests.generation.test_essay import leakage_spec
 
 FACT_A = "аналитик обучил градиентный бустинг"
@@ -32,33 +31,6 @@ S_BOOST = "Маша обучила бустинг на деревьях."
 S_DATES = "Таблица собиралась полгода."
 S_HINT = "Сведения из проверки просочились в обучение."
 S_PLAIN = "Отчёт ушёл руководителю."
-
-
-def unit(angle_cos: float, axis: int = 0, dims: int = 6) -> list[float]:
-    """Вектор с косинусом angle_cos к оси axis; остаток уходит в последнее измерение."""
-    vector = [0.0] * dims
-    vector[axis] = angle_cos
-    vector[-1] = math.sqrt(max(0.0, 1.0 - angle_cos**2))
-    return vector
-
-
-class TableEmbedder:
-    """Эмбеддер по таблице; текст вне таблицы — ошибка теста, а не случайный вектор."""
-
-    def __init__(self, vectors: dict[str, list[float]], *, model: str = "table") -> None:
-        self.model_name = model
-        self.vectors = vectors
-        self.calls: list[list[str]] = []
-        self.fail: Exception | None = None
-
-    async def embed(self, texts: list[str]) -> list[list[float]]:
-        self.calls.append(list(texts))
-        if self.fail is not None:
-            raise self.fail
-        return [self.vectors[text] for text in texts]
-
-    def embedded(self) -> list[str]:
-        return [text for call in self.calls for text in call]
 
 
 def small_spec(*, forbidden: list[str] | None = None) -> TemplateSpec:
