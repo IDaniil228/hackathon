@@ -3,6 +3,7 @@
 import pytest
 
 from taskgen.contracts import RunLimits, RunRequest
+from taskgen.sandbox.registry import RuntimeRegistry
 
 pytestmark = pytest.mark.integration
 
@@ -31,6 +32,18 @@ async def test_cpp_compiles_and_runs(piston):
     )
 
     assert (result.exit_code, result.stdout) == (0, "42"), result.stderr
+
+
+async def test_cpp_standard_in_registry_is_what_piston_compiles_with(piston):
+    # Стандарт в описании окружения для кандидата должен совпадать с флагом компилятора.
+    standard = RuntimeRegistry.load().get("cpp").standard
+    year = standard.upper().removeprefix("C++")
+    source = "#include <iostream>\nint main() { std::cout << __cplusplus; }\n"
+
+    result = await piston.run(RunRequest(runtime="cpp", files={"main.cpp": source}, limits=LIMITS))
+
+    assert result.exit_code == 0, result.stderr
+    assert result.stdout.startswith(f"20{year}"), (standard, result.stdout)
 
 
 async def test_cpp_compile_error_reaches_caller(piston):

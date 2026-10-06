@@ -23,8 +23,6 @@ printf '%s  base.tar.gz\n' "$BASE_SHA256" | sha256sum -c -
 tar xzf base.tar.gz ./bin ./lib ./include ./share
 rm base.tar.gz
 
-pip() {
-  bin/python3.12 -m pip install --no-cache-dir --disable-pip-version-check "$@"
-}
-pip --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
-pip scikit-learn==1.9.1 numpy==1.26.1
+# Пины и индексы — только в requirements.txt: по нему же собирается описание окружения.
+bin/python3.12 -m pip install --no-cache-dir --disable-pip-version-check \
+  -r requirements.txt

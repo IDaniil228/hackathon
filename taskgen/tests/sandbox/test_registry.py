@@ -16,7 +16,8 @@ def test_default_registry_knows_service_runtimes():
 def test_new_runtime_is_added_by_data_only(tmp_path):
     path = tmp_path / "runtimes.yaml"
     path.write_text(
-        "python-old:\n  language: python\n  version: 3.10.0\n  harness: python\n",
+        "python-old:\n  language: python\n  version: 3.10.0\n  harness: python\n"
+        "  description: Python {version}\n",
         encoding="utf-8",
     )
 

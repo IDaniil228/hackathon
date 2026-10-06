@@ -17,11 +17,22 @@ from pydantic import BaseModel, ValidationError
 from taskgen.contracts import RunLimits
 from taskgen.sandbox.errors import SandboxError
 
+# Рецепты локальных пакетов Piston: taskgen/sandbox/packages. Каталог лежит вне пакета
+# Python, потому что его же читает скрипт установки; сервис запускается из исходников
+# (uv sync ставит проект в режиме editable, и образ Docker копирует весь taskgen/).
+PACKAGES_DIR = Path(__file__).resolve().parents[3] / "sandbox" / "packages"
+REQUIREMENTS_FILE = "requirements.txt"
+
 
 class RuntimeSpec(BaseModel):
     language: str
     version: str
     harness: Literal["python", "cpp"]
+    # Описание для человека; {version} и {standard} подставляются из полей ниже, чтобы
+    # версия была записана один раз.
+    description: str
+    # Стандарт языка, с которым пакет Piston компилирует решение, например c++17.
+    standard: str | None = None
     compile_memory_bytes: int | None = None
     # Пакет Piston, который даёт язык; один пакет может давать несколько языков.
     package: str | None = None
@@ -44,11 +55,12 @@ class RuntimeSpec(BaseModel):
 
 
 class RuntimeRegistry:
-    def __init__(self, runtimes: dict[str, RuntimeSpec]) -> None:
+    def __init__(self, runtimes: dict[str, RuntimeSpec], packages_dir: Path = PACKAGES_DIR) -> None:
         self._runtimes = runtimes
+        self._packages_dir = packages_dir
 
     @classmethod
-    def load(cls, path: Path | None = None) -> RuntimeRegistry:
+    def load(cls, path: Path | None = None, packages_dir: Path = PACKAGES_DIR) -> RuntimeRegistry:
         if path is None:
             text = resources.files(__package__).joinpath("runtimes.yaml").read_text("utf-8")
         else:
@@ -60,7 +72,7 @@ class RuntimeRegistry:
                 runtimes[name] = RuntimeSpec.model_validate(fields)
             except ValidationError as error:
                 raise SandboxError(f"окружение {name} описано неверно: {error}") from error
-        return cls(runtimes)
+        return cls(runtimes, packages_dir)
 
     def get(self, name: str) -> RuntimeSpec:
         try:
@@ -77,6 +89,34 @@ class RuntimeRegistry:
         return sorted(
             {(spec.source, spec.package_name, spec.version) for spec in self._runtimes.values()}
         )
+
+    def libraries(self, name: str) -> list[tuple[str, str]]:
+        """Библиотеки окружения сверх стандартной: (имя, версия) из файла зависимостей пакета.
+
+        Официальные пакеты Piston дают только язык. У локального пакета библиотеки — те, что
+        его build.sh ставит из requirements.txt; нет файла — нет и библиотек.
+        """
+        spec = self.get(name)
+        if spec.source != "local":
+            return []
+        path = self._packages_dir / spec.package_name / spec.version / REQUIREMENTS_FILE
+        if not path.is_file():
+            return []
+        pins = []
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.split("#", 1)[0].strip()
+            # Строки с - — опции pip вроде --extra-index-url, а не библиотеки.
+            if not line or line.startswith("-"):
+                continue
+            library, separator, version = line.partition("==")
+            if not separator or not version.strip():
+                raise SandboxError(
+                    f"{path}: зависимость {line!r} без точной версии; описание окружения "
+                    "называет кандидату версии, поэтому нужен пин вида имя==версия"
+                )
+            # Локальная метка (+cpu) говорит, какая сборка ставится, а не какая версия.
+            pins.append((library.strip(), version.strip().split("+", 1)[0]))
+        return pins
 
 
 if __name__ == "__main__":

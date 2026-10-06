@@ -3,6 +3,7 @@
 import pytest
 
 from taskgen.contracts import RunLimits, RunRequest, TestCase, TestRunRequest
+from taskgen.sandbox.registry import RuntimeRegistry
 
 pytestmark = pytest.mark.integration
 
@@ -25,6 +26,27 @@ async def test_interpreter_lives_in_its_own_package(piston):
     prefix, versions = result.stdout.splitlines()
     assert prefix.endswith("/python-ml/3.12.0")
     assert versions.endswith("+cpu 1")
+
+
+async def test_installed_libraries_match_environment_description(piston):
+    # Кандидат видит версии из requirements.txt; установленный пакет обязан им соответствовать.
+    libraries = RuntimeRegistry.load().libraries("python-ml")
+    code = (
+        "import sys\nfrom importlib.metadata import version\n"
+        "for name in sys.argv[1:]:\n    print(name, version(name).split('+')[0])\n"
+    )
+
+    result = await piston.run(
+        RunRequest(
+            runtime="python-ml",
+            files={"main.py": code},
+            args=[name for name, _ in libraries],
+            limits=LIMITS,
+        )
+    )
+
+    assert result.exit_code == 0, result.stderr
+    assert result.stdout.split("\n")[:-1] == [f"{name} {ver}" for name, ver in libraries]
 
 
 async def test_ml_solution_answers_with_numpy_and_torch_values(piston):

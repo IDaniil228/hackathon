@@ -2,15 +2,20 @@
 # Новое окружение для уже поддержанного языка добавляется записью сюда, без правки кода.
 # Поля и допустимые значения задаёт RuntimeSpec в registry.py. Отсюда же скрипт
 # taskgen/sandbox/piston-packages.sh узнаёт, какие пакеты ставить в Piston.
+#
+# description — текст для кандидата; библиотеки к нему добавляет taskgen.sandbox.environment
+# из requirements.txt локального пакета, а без файла пишет, что есть только стандартная.
 python:
   language: python
   version: 3.12.0
   harness: python
+  description: Python {version}
 
 python-ml:
   language: python-ml
   version: 3.12.0
   harness: python
+  description: Python {version} для задач машинного обучения
   # У Piston нет такого пакета, он собирается из taskgen/sandbox/packages/python-ml.
   source: local
   # Импорт torch занимает около 200 МБ. Обучение маленькой сети (2000 примеров, 200 шагов)
@@ -23,5 +28,9 @@ cpp:
   version: 10.2.0
   harness: cpp
   package: gcc
+  description: GCC {version}, стандарт {standard}
+  # Стандарт задаёт скрипт compile пакета gcc в Piston (g++ -std=c++17); совпадение
+  # проверяет живой тест tests/sandbox/test_piston_live.py.
+  standard: C++17
   # Без лимита Piston не ограничивает память компилятора, а шаблонный код раздувает её легко.
   compile_memory_bytes: 1073741824

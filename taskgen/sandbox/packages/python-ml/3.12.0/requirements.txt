@@ -1,0 +1,9 @@
+# Библиотеки пакета python-ml. Отсюда их ставит build.sh, и отсюда же берёт версии описание
+# окружения, которое видит кандидат (taskgen.sandbox.environment). Каждая строка — точный пин.
+#
+# Сборка torch только для CPU лежит в отдельном индексе PyTorch. Локальная метка +cpu
+# выбирает её: на PyPI torch той же версии собран с CUDA и весит в разы больше.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
+scikit-learn==1.9.1
+numpy==1.26.1

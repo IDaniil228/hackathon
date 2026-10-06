@@ -18,6 +18,7 @@ from taskgen.generation.instance import (
     generate_instance,
 )
 from taskgen.generation.params import draw_params
+from taskgen.sandbox.environment import describe_runtime
 from tests.evaluation.fakes import FakeLLM, http_error
 from tests.generation.fakes import LocalSandbox, call_entrypoint
 from tests.generation.templates import ENTRYPOINT, code_spec, essay_spec
@@ -87,6 +88,14 @@ async def test_code_instance_is_validated_by_reference():
     assert [(e.input, e.expected) for e in public.examples] == [
         (c.input, c.expected) for c in hidden.cases[:2]
     ]
+    # Окружение кандидат видит в том виде, в каком его описывает песочница.
+    assert public.environment == describe_runtime("python")
+
+
+async def test_legend_prompt_names_environment():
+    llm = FakeLLM(lambda _m, _s: legend())
+    await generate_instance(code_spec(), 1, deps(llm, LocalSandbox()))
+    assert describe_runtime("python") in prompt_of(llm.calls[0])
 
 
 async def test_prompt_has_params_signature_and_only_public_examples():
@@ -263,6 +272,7 @@ async def test_essay_instance():
     assert instance.validated is False
     assert instance.public.signature is None
     assert instance.public.examples == []
+    assert instance.public.environment is None
 
 
 async def test_essay_does_not_need_sandbox():

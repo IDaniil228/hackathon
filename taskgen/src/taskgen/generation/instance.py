@@ -39,6 +39,8 @@ from taskgen.evaluation.jsonout import (
 from taskgen.generation.harness import GeneratorError, generator_request, parse_generator_output
 from taskgen.generation.leaks import hidden_leaks, mentions_entrypoint, public_count
 from taskgen.generation.params import draw_params, fill_placeholders
+from taskgen.sandbox.environment import describe_all, describe_runtime
+from taskgen.sandbox.errors import SandboxError
 
 # --- Ошибки; текст сообщения уходит клиенту ------------------------------------------------
 
@@ -83,6 +85,12 @@ class PublicPayload(BaseModel):
     signature: Signature | None = Field(default=None, description="Только для заданий с кодом")
     examples: list[Example] = Field(default=[], description="Публичные примеры; остальные скрыты")
     expected_minutes: int = Field(description="Ожидаемое время на задание, минуты")
+    environment: str | None = Field(
+        default=None,
+        # Описание в схеме API собирается той же функцией, что и значение в задании.
+        description="Только для заданий с кодом: окружение и доступные библиотеки. Варианты: "
+        + "; ".join(f"{name} — «{text}»" for name, text in describe_all().items()),
+    )
 
 
 class Legend(BaseModel):
@@ -199,7 +207,11 @@ async def _code(spec: TemplateSpec, seed: int, deps: InstanceDeps) -> TaskInstan
     shown = public_count(len(cases), deps.options.public_examples)
     public_cases, hidden_cases = cases[:shown], cases[shown:]
     entrypoint = spec.entrypoint or ""
-    request = _code_request(spec, params, public_cases)
+    try:
+        environment = describe_runtime(spec.runtime or "")
+    except SandboxError as error:
+        raise TemplateDefectError(f"Шаблон {spec.name}: {error}") from error
+    request = _code_request(spec, params, public_cases, environment)
 
     def check(legend: Legend) -> str | None:
         if not mentions_entrypoint(legend.statement, entrypoint):
@@ -219,6 +231,7 @@ async def _code(spec: TemplateSpec, seed: int, deps: InstanceDeps) -> TaskInstan
             signature=Signature(entrypoint=entrypoint, runtime=spec.runtime or ""),
             examples=[Example(input=c.input, expected=c.expected) for c in public_cases],
             expected_minutes=spec.expected_minutes,
+            environment=environment,
         ),
         hidden=HiddenPayload(
             cases=cases,
@@ -278,7 +291,9 @@ def _reference_problem(report: TestReport, total: int) -> str:
     return ""
 
 
-def _code_request(spec: TemplateSpec, params: dict[str, Any], public: list[TestCase]) -> str:
+def _code_request(
+    spec: TemplateSpec, params: dict[str, Any], public: list[TestCase], environment: str
+) -> str:
     examples = "\n".join(
         f"- input: {json.dumps(c.input, ensure_ascii=False)}; "
         f"expected: {json.dumps(c.expected, ensure_ascii=False)}"
@@ -286,9 +301,10 @@ def _code_request(spec: TemplateSpec, params: dict[str, Any], public: list[TestC
     )
     return (
         f"Инструкция автора задания:\n{fill_placeholders(spec.generator_prompt, params)}\n\n"
-        f"Кандидат пишет функцию `{spec.entrypoint}` в окружении {spec.runtime}. Назови её "
-        "в условии ровно так и опиши аргументы и возвращаемое значение. Аргументы "
-        "передаются в том порядке, в каком они перечислены в input примеров.\n\n"
+        f"Кандидат пишет функцию `{spec.entrypoint}`. {environment}. Не требуй библиотек "
+        "сверх этих. Назови функцию в условии ровно так и опиши аргументы и возвращаемое "
+        "значение. Аргументы передаются в том порядке, в каком они перечислены в input "
+        "примеров.\n\n"
         f"Примеры (input — аргументы функции, expected — результат):\n{examples}\n\n"
         "Других тестовых данных в условии не приводи."
     )
