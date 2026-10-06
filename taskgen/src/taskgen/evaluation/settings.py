@@ -17,3 +17,5 @@ class EvaluationSettings(BaseModel):
     # Ненулевая температура нужна, чтобы сэмплы судьи различались и разброс что-то значил.
     judge_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     analyzer_timeout_seconds: float = Field(default=30.0, gt=0.0)
+    # Локальная модель отвечает на запросы по очереди; облачному провайдеру можно больше.
+    llm_concurrency: int = Field(default=1, ge=1)

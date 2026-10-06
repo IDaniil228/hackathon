@@ -57,6 +57,7 @@ from taskgen.evaluation.grading import (
 )
 from taskgen.evaluation.judge import JudgeError, LLMJudge
 from taskgen.evaluation.languages import canonical_language
+from taskgen.evaluation.limits import LimitedLLM
 from taskgen.evaluation.metrics import MetricScore, compute_quality, judge_facts, load_rubric
 from taskgen.evaluation.scoring import (
     Components,
@@ -334,8 +335,14 @@ class Evaluator:
         """
         settings: Settings = state.settings
         evaluation = getattr(state, "evaluation_settings", None) or EvaluationSettings()
+        # Ограничитель живёт в state, чтобы одновременные запросы к API делили один лимит.
+        # Новый клиент в state.llm получает новый ограничитель.
+        llm = getattr(state, "evaluation_llm", None)
+        if llm is None or llm.inner is not state.llm:
+            llm = LimitedLLM(state.llm, limit=evaluation.llm_concurrency)
+            state.evaluation_llm = llm
         judge = getattr(state, "judge", None) or LLMJudge(
-            state.llm,
+            llm,
             model=settings.llm.judge_model,
             samples=settings.scoring.judge_samples,
             temperature=evaluation.judge_temperature,
@@ -343,14 +350,14 @@ class Evaluator:
         detector = None
         if settings.ai_detector_enabled:
             detector = getattr(state, "ai_detector", None) or LLMAIDetector(
-                state.llm, model=settings.llm.judge_model
+                llm, model=settings.llm.judge_model
             )
         analyzers = getattr(state, "analyzers", None)
         return cls(
             settings=settings,
             evaluation=evaluation,
             sessionmaker=state.sessionmaker,
-            llm=state.llm,
+            llm=llm,
             judge=judge,
             sandbox=getattr(state, "sandbox", None),
             analyzers=analyzers
