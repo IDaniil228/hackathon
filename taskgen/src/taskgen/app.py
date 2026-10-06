@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable, Iterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.routing import APIRoute
+from starlette.routing import BaseRoute
 
 from taskgen import auth
 from taskgen.bank.api import router as bank_router
@@ -70,3 +72,16 @@ def create_app(
         return {"status": "ok"}
 
     return app
+
+
+def api_routes(routes: Iterable[BaseRoute]) -> Iterator[APIRoute]:
+    """Все эндпоинты приложения, включая эндпоинты подключённых роутеров.
+
+    FastAPI держит подключённый роутер одной записью в app.routes, а его эндпоинты — в
+    original_router. Префиксы здесь не нужны: их задают сами роутеры, а не include_router.
+    """
+    for route in routes:
+        if isinstance(route, APIRoute):
+            yield route
+        elif (included := getattr(route, "original_router", None)) is not None:
+            yield from api_routes(included.routes)

@@ -1,6 +1,26 @@
 import pytest
 
+from taskgen.app import api_routes, create_app
+from taskgen.auth import Role, route_roles
 from tests.conftest import ADMIN_KEY
+
+
+def test_every_keyed_route_documents_auth_errors(settings):
+    app = create_app(settings)
+    paths = app.openapi()["paths"]
+    routes = list(api_routes(app.routes))
+    keyed = [route for route in routes if route_roles(route) is not None]
+
+    missing = [
+        (method, route.path)
+        for route in keyed
+        for method in route.methods
+        if not {"401", "403"} <= paths[route.path][method.lower()]["responses"].keys()
+    ]
+    # Все эндпоинты, кроме /health, требуют ключ.
+    assert len(keyed) == len(routes) - 1 and not missing, missing
+    assert route_roles(next(r for r in routes if r.path == "/health")) is None
+    assert route_roles(next(r for r in routes if r.path == "/keys")) == (Role.ADMIN,)
 
 
 def test_health_answers_without_key(client):
