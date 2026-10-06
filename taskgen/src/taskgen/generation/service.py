@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from taskgen.bank.parser import TemplateError, parse_template
 from taskgen.bank.selector import SelectionError, SelectionResult, select_templates
 from taskgen.config import GenerationSettings, Settings
-from taskgen.contracts import Embedder, LLMClient, RunLimits, SandboxRunner
+from taskgen.contracts import Embedder, LLMClient, RunLimits, SandboxRunner, SessionStatus
 from taskgen.db import AreaSkill, Skill, Task, TestSession
 from taskgen.generation.instance import (
     GenerationError,
@@ -37,13 +37,8 @@ from taskgen.llm import limited_llm
 
 logger = logging.getLogger(__name__)
 
-GENERATING = "generating"
-READY = "ready"
-FAILED = "failed"
-
-# Ключи, которые сессия добавляет к объяснению отбора в test_sessions.selection.
+# Ключ, который сессия добавляет к объяснению отбора в test_sessions.selection.
 SEED_KEY = "seed"
-FAILURE_KEY = "failure"
 
 # seed хранится в tasks.seed типа BIGINT со знаком.
 SEED_BITS = 63
@@ -166,10 +161,10 @@ async def create_session(gen: Generator, spec: SessionSpec) -> uuid.UUID:
     try:
         instances = await _generate_all(gen, result, task_seeds)
     except GenerationError as error:
-        await _mark_failed(gen, session_id, selection, str(error))
+        await _mark_failed(gen, session_id, str(error))
         raise SessionFailedError(session_id, error) from error
     except Exception:
-        await _mark_failed(gen, session_id, selection, "внутренняя ошибка генерации")
+        await _mark_failed(gen, session_id, "внутренняя ошибка генерации")
         raise
 
     async with gen.sessionmaker() as db, db.begin():
@@ -178,7 +173,9 @@ async def create_session(gen: Generator, spec: SessionSpec) -> uuid.UUID:
         ):
             db.add(_task_row(session_id, item.template.id, position, instance))
         await db.execute(
-            update(TestSession).where(TestSession.id == session_id).values(status=READY)
+            update(TestSession)
+            .where(TestSession.id == session_id)
+            .values(status=SessionStatus.READY)
         )
     return session_id
 
@@ -210,7 +207,7 @@ async def _insert_session(
             claimed_grade_code=spec.claimed_grade,
             skills=list(spec.skills),
             temperature=result.parameters.temperature,
-            status=GENERATING,
+            status=SessionStatus.GENERATING,
             selection=selection,
         )
         db.add(row)
@@ -218,15 +215,12 @@ async def _insert_session(
         return row.id
 
 
-async def _mark_failed(
-    gen: Generator, session_id: uuid.UUID, selection: dict[str, Any], reason: str
-) -> None:
-    # Колонки для причины в test_sessions нет, поэтому она хранится рядом с объяснением отбора.
+async def _mark_failed(gen: Generator, session_id: uuid.UUID, reason: str) -> None:
     async with gen.sessionmaker() as db, db.begin():
         await db.execute(
             update(TestSession)
             .where(TestSession.id == session_id)
-            .values(status=FAILED, selection=selection | {FAILURE_KEY: reason})
+            .values(status=SessionStatus.FAILED, failure=reason)
         )
 
 

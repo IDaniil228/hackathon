@@ -120,7 +120,6 @@ class SessionOut(BaseModel):
     @classmethod
     def of(cls, view: service.SessionView) -> SessionOut:
         session = view.session
-        selection = session.selection or {}
         result = session.result or {}
         return cls(
             id=session.id,
@@ -129,7 +128,7 @@ class SessionOut(BaseModel):
             claimed_grade=session.claimed_grade_code,
             skills=list(session.skills),
             status=session.status,
-            failure=selection.get(service.FAILURE_KEY),
+            failure=session.failure,
             assigned_grade=result.get("assigned_grade"),
             created_at=session.created_at,
             tasks=[TaskOut.of(task) for task in view.tasks],

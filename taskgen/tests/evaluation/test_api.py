@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
 from taskgen.app import create_app
-from taskgen.contracts import AISignal, CaseOutcome, TestReport
+from taskgen.contracts import AISignal, CaseOutcome, SessionStatus, TestReport
 from taskgen.db import Answer, CandidateSummary, Task, Template, TestSession
 from tests.conftest import ADMIN_KEY
 from tests.evaluation.fakes import FakeLLM, FakeSandbox
@@ -64,7 +64,12 @@ class World:
     def _run(self, fn, *args):
         return self.client.portal.call(fn, *args)
 
-    def make_session(self, tasks: list[dict], claimed: str = "middle") -> tuple[uuid.UUID, list]:
+    def make_session(
+        self,
+        tasks: list[dict],
+        claimed: str = "middle",
+        status: SessionStatus = SessionStatus.READY,
+    ) -> tuple[uuid.UUID, list]:
         async def seed():
             async with self.state.sessionmaker() as db, db.begin():
                 session = TestSession(
@@ -73,6 +78,7 @@ class World:
                     claimed_grade_code=claimed,
                     skills=["python"],
                     temperature=0.3,
+                    status=status,
                 )
                 db.add(session)
                 await db.flush()
@@ -285,6 +291,21 @@ def test_result_before_scoring_is_409_and_unknown_is_404(world):
     missing = world.client.get(f"/sessions/{uuid.uuid4()}/result", headers=AUTH)
     assert missing.status_code == 404
     assert world.client.post(f"/sessions/{uuid.uuid4()}/score", headers=AUTH).status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("status", "fragment"),
+    [(SessionStatus.GENERATING, "генерир"), (SessionStatus.FAILED, "не удалась")],
+)
+def test_session_not_ready_cannot_be_scored(world, status, fragment):
+    session_id, (task_id,) = world.make_session(
+        [{"grade": "middle", "kind": "code"}], status=status
+    )
+    _answer(world, task_id)
+    response = world.client.post(f"/sessions/{session_id}/score", headers=AUTH)
+    assert response.status_code == 409
+    assert fragment in response.json()["detail"]
+    assert world.client.get(f"/sessions/{session_id}/result", headers=AUTH).status_code == 409
 
 
 def test_summary_of_unknown_candidate_is_404(world):

@@ -110,7 +110,10 @@ async def submit_answer(task_id: uuid.UUID, body: AnswerSubmit, request: Request
     ),
     responses={
         404: {"description": "Сессия не найдена"},
-        409: {"description": "В сессии нет заданий"},
+        409: {
+            "description": "Сессия ещё генерируется, её генерация не удалась или в ней нет "
+            "заданий; detail объясняет, что именно"
+        },
         500: {"description": "Скрытые данные задания повреждены"},
         502: {"description": "Судья недоступен, сессия не оценена"},
     },

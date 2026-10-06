@@ -31,6 +31,7 @@ from taskgen.contracts import (
     LLMClient,
     RunLimits,
     SandboxRunner,
+    SessionStatus,
     TaskKind,
     TestReport,
     TestRunRequest,
@@ -59,7 +60,15 @@ from taskgen.llm import limited_llm
 
 logger = logging.getLogger(__name__)
 
-SCORED = "scored"
+SCORED = SessionStatus.SCORED
+
+# Почему сессию в этом статусе нельзя оценить; ready и scored оценивать можно.
+_NOT_SCORABLE = {
+    SessionStatus.GENERATING: (
+        "Сессия ещё генерируется: оценка возможна, когда готовы все задания"
+    ),
+    SessionStatus.FAILED: ("Генерация сессии не удалась, оценивать нечего; создайте новую сессию"),
+}
 
 
 # --- Ошибки, которые API переводит в HTTP-ответы ---------------------------------------
@@ -462,6 +471,13 @@ async def score_session(ev: Evaluator, session_id: uuid.UUID) -> SessionResult:
         session = await db.get(TestSession, session_id)
         if session is None:
             raise NotFoundError("Сессия не найдена")
+        if session.status not in (SessionStatus.READY, SessionStatus.SCORED):
+            # Неполный набор заданий исказил бы оценку грейда по уровням.
+            raise ConflictError(
+                _NOT_SCORABLE.get(
+                    session.status, f"Сессию в статусе {session.status} оценить нельзя"
+                )
+            )
         rows = (
             await db.execute(
                 select(Task, Template.grade_code, Answer)

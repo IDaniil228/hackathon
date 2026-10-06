@@ -31,6 +31,8 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from taskgen.contracts import SessionStatus
+
 SCHEMA = "taskgen"
 
 
@@ -157,7 +159,10 @@ class TestSession(Base):
     claimed_grade_code: Mapped[str] = mapped_column(ForeignKey("grades.code"))
     skills: Mapped[list[str]] = mapped_column(ARRAY(String(64)))
     temperature: Mapped[float] = mapped_column(Float)
-    status: Mapped[str] = mapped_column(String(16), default="created")
+    # Значения и переходы — SessionStatus в taskgen.contracts.
+    status: Mapped[str] = mapped_column(String(16), default=SessionStatus.GENERATING)
+    # Почему сессия failed; текст уходит клиенту.
+    failure: Mapped[str | None] = mapped_column(Text)
     # Как отбирались шаблоны: режим, параметры, расстояния и вероятности. Пишет генерация при
     # создании сессии; это основа объяснимости выдачи, а result пишет оценка позже.
     selection: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

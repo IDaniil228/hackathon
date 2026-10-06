@@ -288,6 +288,10 @@ def _failed(world, response, status: int, fragment: str) -> None:
     assert view["status"] == "failed"
     assert fragment in view["failure"]
     assert view["tasks"] == []
+    # Причина хранится в своей колонке, а объяснение отбора остаётся объяснением.
+    [session] = world.sessions()
+    assert fragment in session.failure
+    assert "failure" not in session.selection
 
 
 def test_no_sandbox_is_503_and_session_failed(world):

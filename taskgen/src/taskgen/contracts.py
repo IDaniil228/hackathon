@@ -11,6 +11,20 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
 
+# --- Жизненный цикл сессии ------------------------------------------------------------------
+
+
+class SessionStatus(StrEnum):
+    """Статус test_sessions.status. Первые три ставит генерация, scored — оценка."""
+
+    # Задания ещё создаются; первое уже выдано кандидату.
+    GENERATING = "generating"
+    READY = "ready"
+    # Набор заданий не собран; причина — в test_sessions.failure.
+    FAILED = "failed"
+    SCORED = "scored"
+
+
 # --- Шаблон задания ---------------------------------------------------------------------
 
 
