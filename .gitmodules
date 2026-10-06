@@ -1,0 +1,24 @@
+[submodule ".agents/skills/ai-commit-trailers"]
+	path = .agents/skills/ai-commit-trailers
+	url = https://github.com/rokokol/ai-commit-trailers-skill.git
+[submodule ".agents/skills/bash-best-practices"]
+	path = .agents/skills/bash-best-practices
+	url = https://github.com/rokokol/bash-best-practices-skill.git
+[submodule ".agents/skills/ci"]
+	path = .agents/skills/ci
+	url = https://github.com/rokokol/ci-skill.git
+[submodule ".agents/skills/code-comments"]
+	path = .agents/skills/code-comments
+	url = https://github.com/rokokol/code-comments-skill.git
+[submodule ".agents/skills/contributing"]
+	path = .agents/skills/contributing
+	url = https://github.com/rokokol/contributing-skill.git
+[submodule ".agents/skills/create-readme"]
+	path = .agents/skills/create-readme
+	url = https://github.com/rokokol/create-readme-skill.git
+[submodule ".agents/skills/maintainer-docs"]
+	path = .agents/skills/maintainer-docs
+	url = https://github.com/rokokol/maintainer-docs-skill.git
+[submodule ".agents/skills/tests"]
+	path = .agents/skills/tests
+	url = https://github.com/rokokol/tests-skill.git
