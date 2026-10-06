@@ -24,7 +24,7 @@ async def test_python_runs_with_stdin_and_args(piston):
 
 
 async def test_cpp_compiles_and_runs(piston):
-    source = '#include <iostream>\nint main() { int x; std::cin >> x; std::cout << x * 2; }\n'
+    source = "#include <iostream>\nint main() { int x; std::cin >> x; std::cout << x * 2; }\n"
 
     result = await piston.run(
         RunRequest(runtime="cpp", files={"main.cpp": source}, stdin="21", limits=LIMITS)

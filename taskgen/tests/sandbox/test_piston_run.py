@@ -1,9 +1,4 @@
-"""Маппинг RunRequest в запрос Piston и разбор ответа, без реального Piston.
-
-Ответы в тестах повторяют форму, которую Piston вернул на реальных запусках.
-"""
-
-import json
+"""Маппинг RunRequest в запрос Piston и разбор ответа, без реального Piston."""
 
 import httpx
 import pytest
@@ -12,42 +7,14 @@ from taskgen.config import SandboxSettings
 from taskgen.contracts import RunLimits, RunRequest
 from taskgen.sandbox.errors import SandboxError
 from taskgen.sandbox.piston import PistonRunner
+from tests.sandbox.fakes import execute_response as ok
+from tests.sandbox.fakes import fake_runner, stage
 
 LIMITS = RunLimits(timeout_ms=1500, memory_bytes=128 * 1024 * 1024)
 
 
-def stage(**overrides):
-    base = {
-        "signal": None,
-        "stdout": "",
-        "stderr": "",
-        "code": 0,
-        "output": "",
-        "memory": 3_784_000,
-        "message": None,
-        "status": None,
-        "cpu_time": 10,
-        "wall_time": 18,
-    }
-    return base | overrides
-
-
 def runner_answering(response: httpx.Response, sent: list[dict] | None = None) -> PistonRunner:
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/api/v2/execute"
-        if sent is not None:
-            sent.append(json.loads(request.content))
-        return response
-
-    http = httpx.AsyncClient(base_url="http://piston.test", transport=httpx.MockTransport(handler))
-    return PistonRunner(SandboxSettings(piston_url="http://piston.test"), http=http)
-
-
-def ok(run: dict, compile_stage: dict | None = None) -> httpx.Response:
-    body = {"run": run, "language": "python", "version": "3.12.0"}
-    if compile_stage is not None:
-        body["compile"] = compile_stage
-    return httpx.Response(200, json=body)
+    return fake_runner(lambda body: response, sent)
 
 
 async def test_request_maps_runtime_files_and_limits():

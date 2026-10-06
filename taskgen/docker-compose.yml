@@ -17,6 +17,14 @@ services:
     image: ghcr.io/engineer-man/piston
     # Piston изолирует запуски через Isolate (namespaces и cgroup v2), ему нужен privileged.
     privileged: true
+    environment:
+      # По умолчанию Piston обрывает запуск после 1 КБ вывода, а протокол обвязки тестов
+      # печатает ответ на каждый кейс.
+      PISTON_OUTPUT_MAX_SIZE: 4194304
+      # Это потолок для лимитов из запроса, а не значение по умолчанию: лимит каждого
+      # запуска сервис передаёт сам, и без потолка выше 3 с запрос отклоняется.
+      PISTON_RUN_TIMEOUT: 60000
+      PISTON_RUN_CPU_TIME: 60000
     ports: ["2000:2000"]
     volumes: [piston-packages:/piston/packages]
     tmpfs: [/tmp:exec]
