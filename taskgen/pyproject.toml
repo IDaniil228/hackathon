@@ -14,6 +14,9 @@ dependencies = [
     "httpx",
     "pyyaml",
     "python-multipart>=0.0.32",
+    "ruff>=0.16.10",
+    "radon>=6.0.1",
+    "lizard>=1.24.1",
 ]
 
 [dependency-groups]
