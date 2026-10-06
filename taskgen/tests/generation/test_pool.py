@@ -57,14 +57,15 @@ def test_pool_instance_is_issued_to_one_candidate_and_removed(world):
     assert len(stock) == 2
     calls = llm_calls(world)
 
-    first = world.create(**ONE_TASK)
+    first = world.create(profile={"resume": "Резюме, которое пул не видит"}, **ONE_TASK)
     assert first.status_code == 201, first.text
     [task] = world.tasks(first.json()["id"])
-    # Первое задание взято из пула целиком, без обращения к модели.
+    # Первое задание взято из пула целиком, без обращения к модели и без профиля.
     issued = next(i for i in stock if i.seed == task.seed)
     assert task.status == "ready"
     assert task.statement == issued.statement
     assert task.hidden_payload == issued.hidden_payload
+    assert task.personalization is None
     assert llm_calls(world) == calls
     assert [i.id for i in world.pool()] == [i.id for i in stock if i.id != issued.id]
 

@@ -261,6 +261,19 @@ def test_failed_template_is_replaced_by_next_of_same_grade(world):
     assert "эталон" in replacement["reason"]
 
 
+def test_replacement_limit_stops_replacing(world):
+    world.state.settings = world.state.settings.model_copy(
+        update={
+            "generation": GenerationSettings(autostart=False, pool_size=0, replacements_per_task=0)
+        }
+    )
+    world.add_templates(world.broken(), world.code("good"))
+    override = {"selection_override": {"tasks_per_test": 1, "temperature": 1.0}}
+    statuses = {world.create(seed=seed, **override).status_code for seed in range(20)}
+    # Где выпал сломанный шаблон, замены нет даже при свободном шаблоне того же грейда.
+    assert statuses == {201, 500}
+
+
 def test_failure_without_same_grade_replacement_fails_session(world):
     # Оба шаблона junior попадают в сессию, поэтому заменить сломанный нечем.
     world.add_templates(world.code("good"), world.broken())

@@ -57,7 +57,7 @@ def test_snapshot_lives_until_last_task_then_only_hash_stays(world):
     assert "resume" not in str(view)
 
 
-def test_personal_tasks_see_profile_and_pool_task_does_not(world):
+def test_personal_tasks_see_profile(world):
     world.add_templates(world.code("a"), world.essay())
     session = world.create_ready(profile=PROFILE)
     prompts = ["\n".join(m.content for m in call["messages"]) for call in world.state.llm.calls]
