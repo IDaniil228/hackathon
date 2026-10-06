@@ -1,0 +1,64 @@
+# Интеграционные тесты taskgen (метка integration) на настоящих Postgres и Piston.
+# Это детектор, а не гейт pull request: образ Piston берётся как latest, его пакеты
+# скачиваются с GitHub, а python-ml собирается из индексов PyPI и PyTorch. Красный цвет здесь
+# может означать перемену во внешнем мире, а не ошибку в изменении. Гейт — taskgen.yml.
+name: taskgen-integration
+
+on:
+  push:
+    branches: [master]
+    paths: ["taskgen/**", ".github/workflows/taskgen-integration.yml", ".github/actions/**"]
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: taskgen
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Адреса совпадают с портами из docker-compose.yml.
+      TASKGEN_DATABASE_URL: postgresql+asyncpg://taskgen:taskgen@localhost:5432/taskgen
+      TASKGEN_SANDBOX__PISTON_URL: http://localhost:2000
+      # Каталог архивов локальных пакетов Piston для piston-packages.sh и для кэша ниже.
+      TASKGEN_PISTON_BUILD: ${{ github.workspace }}/.cache/piston-packages
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/setup-uv
+        with:
+          working-directory: taskgen
+      - run: uv sync --locked
+      # Postgres и Piston поднимаются из docker-compose.yml, а не service container'ами:
+      # образы, пароли и лимиты Piston описаны там один раз. Скрипт пакетов перезапускает
+      # контейнер Piston по имени, а у service container имя назначает раннер.
+      - name: Postgres и Piston
+        run: docker compose up -d --wait db piston
+      - run: uv run --locked alembic upgrade head
+      # Ключ — хэш рецептов локальных пакетов: архив пересобирается только после их правки.
+      # Официальные пакеты Piston скачивает сам при каждом запуске.
+      - uses: actions/cache@v6
+        with:
+          path: ${{ env.TASKGEN_PISTON_BUILD }}
+          key: piston-local-${{ hashFiles('taskgen/sandbox/packages/**') }}
+      - name: Пакеты песочницы
+        run: sandbox/piston-packages.sh install
+      - name: Интеграционные тесты
+        run: uv run --locked pytest -q -m integration
+      - name: Логи контейнеров
+        if: failure()
+        run: docker compose logs --no-color --tail 200 db piston

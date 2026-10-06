@@ -113,6 +113,8 @@ uv run ruff check . && uv run ruff format --check .
 
 Первая команда не требует ничего, кроме Python. Полный прогон требует Postgres и Piston с пакетами: адрес БД задаёт `TASKGEN_DATABASE_URL`, адрес Piston — `TASKGEN_SANDBOX__PISTON_URL`. Тесты с настоящей моделью включает `TASKGEN_LLM_SMOKE=1`. Справочники документации пересобирает `uv run python scripts/gen_docs.py`, и тест `tests/test_docs_generated.py` падает, если их забыли пересобрать
 
+В CI линтеры и тесты без метки `integration` запускает [taskgen.yml](../../.github/workflows/taskgen.yml), а тесты с меткой `integration` — [taskgen-integration.yml](../../.github/workflows/taskgen-integration.yml). Когда запускается каждый из них и почему, сказано в заголовке файла
+
 ## Ограничения образа
 
 - Образ сервиса не ставит clang-tidy и cppcheck: метрики качества C++ из этих инструментов в контейнере не измеряются, и их вес переходит к остальным компонентам балла. lizard ставится как зависимость Python
