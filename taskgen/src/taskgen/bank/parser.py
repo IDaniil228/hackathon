@@ -52,6 +52,30 @@ IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # {{n}} — экранированная скобка, а не подстановка, поэтому двойные скобки не считаются.
 PLACEHOLDER = re.compile(r"(?<!\{)\{([A-Za-z_][A-Za-z0-9_]*)\}(?!\})")
 FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})(.*)$")
+
+
+def closes_fence(fence: str, match: re.Match[str]) -> bool:
+    """Закрывает ли забор match блок, открытый забором fence (правила CommonMark).
+
+    Закрывает только забор того же символа, не короче открывающего и без текста после него.
+    """
+    marker = match.group(1)
+    return marker[0] == fence[0] and len(marker) >= len(fence) and not match.group(2).strip()
+
+
+def unclosed_fence(text: str) -> bool:
+    """Остался ли в тексте открытый блок кода: признак текста, оборванного посреди кода."""
+    fence: str | None = None
+    for line in text.splitlines():
+        if (match := FENCE.match(line)) is None:
+            continue
+        if fence is None:
+            fence = match.group(1)
+        elif closes_fence(fence, match):
+            fence = None
+    return fence is not None
+
+
 SECTION_HEADING = re.compile(r"^##\s+(.+?)\s*#*\s*$")
 TITLE_HEADING = re.compile(r"^#\s+\S")
 RUBRIC_ITEM = re.compile(r"^-\s+([A-Za-z0-9_.-]+):\s+(\S.*)$")
@@ -190,10 +214,9 @@ def _split_sections(body: str, out: _Collector) -> dict[str, str]:
     for line in body.splitlines():
         match = FENCE.match(line)
         if match:
-            marker = match.group(1)
             if fence is None:
-                fence = marker
-            elif marker[0] == fence[0] and len(marker) >= len(fence) and not match.group(2).strip():
+                fence = match.group(1)
+            elif closes_fence(fence, match):
                 fence = None
         elif fence is None and (heading := SECTION_HEADING.match(line)):
             name = heading.group(1)
@@ -486,13 +509,7 @@ def _code_blocks(text: str) -> list[_CodeBlock]:
         match = FENCE.match(line)
         if fence is None and match:
             fence, info, lines = match.group(1), match.group(2).strip(), []
-        elif (
-            fence is not None
-            and match
-            and match.group(1)[0] == fence[0]
-            and len(match.group(1)) >= len(fence)
-            and not match.group(2).strip()
-        ):
+        elif fence is not None and match and closes_fence(fence, match):
             blocks.append(_CodeBlock(info, "\n".join(lines)))
             fence = None
         elif fence is not None:

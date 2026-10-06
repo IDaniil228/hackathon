@@ -18,6 +18,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field
 
+from taskgen.bank.parser import unclosed_fence
 from taskgen.config import GenerationSettings
 from taskgen.contracts import (
     ChatMessage,
@@ -339,6 +340,8 @@ async def _code(
             return "условие содержит данные скрытых тестов; приводи только данные из примеров"
         if defines_entrypoint(legend.statement, entrypoint):
             return "условие содержит код решения; опиши задачу словами, без реализации функции"
+        if unclosed_fence(legend.statement):
+            return "условие оборвано посреди блока кода; допиши его целиком и закрой блок"
         return None
 
     legend = await _write_legend(spec, request, check, deps, context)

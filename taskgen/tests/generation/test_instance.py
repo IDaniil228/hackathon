@@ -242,6 +242,16 @@ async def test_legend_without_entrypoint_is_rewritten():
     assert ENTRYPOINT in prompt_of(llm.calls[1])
 
 
+async def test_cut_off_legend_is_rewritten():
+    # Реальный случай: Saiga закрыла строку JSON посреди примера, и условие оборвалось.
+    cut = legend(f"{CLEAN}\n\n```python\ninput = [[")
+    llm = FakeLLM([cut, legend()])
+    instance = await generate_instance(code_spec(), 3, deps(llm, LocalSandbox()))
+    assert len(llm.calls) == 2
+    assert instance.statement == CLEAN
+    assert "оборвано" in prompt_of(llm.calls[1])
+
+
 async def test_legend_that_never_passes_checks_is_model_error():
     llm = FakeLLM(lambda _m, _s: legend("Без имени функции."))
     with pytest.raises(ModelOutputError, match="нет имени функции"):

@@ -18,7 +18,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from taskgen.bank.parser import FENCE, find_phrases
+from taskgen.bank.parser import find_phrases, unclosed_fence
 from taskgen.contracts import ChatMessage, LLMClient, ReasoningEffort, ScenarioFact, TemplateSpec
 from taskgen.evaluation.jsonout import EmptyReplyError, StructuredOutputError, complete_structured
 from taskgen.evaluation.judge import quote_in_answer
@@ -178,20 +178,6 @@ def _checker_messages(facts: list[ScenarioFact], situation: str) -> list[ChatMes
     ]
 
 
-def _unclosed_fence(text: str) -> bool:
-    fence: str | None = None
-    for line in text.splitlines():
-        match = FENCE.match(line)
-        if match is None:
-            continue
-        marker = match.group(1)
-        if fence is None:
-            fence = marker
-        elif marker[0] == fence[0] and len(marker) >= len(fence) and not match.group(2).strip():
-            fence = None
-    return fence is not None
-
-
 async def _present_facts(
     llm: LLMClient,
     facts: list[ScenarioFact],
@@ -242,7 +228,7 @@ async def check_essay_scenario(
     if forbidden_found:
         listed = ", ".join(f"«{phrase}»" for phrase in forbidden_found)
         reasons.append(f"в заголовке или ситуации есть запрещённые фразы: {listed}")
-    if _unclosed_fence(scenario.situation):
+    if unclosed_fence(scenario.situation):
         reasons.append("в ситуации не закрыт блок кода, и вопросы попадут внутрь него")
 
     facts = filled_facts(spec, params)
