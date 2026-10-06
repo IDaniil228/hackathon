@@ -260,6 +260,16 @@ async def test_cut_off_legend_is_rewritten():
     assert "оборвался" in prompt_of(llm.calls[1])
 
 
+async def test_legend_with_formula_spoiled_by_json_escape_is_rewritten():
+    # Модель пишет \frac в JSON одним обратным слэшем, как qwen3:8b в ml-logreg-gradient-step.
+    spoiled = '{"title": "Склад", "statement": "' + CLEAN + ' Доля $\\frac{k}{n}$."}'
+    llm = FakeLLM([spoiled, legend()])
+    instance = await generate_instance(code_spec(), 3, deps(llm, LocalSandbox()))
+    assert len(llm.calls) == 2
+    assert instance.statement == CLEAN
+    assert "обратные слэши" in prompt_of(llm.calls[1])
+
+
 async def test_legend_that_never_passes_checks_is_model_error():
     llm = FakeLLM(lambda _m, _s: legend("Без имени функции."))
     with pytest.raises(ModelOutputError, match="нет имени функции"):

@@ -132,6 +132,25 @@ async def test_case_naming_the_answer_is_rewritten():
     assert instance.hidden.quiz_variant == variant.id
 
 
+async def test_case_with_formula_spoiled_by_json_escape_is_rewritten():
+    spec = quiz_spec()
+    attempts = []
+
+    def respond(messages, schema):
+        reply = essay_reply(messages, schema)
+        if "situation" in (schema or {}).get("properties", {}):
+            attempts.append(messages)
+            if len(attempts) == 1:
+                # \beta одним обратным слэшем: json.loads читает \b как управляющий символ.
+                return reply.replace('"situation": "', '"situation": "Вес $\\beta = 2$. ')
+        return reply
+
+    instance = await generate_instance(spec, 3, deps(FakeLLM(respond)))
+    assert len(attempts) == 2
+    assert "обратные слэши" in attempts[1][-1].content
+    assert "eta" not in instance.statement
+
+
 async def test_case_prompt_has_facts_of_chosen_variant_only_and_no_answers():
     spec = quiz_spec()
     seed = 11

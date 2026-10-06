@@ -37,3 +37,51 @@ def test_unclosed_code_block_is_a_cut_off():
     # Saiga закрыла строку JSON посреди примера в блоке кода.
     [problem] = text_problems("Пример использования:\n```python\ninput = [[")
     assert "блока кода" in problem
+
+
+def decoded(json_text: str) -> str:
+    """Строка так, как её получает сервис из JSON-ответа модели."""
+    return json.loads(f'"{json_text}"')
+
+
+# --- Формулы, испорченные JSON-экранированием -------------------------------------------------
+
+# Модель пишет в JSON-строке \frac одним обратным слэшем, и json.loads читает \f как символ
+# перевода страницы. \b, \t, \n и \r так же становятся управляющими символами.
+SPOILED_FORMULAS = {
+    # Настоящие выводы qwen3:8b и qwen3.5 на ml-logreg-gradient-step.
+    "qwen38-beta": "Функция активации $\x08eta(x) = \\frac{1}{1+e^{-x}}$.",
+    "qwen38-frac": "Градиент по весам $w$: $\x0crac{\\partial L}{\\partial w} = X^T (p - y)$",
+    "qwen35-frac": "по всем объектам: $\x0crac{1}{n} \\sum_{i=0}^{n-1} y_i$",
+    # Настоящий вывод GigaChat: \b вне формулы съел букву b в правиле обновления.
+    "gigachat-b": "w ← w − lr · ∇_w L\n\x08 <- b − lr · ∇_b L",
+    # Команды, которые json.loads превращает в табуляцию, перевод строки и возврат каретки.
+    "theta": decoded(r"угол $\theta$ между векторами"),
+    "tau": decoded(r"температура $\tau = 0.5$"),
+    "nabla": decoded(r"шаг $w - lr \nabla L$ по градиенту"),
+    "rho": decoded(r"корреляция $\rho(x, y)$ признаков"),
+    "neq-display": decoded(r"$$\na \neq b$$"),
+}
+
+# Честный текст: обратные слэши удвоены, переводы строк и табуляция стоят там, где им место.
+HONEST_FORMULAS = {
+    "doubled": decoded(r"$\\frac{1}{n} \\sum_i \\beta_i$, угол $\\theta$, $\\nabla L$"),
+    "display-lines": "$$\nL = -\\frac{1}{n} \\sum_i y_i \\log p_i\n$$\n\nNext step",
+    "display-letter-lines": "$$\nx = 1\n$$\n\n$$\ny_i = w^T x_i\n$$",
+    "shell-in-code": "```bash\nexport PATH=$HOME/bin:$PATH\n\techo $PATH\n```\nnext $x$",
+    "go-tabs": "```go\nfunc f() {\n\treturn\n}\n```",
+    "inline-code-dollars": "Переменная `$HOME`\nи `$PATH` берутся из окружения",
+    "prices": "Запрос стоит $5.\nPremium-тариф стоит $10\nв месяц.",
+    "newline-after-math": "Вероятность $p$\nnext строка и $q$",
+}
+
+
+@pytest.mark.parametrize("text", SPOILED_FORMULAS.values(), ids=SPOILED_FORMULAS.keys())
+def test_formula_spoiled_by_json_escape_is_rejected(text):
+    [problem] = text_problems(text)
+    assert "обратные слэши" in problem
+
+
+@pytest.mark.parametrize("text", HONEST_FORMULAS.values(), ids=HONEST_FORMULAS.keys())
+def test_honest_formulas_and_code_are_not_rejected(text):
+    assert text_problems(text) == []
