@@ -36,6 +36,8 @@ docker compose --profile ollama up -d ollama
 docker compose exec ollama ollama pull qwen3.5:9b
 ```
 
+Модели с рассуждениями на слабой машине могут истратить весь ответ на рассуждения и вернуть пустой текст. При проверке этой инструкции qwen3.5:9b с настройками по умолчанию не написал условие первого задания ни с одной попытки, и `POST /sessions` ответил 502; с `TASKGEN_LLM__GENERATOR_REASONING_EFFORT=none` та же сессия создалась за 18 секунд. Для судьи и проверяльщика эссе есть такие же настройки `TASKGEN_LLM__JUDGE_REASONING_EFFORT` и `TASKGEN_LLM__CHECKER_REASONING_EFFORT`
+
 Облачный провайдер подключается теми же настройками, без правки кода: `TASKGEN_LLM__BASE_URL` — адрес его OpenAI-совместимого API, `TASKGEN_LLM__API_KEY` — ключ, `TASKGEN_LLM__GENERATOR_MODEL`, `TASKGEN_LLM__JUDGE_MODEL` и `TASKGEN_LLM__EMBEDDING_MODEL` — имена моделей. Провайдер должен отдавать `/chat/completions` с `response_format` типа `json_schema` и `/embeddings`. YandexGPT и GigaChat с сервисом не проверялись: поддерживают ли их OpenAI-совместимые шлюзы оба эндпоинта и структурный ответ, нужно уточнить в документации провайдера. Облачному провайдеру можно поднять `TASKGEN_LLM__CONCURRENCY`
 
 ## 2. Контейнеры
