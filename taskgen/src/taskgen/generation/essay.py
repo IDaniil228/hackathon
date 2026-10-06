@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import logging
 import re
-import secrets
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any
@@ -40,6 +39,7 @@ from taskgen.contracts import (
 from taskgen.evaluation.jsonout import EmptyReplyError, StructuredOutputError, complete_structured
 from taskgen.evaluation.judge import quote_in_answer
 from taskgen.generation.params import fill_placeholders
+from taskgen.markers import markers, new_nonce
 
 logger = logging.getLogger(__name__)
 
@@ -296,9 +296,6 @@ def _decide(score: float, threshold: float, grey_zone: float) -> bool | None:
 
 # --- LLM-проверяльщик ------------------------------------------------------------------------
 
-_START = "<<<СИТУАЦИЯ-{nonce}>>>"
-_END = "<<<КОНЕЦ-{nonce}>>>"
-
 CHECKER_SYSTEM = """Ты проверяешь текст ситуации для задания кандидату. Тебе дан список фактов.
 
 Для каждого факта реши, утверждает ли ситуация этот факт целиком: как то, что произошло,
@@ -374,10 +371,7 @@ def _checker_schema(facts: list[ScenarioFact], phrases: list[str]) -> dict[str, 
 def _checker_messages(
     facts: list[ScenarioFact], phrases: list[str], situation: str
 ) -> list[ChatMessage]:
-    # Случайная метка в маркерах: текст ситуации не может заранее содержать закрывающий
-    # маркер и выйти из раздела данных.
-    nonce = secrets.token_hex(8)
-    start, end = _START.format(nonce=nonce), _END.format(nonce=nonce)
+    start, end = markers("СИТУАЦИЯ", new_nonce())
     listing = "\n".join(f"- {fact.id}: {fact.text}" for fact in facts) or "(нет)"
     user = f"Факты:\n{listing}\n\n"
     system = CHECKER_SYSTEM.format(start=start, end=end)

@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
-import secrets
 from typing import Literal
 
 from pydantic import BaseModel
@@ -26,12 +24,11 @@ from taskgen.contracts import (
     RubricVerdict,
 )
 from taskgen.evaluation.jsonout import StructuredOutputError, complete_structured
+from taskgen.markers import find_nonce, markers, new_nonce
 
 _VALUE = {"no": 0.0, "partial": 0.5, "yes": 1.0}
 _VERDICT_OF = {value: verdict for verdict, value in _VALUE.items()}
-_START = "<<<ОТВЕТ-{nonce}>>>"
-_END = "<<<КОНЕЦ-{nonce}>>>"
-_MARKER = re.compile(r"<<<ОТВЕТ-([0-9a-f]+)>>>")
+_LABEL = "ОТВЕТ"
 
 _SYSTEM = """Ты — строгий экзаменатор. Ты оцениваешь ответ кандидата на задание по пунктам рубрики.
 
@@ -112,7 +109,7 @@ def _rubric_text(rubric: list[RubricItem]) -> str:
 
 
 def _messages(request: JudgeRequest, nonce: str) -> list[ChatMessage]:
-    start, end = _START.format(nonce=nonce), _END.format(nonce=nonce)
+    start, end = markers(_LABEL, nonce)
     kind = "код" if request.kind == "code" else "развёрнутый ответ"
     user = (
         f"Условие задания:\n{request.statement}\n\n"
@@ -174,15 +171,15 @@ class LLMJudge:
     @staticmethod
     def markers_for(messages: list[ChatMessage]) -> tuple[str, str]:
         """Маркеры ответа, которые стоят в системном сообщении этого вызова."""
-        nonce = _MARKER.search(messages[0].content)
+        nonce = find_nonce(_LABEL, messages[0].content)
         if nonce is None:
             raise ValueError("В системном сообщении нет маркеров ответа")
-        return _START.format(nonce=nonce.group(1)), _END.format(nonce=nonce.group(1))
+        return markers(_LABEL, nonce)
 
     async def _sample(self, request: JudgeRequest) -> dict[str, RubricVerdict] | None:
         # Случайная метка в маркерах: ответ кандидата не может заранее содержать
         # закрывающий маркер и выйти из раздела данных.
-        messages = _messages(request, secrets.token_hex(8))
+        messages = _messages(request, new_nonce())
         try:
             sample = await complete_structured(
                 self._llm,
