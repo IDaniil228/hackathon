@@ -76,6 +76,11 @@ async def test_tuples_become_lists():
         ("def generate(params, rng):\n    raise ValueError('сломан')\n", "сломан"),
         ("def generate(params, rng):\n    return [{'input': [{1, 2}], 'expected': 1}]\n", "JSON"),
         ("x = 1\n", "generate"),
+        # NaN не равен себе: кейс с ним не проходит даже эталон, и строгий JSON его не знает.
+        (
+            "def generate(params, rng):\n    return [{'input': [1], 'expected': float('nan')}]\n",
+            "JSON",
+        ),
     ],
 )
 async def test_failing_generator_reports_stderr(source, fragment):

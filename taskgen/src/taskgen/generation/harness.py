@@ -40,7 +40,7 @@ if not callable(_namespace.get("generate")):
 with contextlib.redirect_stdout(sys.stderr):
     _cases = _namespace["generate"](_payload["params"], random.Random(_payload["seed"]))
 try:
-    _text = json.dumps(list(_cases), ensure_ascii=False)
+    _text = json.dumps(list(_cases), ensure_ascii=False, allow_nan=False)
 except (TypeError, ValueError) as _error:
     sys.exit(f"кейсы генератора не переводятся в JSON: {_error}")
 sys.stdout.write(_text)
