@@ -1,0 +1,2468 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "taskgen",
+    "summary": "Генерация и оценка заданий для теста на грейд",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/keys": {
+      "post": {
+        "tags": [
+          "Ключи"
+        ],
+        "summary": "Выпустить сервисный ключ",
+        "description": "Ключ возвращается один раз; сервис хранит только его хэш",
+        "operationId": "issue_key_keys_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyIssued"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/templates": {
+      "post": {
+        "tags": [
+          "Шаблоны"
+        ],
+        "summary": "Загрузить шаблон",
+        "description": "Принимает один md-шаблон: телом запроса с Content-Type text/markdown или JSON с полем body. Шаблон ищется по имени из frontmatter. Если тело не изменилось, ничего не пишется; иначе создаётся следующая версия, а прежняя перестаёт быть текущей и остаётся в БД. Эмбеддинг описания считается после ответа; его сбой не отменяет загрузку",
+        "operationId": "upload_template_templates_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "400": {
+            "description": "Тело запроса не читается: неверный JSON или не UTF-8"
+          },
+          "415": {
+            "description": "Неподдерживаемый Content-Type"
+          },
+          "422": {
+            "description": "Шаблон не прошёл проверку. detail.errors перечисляет все проблемы: файл (source), поле frontmatter или раздел тела (location) и причину (message)"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "text/markdown": {
+              "schema": {
+                "type": "string"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "body": {
+                    "description": "md-шаблон целиком: frontmatter и разделы",
+                    "title": "Body",
+                    "type": "string"
+                  },
+                  "source": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Имя файла для сообщений об ошибках",
+                    "title": "Source"
+                  }
+                },
+                "required": [
+                  "body"
+                ],
+                "title": "TemplateUpload",
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Шаблоны"
+        ],
+        "summary": "Список шаблонов",
+        "description": "Текущие версии шаблонов с фильтрами. Возвращаются только метаданные, без тела шаблона: эталон и тесты не выдаются",
+        "operationId": "list_templates_templates_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "area",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Код области",
+              "title": "Area"
+            },
+            "description": "Код области"
+          },
+          {
+            "name": "grade",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Код грейда",
+              "title": "Grade"
+            },
+            "description": "Код грейда"
+          },
+          {
+            "name": "skill",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Код навыка, который есть у шаблона",
+              "title": "Skill"
+            },
+            "description": "Код навыка, который есть у шаблона"
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TaskKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Тип задания",
+              "title": "Kind"
+            },
+            "description": "Тип задания"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TemplateInfo"
+                  },
+                  "title": "Response List Templates Templates Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/templates/bulk": {
+      "post": {
+        "tags": [
+          "Шаблоны"
+        ],
+        "summary": "Загрузить несколько шаблонов",
+        "description": "Принимает файлы в multipart/form-data (поле files, по одному md на файл) или JSON со списком templates. Набор проверяется целиком: при ошибке в любом файле не пишется ничего, а ответ перечисляет проблемы всех файлов",
+        "operationId": "upload_bulk_templates_bulk_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "files": {
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    },
+                    "type": "array"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "files"
+                ]
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$defs": {
+                  "TemplateUpload": {
+                    "properties": {
+                      "body": {
+                        "type": "string",
+                        "title": "Body",
+                        "description": "md-шаблон целиком: frontmatter и разделы"
+                      },
+                      "source": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "title": "Source",
+                        "description": "Имя файла для сообщений об ошибках"
+                      }
+                    },
+                    "type": "object",
+                    "required": [
+                      "body"
+                    ],
+                    "title": "TemplateUpload"
+                  }
+                },
+                "properties": {
+                  "templates": {
+                    "items": {
+                      "$ref": "#/$defs/TemplateUpload"
+                    },
+                    "type": "array",
+                    "title": "Templates"
+                  }
+                },
+                "type": "object",
+                "required": [
+                  "templates"
+                ],
+                "title": "BulkUpload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkImportResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "400": {
+            "description": "Тело запроса не читается: неверный JSON или не UTF-8"
+          },
+          "415": {
+            "description": "Неподдерживаемый Content-Type"
+          },
+          "422": {
+            "description": "Шаблон не прошёл проверку. detail.errors перечисляет все проблемы: файл (source), поле frontmatter или раздел тела (location) и причину (message)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/templates/{name}": {
+      "get": {
+        "tags": [
+          "Шаблоны"
+        ],
+        "summary": "Шаблон по имени",
+        "description": "Метаданные текущей версии шаблона. Поле body с исходным md отдаётся только роли admin",
+        "operationId": "get_template_templates__name__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Шаблона с таким именем нет"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions": {
+      "post": {
+        "tags": [
+          "Тестовые сессии"
+        ],
+        "summary": "Создать тестовую сессию",
+        "description": "Отбирает шаблоны области по заявленному грейду и навыкам кандидата и создаёт сессию со всеми заданиями. Ответ приходит, когда готово первое задание; остальные создаются в фоне и появляются в GET /sessions/{id} по мере готовности, сессия при этом в статусе generating. Задание с кодом выдаётся только после того, как эталон прошёл все его тесты в песочнице. Шаблон, который не дал экземпляра, заменяется другим того же грейда. Параметры отбора берутся из настроек теста; переопределить их может только admin. Если первое задание создать не удалось, сессия остаётся со статусом failed, а detail ответа содержит message и session_id",
+        "operationId": "create_session_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли или client передал selection_override"
+          },
+          "409": {
+            "description": "В области нет шаблонов"
+          },
+          "422": {
+            "description": "Неизвестная область, грейд или навык; неверные параметры отбора"
+          },
+          "500": {
+            "description": "Шаблон первого задания и его замены не дали экземпляра"
+          },
+          "502": {
+            "description": "Модель генерации недоступна или не написала условие"
+          },
+          "503": {
+            "description": "Песочница не настроена или недоступна; сессия failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "Тестовые сессии"
+        ],
+        "summary": "Тестовая сессия",
+        "description": "Статус сессии и её задания: условие и публичная часть, без скрытых тестов. Пока сессия в статусе generating, клиент опрашивает этот эндпоинт и получает задания по мере готовности",
+        "operationId": "get_session_sessions__session_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Сессия не найдена"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}/profile": {
+      "post": {
+        "tags": [
+          "Тестовые сессии"
+        ],
+        "summary": "Сверить профиль кандидата с профилем сессии",
+        "description": "Основной бэкенд передаёт текущий профиль кандидата или его хэш. Если хэш отличается от хэша профиля, с которым создана сессия, сессия помечается profile_changed. Это только фиксация факта: задания и статус сессии не меняются",
+        "operationId": "check_profile_sessions__session_id__profile_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileCheck"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileCheckOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Сессия не найдена"
+          },
+          "422": {
+            "description": "Нужно ровно одно поле: profile или profile_hash"
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}/selection": {
+      "get": {
+        "tags": [
+          "Тестовые сессии"
+        ],
+        "summary": "Объяснение отбора заданий",
+        "description": "Для работодателя: как отбирались шаблоны — режим сходства, параметры, расстояния, вероятности и замены шаблонов, которые не дали экземпляра. Тела шаблонов, эталоны и тесты не выдаются",
+        "operationId": "get_selection_sessions__session_id__selection_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelectionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Сессия не найдена"
+          },
+          "409": {
+            "description": "Сессия создана не генерацией, объяснения отбора нет"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}": {
+      "get": {
+        "tags": [
+          "Тестовые сессии"
+        ],
+        "summary": "Задание",
+        "description": "Статус задания, а у готового — условие и публичная часть: сигнатура, примеры, окружение, ожидаемое время",
+        "operationId": "get_task_tasks__task_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Задание не найдено"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{task_id}/answer": {
+      "post": {
+        "tags": [
+          "Оценка"
+        ],
+        "summary": "Отправить ответ на задание",
+        "description": "Сохраняет ответ кандидата и поведенческие сигналы фронтенда. Код сразу прогоняется на скрытых тестах в песочнице и статическими анализаторами; результат прогона в ответе не раскрывается. Повторная отправка до оценки сессии заменяет ответ",
+        "operationId": "submit_answer_tasks__task_id__answer_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerSubmit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerAccepted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Задание не найдено"
+          },
+          "409": {
+            "description": "Сессия уже оценена или задание ещё не готово"
+          },
+          "422": {
+            "description": "Язык ответа не совпадает с языком задания"
+          },
+          "500": {
+            "description": "Скрытые данные задания повреждены"
+          },
+          "503": {
+            "description": "Песочница не настроена или недоступна"
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}/score": {
+      "post": {
+        "tags": [
+          "Оценка"
+        ],
+        "summary": "Оценить сессию",
+        "description": "Оценивает все задания сессии: тесты, судья по рубрике, качество кода и скорость. Присваивает грейд по уровням, записывает результат и обновляет summary кандидата. Повторный вызов пересчитывает результат",
+        "operationId": "score_session_sessions__session_id__score_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Сессия не найдена"
+          },
+          "409": {
+            "description": "Сессия ещё генерируется, её генерация не удалась или в ней нет заданий; detail объясняет, что именно"
+          },
+          "500": {
+            "description": "Скрытые данные задания повреждены"
+          },
+          "502": {
+            "description": "Судья недоступен, сессия не оценена"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sessions/{session_id}/result": {
+      "get": {
+        "tags": [
+          "Оценка"
+        ],
+        "summary": "Результат оценки сессии",
+        "description": "Результат последней оценки сессии без скрытых данных заданий",
+        "operationId": "get_result_sessions__session_id__result_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Сессия не найдена"
+          },
+          "409": {
+            "description": "Сессия ещё не оценена"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/candidates/{candidate_ref}/summary": {
+      "get": {
+        "tags": [
+          "Оценка"
+        ],
+        "summary": "Machine summary кандидата",
+        "description": "Сводка по всем оценённым сессиям кандидата для индексации и показа рекрутеру. Её пишет только сервис после оценки сессии; изменить её через API нельзя",
+        "operationId": "get_summary_candidates__candidate_ref__summary_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "candidate_ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Candidate Ref"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "У кандидата нет оценённых сессий"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Служебное"
+        ],
+        "summary": "Проверка, что сервис запущен",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnswerAccepted": {
+        "properties": {
+          "answer_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Answer Id"
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Task Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Ответ сохранён и будет оценён",
+            "default": "accepted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answer_id",
+          "task_id"
+        ],
+        "title": "AnswerAccepted"
+      },
+      "AnswerSubmit": {
+        "properties": {
+          "content": {
+            "type": "string",
+            "maxLength": 200000,
+            "minLength": 1,
+            "title": "Content",
+            "description": "Текст ответа или код"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language",
+            "description": "Язык ответа для задания с кодом; по умолчанию — язык задания"
+          },
+          "paste_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paste Count",
+            "description": "Число вставок из буфера"
+          },
+          "focus_lost_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus Lost Count",
+            "description": "Сколько раз кандидат уходил со страницы теста"
+          },
+          "time_spent_sec": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Spent Sec",
+            "description": "Время работы над заданием, секунды"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "AnswerSubmit"
+      },
+      "Behavior": {
+        "properties": {
+          "paste_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paste Count",
+            "description": "Число вставок из буфера"
+          },
+          "focus_lost_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus Lost Count",
+            "description": "Сколько раз кандидат уходил со страницы теста"
+          },
+          "time_spent_sec": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Spent Sec",
+            "description": "Время работы над заданием, секунды"
+          }
+        },
+        "type": "object",
+        "title": "Behavior",
+        "description": "Поведенческие сигналы фронтенда. Это описательные факты, на балл они не влияют."
+      },
+      "BulkImportResult": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ImportResult"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "title": "BulkImportResult"
+      },
+      "CandidateProfile": {
+        "properties": {
+          "resume": {
+            "type": "string",
+            "maxLength": 20000,
+            "title": "Resume",
+            "description": "Свободный текст резюме",
+            "default": ""
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Skills",
+            "description": "Коды навыков профиля из любых областей, а не только из тестируемой",
+            "default": []
+          },
+          "extra": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extra",
+            "description": "Прочие поля профиля: опыт, роли, ссылки и так далее",
+            "default": {}
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "CandidateProfile"
+      },
+      "Components": {
+        "properties": {
+          "tests": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Tests",
+            "default": 0.0
+          },
+          "rubric": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rubric"
+          },
+          "quality": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality"
+          },
+          "performance": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Performance"
+          }
+        },
+        "type": "object",
+        "title": "Components",
+        "description": "Компоненты балла. None — компонент не измерен, например нет анализатора для языка."
+      },
+      "Example": {
+        "properties": {
+          "input": {
+            "title": "Input",
+            "description": "Аргументы функции: массив позиционных или объект именованных"
+          },
+          "expected": {
+            "title": "Expected",
+            "description": "Ожидаемый результат"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input",
+          "expected"
+        ],
+        "title": "Example"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ImportResult": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ImportStatus",
+            "description": "created — новый шаблон, updated — новая версия, unchanged — тело не изменилось"
+          },
+          "template_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Template Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "name",
+          "version",
+          "status",
+          "template_id"
+        ],
+        "title": "ImportResult"
+      },
+      "ImportStatus": {
+        "type": "string",
+        "enum": [
+          "created",
+          "updated",
+          "unchanged"
+        ],
+        "title": "ImportStatus"
+      },
+      "JudgeCounts": {
+        "properties": {
+          "yes": {
+            "type": "integer",
+            "title": "Yes"
+          },
+          "partial": {
+            "type": "integer",
+            "title": "Partial"
+          },
+          "no": {
+            "type": "integer",
+            "title": "No"
+          },
+          "spread": {
+            "type": "number",
+            "title": "Spread"
+          }
+        },
+        "type": "object",
+        "required": [
+          "yes",
+          "partial",
+          "no",
+          "spread"
+        ],
+        "title": "JudgeCounts",
+        "description": "Итог судьи без идентификаторов пунктов: рубрика — часть скрытых данных задания."
+      },
+      "KeyCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "role"
+        ],
+        "title": "KeyCreate"
+      },
+      "KeyIssued": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "role",
+          "key"
+        ],
+        "title": "KeyIssued"
+      },
+      "LevelResult": {
+        "properties": {
+          "grade": {
+            "type": "string",
+            "title": "Grade"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "solved": {
+            "type": "integer",
+            "title": "Solved"
+          },
+          "share": {
+            "type": "number",
+            "title": "Share"
+          },
+          "share_passed": {
+            "type": "boolean",
+            "title": "Share Passed"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grade",
+          "total",
+          "solved",
+          "share",
+          "share_passed",
+          "confirmed"
+        ],
+        "title": "LevelResult"
+      },
+      "ProfileCheck": {
+        "properties": {
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CandidateProfile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Текущий профиль; хэш сервис посчитает сам"
+          },
+          "profile_hash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Hash",
+            "description": "SHA-256 канонического JSON профиля: ключи по алфавиту, без пробелов, UTF-8, все поля профиля со значениями по умолчанию. Надёжнее передать profile"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ProfileCheck",
+        "description": "Текущий профиль кандидата или его хэш; ровно одно из двух полей."
+      },
+      "ProfileCheckOut": {
+        "properties": {
+          "profile_changed": {
+            "type": "boolean",
+            "title": "Profile Changed",
+            "description": "Профиль кандидата отличается от того, с которым создана сессия; флаг только фиксирует факт и не сбрасывается"
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile_changed"
+        ],
+        "title": "ProfileCheckOut"
+      },
+      "PublicPayload": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "signature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Signature"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Только для заданий с кодом"
+          },
+          "examples": {
+            "items": {
+              "$ref": "#/components/schemas/Example"
+            },
+            "type": "array",
+            "title": "Examples",
+            "description": "Публичные примеры; остальные скрыты",
+            "default": []
+          },
+          "expected_minutes": {
+            "type": "integer",
+            "title": "Expected Minutes",
+            "description": "Ожидаемое время на задание, минуты"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment",
+            "description": "Только для заданий с кодом: окружение и доступные библиотеки. Варианты: cpp — \"Окружение: GCC 10.2.0, стандарт C++17; только стандартная библиотека\"; python — \"Окружение: Python 3.12.0; только стандартная библиотека\"; python-ml — \"Окружение: Python 3.12.0 для задач машинного обучения; библиотеки torch 2.14.1, scikit-learn 1.9.1, numpy 1.26.1\""
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "expected_minutes"
+        ],
+        "title": "PublicPayload",
+        "description": "То, что видит кандидат помимо текста условия. Хранится в tasks.public_payload."
+      },
+      "Recommendation": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "none",
+              "take_test"
+            ],
+            "title": "Action"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "text"
+        ],
+        "title": "Recommendation"
+      },
+      "ReplacementOut": {
+        "properties": {
+          "position": {
+            "type": "integer",
+            "title": "Position",
+            "description": "Номер задания, в котором заменён шаблон"
+          },
+          "template_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Template Id",
+            "description": "Заменённый шаблон"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "description": "Почему шаблон не дал экземпляра"
+          }
+        },
+        "type": "object",
+        "required": [
+          "position",
+          "template_id",
+          "name",
+          "reason"
+        ],
+        "title": "ReplacementOut"
+      },
+      "Role": {
+        "type": "string",
+        "enum": [
+          "admin",
+          "client"
+        ],
+        "title": "Role"
+      },
+      "SelectedOut": {
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Template Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "grade": {
+            "type": "string",
+            "title": "Grade"
+          },
+          "grade_gap": {
+            "type": "integer",
+            "title": "Grade Gap",
+            "description": "Разность позиций грейда шаблона и заявленного"
+          },
+          "similarity": {
+            "type": "number",
+            "title": "Similarity",
+            "description": "Сходство шаблона с навыками кандидата"
+          },
+          "distance": {
+            "type": "number",
+            "title": "Distance"
+          },
+          "probability": {
+            "type": "number",
+            "title": "Probability",
+            "description": "Вероятность выпасть первым из всего пула"
+          },
+          "step_probability": {
+            "type": "number",
+            "title": "Step Probability",
+            "description": "Вероятность на том шаге, где шаблон выпал"
+          }
+        },
+        "type": "object",
+        "required": [
+          "template_id",
+          "name",
+          "version",
+          "grade",
+          "grade_gap",
+          "similarity",
+          "distance",
+          "probability",
+          "step_probability"
+        ],
+        "title": "SelectedOut"
+      },
+      "SelectionOut": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Session Id"
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed"
+          },
+          "selection_mode": {
+            "type": "string",
+            "title": "Selection Mode",
+            "description": "embeddings или skills_jaccard"
+          },
+          "fallback_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fallback Reason",
+            "description": "Почему отбор шёл без эмбеддингов"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Parameters",
+            "description": "Параметры отбора, с которыми он шёл"
+          },
+          "candidates": {
+            "type": "integer",
+            "title": "Candidates",
+            "description": "Сколько шаблонов области участвовало в отборе"
+          },
+          "selected": {
+            "items": {
+              "$ref": "#/components/schemas/SelectedOut"
+            },
+            "type": "array",
+            "title": "Selected",
+            "description": "Выбранные шаблоны в порядке заданий"
+          },
+          "replacements": {
+            "items": {
+              "$ref": "#/components/schemas/ReplacementOut"
+            },
+            "type": "array",
+            "title": "Replacements",
+            "description": "Шаблоны, которые не дали экземпляра и заменены следующим по вероятности шаблоном того же грейда; в порядке замен"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "seed",
+          "selection_mode",
+          "fallback_reason",
+          "parameters",
+          "candidates",
+          "selected",
+          "replacements"
+        ],
+        "title": "SelectionOut"
+      },
+      "SelectionOverride": {
+        "properties": {
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature",
+            "description": "Температура отбора, 0..1"
+          },
+          "alpha": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alpha",
+            "description": "Вес разницы грейдов"
+          },
+          "beta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beta",
+            "description": "Вес несходства навыков"
+          },
+          "tasks_per_test": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tasks Per Test",
+            "description": "Число заданий в тесте"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SelectionOverride",
+        "description": "Параметры отбора вместо test_configs и настроек; пустое поле не переопределяется."
+      },
+      "SessionCreate": {
+        "properties": {
+          "candidate_ref": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Candidate Ref",
+            "description": "Идентификатор кандидата в основном бэкенде"
+          },
+          "area": {
+            "type": "string",
+            "title": "Area",
+            "description": "Код области"
+          },
+          "claimed_grade": {
+            "type": "string",
+            "title": "Claimed Grade",
+            "description": "Код грейда, на который претендует кандидат"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills",
+            "description": "Коды навыков кандидата из справочника области"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMaximum": 9.223372036854776e+18,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed",
+            "description": "Seed отбора и генерации; тот же seed на том же банке даёт те же задания"
+          },
+          "selection_override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SelectionOverride"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Только для роли admin: параметры отбора для этой сессии"
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CandidateProfile"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Профиль кандидата. Влияет на отбор шаблонов и тематику легенды, но не на сложность. Хранится в сессии, пока генерируются её задания, затем удаляется; остаётся только хэш"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "candidate_ref",
+          "area",
+          "claimed_grade",
+          "skills"
+        ],
+        "title": "SessionCreate"
+      },
+      "SessionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "candidate_ref": {
+            "type": "string",
+            "title": "Candidate Ref"
+          },
+          "area": {
+            "type": "string",
+            "title": "Area"
+          },
+          "claimed_grade": {
+            "type": "string",
+            "title": "Claimed Grade"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus",
+            "description": "generating — первое задание выдано, остальные создаются; ready — все задания готовы; failed — набор заданий не собран, причина в failure; scored — сессия оценена"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure",
+            "description": "Причина статуса failed"
+          },
+          "assigned_grade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Grade",
+            "description": "Грейд по итогам оценки; null — до оценки"
+          },
+          "profile_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Hash",
+            "description": "Хэш профиля, с которым создана сессия"
+          },
+          "profile_changed": {
+            "type": "boolean",
+            "title": "Profile Changed",
+            "description": "Основной бэкенд сообщил о другом профиле"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/TaskOut"
+            },
+            "type": "array",
+            "title": "Tasks",
+            "description": "Все задания сессии по порядку, с их статусами"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "candidate_ref",
+          "area",
+          "claimed_grade",
+          "skills",
+          "status",
+          "failure",
+          "assigned_grade",
+          "profile_hash",
+          "profile_changed",
+          "created_at",
+          "tasks"
+        ],
+        "title": "SessionOut"
+      },
+      "SessionResult": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Session Id"
+          },
+          "claimed_grade": {
+            "type": "string",
+            "title": "Claimed Grade"
+          },
+          "assigned_grade": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Grade",
+            "description": "Подтверждённый грейд; null — ни один"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "passed",
+              "failed",
+              "upgraded",
+              "downgraded"
+            ],
+            "title": "Outcome"
+          },
+          "recommendation": {
+            "$ref": "#/components/schemas/Recommendation"
+          },
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/LevelResult"
+            },
+            "type": "array",
+            "title": "Levels"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/Thresholds"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/TaskResult"
+            },
+            "type": "array",
+            "title": "Tasks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "claimed_grade",
+          "assigned_grade",
+          "outcome",
+          "recommendation",
+          "levels",
+          "thresholds",
+          "tasks"
+        ],
+        "title": "SessionResult"
+      },
+      "SessionStatus": {
+        "type": "string",
+        "enum": [
+          "generating",
+          "ready",
+          "failed",
+          "scored"
+        ],
+        "title": "SessionStatus",
+        "description": "Статус test_sessions.status. Первые три ставит генерация, scored — оценка."
+      },
+      "Signature": {
+        "properties": {
+          "entrypoint": {
+            "type": "string",
+            "title": "Entrypoint",
+            "description": "Имя функции, которую пишет кандидат"
+          },
+          "runtime": {
+            "type": "string",
+            "title": "Runtime",
+            "description": "Окружение песочницы, в котором решение проверяется"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entrypoint",
+          "runtime"
+        ],
+        "title": "Signature"
+      },
+      "SummaryOut": {
+        "properties": {
+          "candidate_ref": {
+            "type": "string",
+            "title": "Candidate Ref"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "Текст для рекрутера; каждое утверждение опирается на data"
+          },
+          "data": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Data",
+            "description": "Факты из оценённых сессий кандидата"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_ref",
+          "text",
+          "data",
+          "updated_at"
+        ],
+        "title": "SummaryOut"
+      },
+      "TaskKind": {
+        "type": "string",
+        "enum": [
+          "code",
+          "essay"
+        ],
+        "title": "TaskKind"
+      },
+      "TaskOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Session Id"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position",
+            "description": "Номер задания в сессии, с 1"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus",
+            "description": "pending — задание ещё создаётся, ready — готово, failed — не создано"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TaskKind"
+          },
+          "statement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statement",
+            "description": "Текст условия в Markdown; есть только у ready"
+          },
+          "public": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Публичная часть; есть только у ready"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure",
+            "description": "Почему задание не создано"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "session_id",
+          "position",
+          "status",
+          "kind",
+          "statement",
+          "public",
+          "failure"
+        ],
+        "title": "TaskOut",
+        "description": "Задание глазами кандидата: условие и публичная часть, без скрытых тестов и рубрики."
+      },
+      "TaskResult": {
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Task Id"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TaskKind"
+          },
+          "grade": {
+            "type": "string",
+            "title": "Grade"
+          },
+          "answered": {
+            "type": "boolean",
+            "title": "Answered"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "description": "Балл задания от 0 до 1"
+          },
+          "solved": {
+            "type": "boolean",
+            "title": "Solved",
+            "description": "Балл не ниже порога решённости"
+          },
+          "components": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Components"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Компоненты балла задания с кодом; null — компонент не измерен"
+          },
+          "tests": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TestsSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "judge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JudgeCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "behavior": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Behavior"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_id",
+          "position",
+          "kind",
+          "grade",
+          "answered",
+          "language",
+          "score",
+          "solved",
+          "components",
+          "tests",
+          "judge",
+          "behavior"
+        ],
+        "title": "TaskResult"
+      },
+      "TaskStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "ready",
+          "failed"
+        ],
+        "title": "TaskStatus",
+        "description": "Статус tasks.status. Условие и скрытые данные есть только у ready."
+      },
+      "TemplateInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "area": {
+            "type": "string",
+            "title": "Area"
+          },
+          "grade": {
+            "type": "string",
+            "title": "Grade"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TaskKind"
+          },
+          "runtime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime"
+          },
+          "difficulty": {
+            "type": "integer",
+            "title": "Difficulty"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "content_hash": {
+            "type": "string",
+            "title": "Content Hash"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body",
+            "description": "Исходный md; только для роли admin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "version",
+          "area",
+          "grade",
+          "kind",
+          "runtime",
+          "difficulty",
+          "skills",
+          "description",
+          "content_hash",
+          "created_at"
+        ],
+        "title": "TemplateInfo",
+        "description": "Метаданные текущей версии шаблона."
+      },
+      "TestsSummary": {
+        "properties": {
+          "passed": {
+            "type": "integer",
+            "title": "Passed"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "compile_error": {
+            "type": "boolean",
+            "title": "Compile Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "passed",
+          "total",
+          "compile_error"
+        ],
+        "title": "TestsSummary"
+      },
+      "Thresholds": {
+        "properties": {
+          "solved": {
+            "type": "number",
+            "title": "Solved",
+            "description": "Балл, с которого задание считается решённым"
+          },
+          "pass_level": {
+            "type": "number",
+            "title": "Pass Level",
+            "description": "Доля решённых заданий, с которой уровень пройден"
+          }
+        },
+        "type": "object",
+        "required": [
+          "solved",
+          "pass_level"
+        ],
+        "title": "Thresholds"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
