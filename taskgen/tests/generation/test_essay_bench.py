@@ -136,3 +136,49 @@ def test_negation_error_counts_negated_fact_judged_present():
     assert bench.evaluate([fooled], cases)["negation_error"] == (1, 1)
     assert bench.evaluate([right], cases)["negation_error"] == (0, 1)
     assert bench.evaluate([right], cases)["fact"] == (1.0, 1.0, 1.0)
+
+
+# --- Замер смысла цитат -----------------------------------------------------------------------
+
+
+def test_quote_pairs_cover_every_rubric_item_of_every_essay():
+    pairs = bench.quote_pairs()
+    honest = {(p["essay"], p["target"]) for p in pairs if p["kind"] == "honest"}
+    aware = {(p["essay"], p["target"]) for p in pairs if p["kind"] == "aware"}
+    templates = sorted(bench.TEMPLATES.glob("*/*/*-essay.md"))
+    expected = {
+        (spec.name, item.id)
+        for spec in (bench.load_spec(str(path.relative_to(bench.TEMPLATES))) for path in templates)
+        for item in spec.rubric
+    }
+    assert len(templates) == 9
+    assert honest == expected == aware
+    assert {p["kind"] for p in pairs if p["group"] == "fact"} == {"carrier", "other", "negation"}
+
+
+def test_quote_file_without_honest_quotes_for_an_item_is_rejected(tmp_path):
+    quotes = tmp_path / "quotes"
+    shutil.copytree(bench.QUOTES, quotes)
+    path = quotes / "ml-validation-leakage-essay.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    del data["honest"]["remedies"]
+    path.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+
+    with pytest.raises(bench.BenchDataError, match="честные цитаты"):
+        bench.quote_pairs(quotes)
+
+
+def test_quote_report_safe_threshold_keeps_every_honest_quote():
+    pairs = [
+        {"group": group, "kind": kind}
+        for group, honest in bench.HONEST.items()
+        for kind in (honest, honest, "attack", "attack")
+    ]
+    scores = [0.5, 0.6, 0.4, 0.7] * 2
+
+    report = bench.quote_report(pairs, scores)
+
+    for group in bench.HONEST:
+        assert report[group]["safe_threshold"] == 0.5
+        assert report[group]["shares"]["0.5"] == {bench.HONEST[group]: 0.0, "attack": 0.5}
+        assert report[group]["shares"]["0.51"][bench.HONEST[group]] == 0.5

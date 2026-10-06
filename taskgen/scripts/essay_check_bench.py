@@ -14,6 +14,7 @@ tests/generation/bench/essays/*.yaml, а варианты собираются �
     uv run python scripts/essay_check_bench.py build          # пересобрать cases.json
     uv run python scripts/essay_check_bench.py build --check  # cases.json совпадает с источниками
     uv run python scripts/essay_check_bench.py run --out results.json
+    uv run python scripts/essay_check_bench.py quotes --out quotes.json  # смысл цитат
 
 Порог эмбеддингов подбирается на половине эссе (tune) и меряется на другой половине (test):
 варианты одного эссе не попадают в обе половины. LLM медленная, поэтому режимы llm и both
@@ -40,7 +41,7 @@ import yaml
 from taskgen.bank.parser import find_phrases, normalize_phrase, parse_template
 from taskgen.config import Settings
 from taskgen.contracts import ChatMessage, TemplateSpec
-from taskgen.evaluation.quotes import EmbeddingCache
+from taskgen.evaluation.quotes import EmbeddingCache, QuoteRelevance
 from taskgen.generation.essay import (
     EssayCheckOptions,
     EssayScenario,
@@ -627,6 +628,207 @@ async def run(args: argparse.Namespace) -> int:
     return 0
 
 
+# --- Смысл цитат ------------------------------------------------------------------------------
+#
+# Пары "текст пункта или факта — цитата" размечены по построению:
+#
+# - rubric/honest: цитата из правильного ответа на этот пункт, tests/generation/bench/quotes
+# - rubric/other-item: честная цитата к другому пункту той же рубрики
+# - rubric/generic: самоутверждение без темы задания, quotes/generic.yaml
+# - rubric/echo: самоутверждение, пересказывающее видимые кандидату вопросы
+# - rubric/aware: самоутверждение, которое называет понятие из пункта
+# - fact/carrier: факт и предложение хорошей ситуации, которое его несёт
+# - fact/other: факт и другое предложение той же ситуации
+# - fact/negation: факт и предложение с его отрицанием
+#
+# Честный класс в каждой группе один: honest и carrier. Порог годится, если доля честных
+# цитат ниже него около нуля.
+
+QUOTES = BENCH / "quotes"
+HONEST = {"rubric": "honest", "fact": "carrier"}
+
+
+def quote_pairs(
+    quotes_dir: Path = QUOTES, essays_dir: Path = BENCH / "essays"
+) -> list[dict[str, Any]]:
+    pairs: list[dict[str, Any]] = []
+    generic = yaml.safe_load((quotes_dir / "generic.yaml").read_text(encoding="utf-8"))["claims"]
+    for source in sorted(quotes_dir.glob("*-essay.yaml")):
+        pairs.extend(_rubric_pairs(yaml.safe_load(source.read_text(encoding="utf-8")), generic))
+    for source in sorted(essays_dir.glob("*.yaml")):
+        pairs.extend(_fact_pairs(yaml.safe_load(source.read_text(encoding="utf-8"))))
+    return pairs
+
+
+def _rubric_pairs(data: dict[str, Any], generic: list[str]) -> list[dict[str, Any]]:
+    spec = load_spec(data["template"])
+    items = {item.id: item.text for item in spec.rubric}
+    honest, aware = data["honest"], data["claims"]["aware"]
+    _require(set(honest) == set(items), f"{spec.name}: честные цитаты не по всем пунктам")
+    _require(set(aware) == set(items), f"{spec.name}: aware не по всем пунктам")
+    _require(all(honest.values()), f"{spec.name}: у пункта нет честных цитат")
+    pairs: list[dict[str, Any]] = []
+
+    def pair(kind: str, item_id: str, quote: str) -> None:
+        pairs.append(
+            {
+                "group": "rubric",
+                "kind": kind,
+                "essay": spec.name,
+                "target": item_id,
+                "reference": items[item_id],
+                "quotes": [quote],
+            }
+        )
+
+    for item_id in items:
+        for quote in honest[item_id]:
+            pair("honest", item_id, quote)
+        for other, quotes in honest.items():
+            for quote in quotes if other != item_id else []:
+                pair("other-item", item_id, quote)
+        for quote in data["claims"]["echo"]:
+            pair("echo", item_id, quote)
+        for quote in generic:
+            pair("generic", item_id, quote)
+        pair("aware", item_id, aware[item_id])
+    return pairs
+
+
+def _fact_pairs(data: dict[str, Any]) -> list[dict[str, Any]]:
+    spec = load_spec(data["template"])
+    pairs: list[dict[str, Any]] = []
+    texts: dict[str, dict[str, str]] = {}
+
+    def pair(kind: str, fact_id: str, sid: str, sentence: str) -> None:
+        pairs.append(
+            {
+                "group": "fact",
+                "kind": kind,
+                "essay": spec.name,
+                "target": fact_id,
+                "reference": texts[sid][fact_id],
+                "quotes": [sentence],
+            }
+        )
+
+    for good in data["situations"]:
+        sid = good["id"]
+        texts[sid] = {fact.id: fact.text for fact in filled_facts(spec, good["params"])}
+        for unit in good["units"]:
+            for fact_id in texts[sid]:
+                pair("carrier" if fact_id in unit["facts"] else "other", fact_id, sid, unit["text"])
+    for negation in data.get("negations") or []:
+        pair("negation", negation["fact"], negation["situation"], negation["text"])
+    return pairs
+
+
+def quote_report(pairs: list[dict[str, Any]], scores: list[float]) -> dict[str, Any]:
+    """Распределение честных сходств и доля каждого класса по ту сторону порога.
+
+    Для честного класса доля — сколько отсечено (ниже порога), для остальных — сколько
+    пропущено (не ниже порога). safe_threshold — наибольший порог сетки без потерь честных.
+    """
+    report: dict[str, Any] = {}
+    thresholds = [round(0.30 + 0.01 * step, 2) for step in range(41)]
+    for group, honest_kind in HONEST.items():
+        by_kind: dict[str, list[float]] = defaultdict(list)
+        for item, score in zip(pairs, scores, strict=True):
+            if item["group"] == group:
+                by_kind[item["kind"]].append(score)
+        honest = sorted(by_kind[honest_kind])
+        shares = {
+            str(t): {
+                kind: _beyond(values, t, cut=kind == honest_kind)
+                for kind, values in by_kind.items()
+            }
+            for t in thresholds
+        }
+        safe = max(t for t in thresholds if shares[str(t)][honest_kind] == 0.0)
+        report[group] = {
+            "counts": {kind: len(values) for kind, values in by_kind.items()},
+            "honest_quantiles": {
+                "min": honest[0],
+                "p5": honest[len(honest) // 20],
+                "median": honest[len(honest) // 2],
+            },
+            "safe_threshold": safe,
+            "shares": shares,
+        }
+    return report
+
+
+def _beyond(values: list[float], threshold: float, *, cut: bool) -> float:
+    """cut: доля ниже порога, то есть отсечённых; иначе доля пропущенных."""
+    hits = sum((v < threshold) if cut else (v >= threshold) for v in values)
+    return hits / len(values)
+
+
+def quote_table(report: dict[str, Any], marks: list[float]) -> str:
+    lines: list[str] = []
+    for group, data in report.items():
+        honest_kind = HONEST[group]
+        kinds = [honest_kind] + sorted(k for k in data["counts"] if k != honest_kind)
+        quantiles = ", ".join(f"{k} {v:.3f}" for k, v in data["honest_quantiles"].items())
+        lines.append(
+            f"\n{group}: пар {data['counts']}; честные: {quantiles}; "
+            f"наибольший порог без потерь честных {data['safe_threshold']}"
+        )
+        lines.append(
+            "| порог | "
+            + " | ".join(f"{k} {'отсечено' if k == honest_kind else 'пропущено'}" for k in kinds)
+            + " |"
+        )
+        lines.append("|" + "---|" * (len(kinds) + 1))
+        for mark in sorted({*marks, data["safe_threshold"]}):
+            shares = data["shares"][str(round(mark, 2))]
+            lines.append(f"| {mark:.2f} | " + " | ".join(f"{shares[k]:.1%}" for k in kinds) + " |")
+    return "\n".join(lines)
+
+
+async def run_quotes(args: argparse.Namespace) -> int:
+    pairs = quote_pairs()
+    client = OpenAICompatibleClient(Settings().llm.model_copy(update={"timeout_seconds": 600.0}))
+    log(f"пар {len(pairs)}, эмбеддер {client.model_name}")
+    # Сходство считает тот же код, что и сервис: склейка цитат и векторы пунктов из кэша.
+    relevance = QuoteRelevance(threshold=0.0, embedder=client)
+    scores: list[float] = []
+    batch = 128
+    for start in range(0, len(pairs), batch):
+        chunk = pairs[start : start + batch]
+        scores += await relevance.similarities([(p["reference"], p["quotes"]) for p in chunk])
+    await client.aclose()
+    report = quote_report(pairs, scores)
+    table_text = quote_table(report, args.marks)
+    print(f"Эмбеддер {client.model_name}" + table_text)
+    Path(args.out).write_text(
+        json.dumps(
+            {
+                "embedding_model": client.model_name,
+                "report": report,
+                "table": table_text,
+                # Пары целиком пересчитываются прогоном; ближе всего к порогу — худшие честные.
+                "lowest_honest": {
+                    group: sorted(
+                        (
+                            {"essay": p["essay"], "target": p["target"], "score": round(s, 4)}
+                            for p, s in zip(pairs, scores, strict=True)
+                            if p["group"] == group and p["kind"] == kind
+                        ),
+                        key=lambda row: row["score"],
+                    )[:10]
+                    for group, kind in HONEST.items()
+                },
+            },
+            ensure_ascii=False,
+            indent=1,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -643,7 +845,18 @@ def main(argv: list[str] | None = None) -> int:
     bench.add_argument("--grey-zone", type=float, default=0.05)
     bench.add_argument("--modes", nargs="+", default=["llm", "both"], choices=["llm", "both"])
     bench.add_argument("--timeout", type=float, default=900.0, help="таймаут запроса, с")
+    quotes = sub.add_parser("quotes", help="замерить сходство цитат с пунктами и фактами")
+    quotes.add_argument("--out", required=True, help="куда записать результаты в JSON")
+    quotes.add_argument(
+        "--marks",
+        nargs="+",
+        type=float,
+        default=[0.35, 0.40, 0.45, 0.50, 0.55, 0.60],
+        help="пороги для таблицы, кроме наибольшего без потерь честных",
+    )
     args = parser.parse_args(argv)
+    if args.command == "quotes":
+        return asyncio.run(run_quotes(args))
     if args.command == "build":
         rendered = render_cases(build_cases())
         if args.check:
