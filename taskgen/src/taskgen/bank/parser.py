@@ -16,9 +16,9 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
-from taskgen.config import ScoringSettings
 from taskgen.contracts import RubricItem, TaskKind, TemplateSpec
 from taskgen.db import Template
+from taskgen.evaluation.scoring import WEIGHT_OF
 
 SECTION_GENERATION = "Генерация"
 SECTION_QUESTIONS = "Вопросы"
@@ -28,9 +28,25 @@ SECTION_REFERENCE = "Эталон"
 SECTION_SIGNATURE = "Сигнатура"
 SECTION_TESTS = "Тесты"
 SECTION_RUBRIC = "Рубрика"
-ESSAY_ONLY_SECTIONS = (SECTION_QUESTIONS, SECTION_FACTS, SECTION_FORBIDDEN)
-CODE_ONLY_SECTIONS = (SECTION_REFERENCE, SECTION_SIGNATURE, SECTION_TESTS)
-KNOWN_SECTIONS = (SECTION_GENERATION, *ESSAY_ONLY_SECTIONS, *CODE_ONLY_SECTIONS, SECTION_RUBRIC)
+SECTION_QUESTION = "Вопрос"
+SECTION_VARIANTS = "Варианты"
+# Разделы, которые задаются только заданиям перечисленных типов; «Генерация» нужна всем.
+KIND_SECTIONS: dict[str, frozenset[TaskKind]] = {
+    SECTION_REFERENCE: frozenset({TaskKind.CODE}),
+    SECTION_SIGNATURE: frozenset({TaskKind.CODE}),
+    SECTION_TESTS: frozenset({TaskKind.CODE}),
+    SECTION_QUESTIONS: frozenset({TaskKind.ESSAY}),
+    SECTION_FACTS: frozenset({TaskKind.ESSAY}),
+    SECTION_QUESTION: frozenset({TaskKind.QUIZ}),
+    SECTION_VARIANTS: frozenset({TaskKind.QUIZ}),
+    SECTION_FORBIDDEN: frozenset({TaskKind.ESSAY, TaskKind.QUIZ}),
+    # Задачка сверяется с ключом варианта, рубрика ей не нужна.
+    SECTION_RUBRIC: frozenset({TaskKind.CODE, TaskKind.ESSAY}),
+}
+KNOWN_SECTIONS = (SECTION_GENERATION, *KIND_SECTIONS)
+# Меньше трёх неверных ответов — угадать проще, чем при четырёх вариантах.
+MIN_WRONG_ANSWERS = 3
+MIN_VARIANTS = 2
 
 # Поля TemplateSpec, которые берутся из разделов тела; остальные задаёт frontmatter.
 BODY_FIELDS = frozenset(
@@ -42,11 +58,14 @@ BODY_FIELDS = frozenset(
         "questions",
         "scenario_facts",
         "forbidden",
+        "question",
+        "variants",
         "rubric",
     }
 )
 FRONTMATTER_FIELDS = frozenset(TemplateSpec.model_fields) - BODY_FIELDS
-SCORING_WEIGHTS = frozenset(k for k in ScoringSettings.model_fields if k.startswith("weight_"))
+# Шаблон переопределяет только веса балла задания; вес блока задачек — настройка сессии.
+SCORING_WEIGHTS = frozenset(WEIGHT_OF.values())
 
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # {{n}} — экранированная скобка, а не подстановка, поэтому двойные скобки не считаются.
@@ -159,17 +178,19 @@ def parse_template(text: str, *, source: str) -> TemplateSpec:
     data: dict[str, Any] = {k: v for k, v in meta.items() if k in FRONTMATTER_FIELDS}
     params = meta.get("params") if isinstance(meta.get("params"), dict) else {}
     data["generator_prompt"] = _generation(sections, params, out)
-    data["rubric"] = _rubric(sections, out)
+    if kind != TaskKind.QUIZ.value:
+        data["rubric"] = _rubric(sections, out)
     if is_code:
         data.update(_code_sections(sections, meta.get("runtime"), out))
-        for name in ESSAY_ONLY_SECTIONS:
-            if name in sections:
-                out.add(section_label(name), "раздел задаётся только заданиям kind=essay")
     elif kind == TaskKind.ESSAY.value:
         data.update(_essay_sections(sections, params, out))
-        for name in CODE_ONLY_SECTIONS:
-            if name in sections:
-                out.add(section_label(name), "раздел задаётся только заданиям kind=code")
+    elif kind == TaskKind.QUIZ.value:
+        data.update(_quiz_sections(sections, params, out))
+    if kind in set(TaskKind):
+        for name, kinds in KIND_SECTIONS.items():
+            if name in sections and kind not in kinds:
+                allowed = ", ".join(f"kind={k.value}" for k in TaskKind if k in kinds)
+                out.add(section_label(name), f"раздел задаётся только заданиям {allowed}")
 
     try:
         spec = TemplateSpec.model_validate(data)
@@ -262,7 +283,7 @@ def _check_frontmatter(meta: dict[str, Any], *, is_code: bool, out: _Collector) 
     runtime = meta.get("runtime")
     if is_code and not runtime:
         out.add("runtime", "заданию с кодом нужно окружение песочницы")
-    if meta.get("kind") == TaskKind.ESSAY.value and runtime is not None:
+    if meta.get("kind") in (TaskKind.ESSAY.value, TaskKind.QUIZ.value) and runtime is not None:
         out.add("runtime", "окружение песочницы задаётся только заданиям kind=code")
     runtime_limit = Template.__table__.c.runtime.type.length
     if isinstance(runtime, str) and len(runtime) > runtime_limit:
@@ -355,6 +376,11 @@ def _essay_sections(
                 section_label(SECTION_FACTS),
                 f"факт {fact['id']!r} содержит запрещённую фразу {phrase!r}",
             )
+    _check_param_choices(params, forbidden, out)
+    return {"questions": questions, "scenario_facts": facts, "forbidden": forbidden}
+
+
+def _check_param_choices(params: dict[str, Any], forbidden: list[str], out: _Collector) -> None:
     for name, spec in params.items():
         choices = spec.get("choices") if isinstance(spec, dict) else None
         for choice in choices if isinstance(choices, list) else []:
@@ -362,7 +388,137 @@ def _essay_sections(
                 out.add(
                     f"params.{name}", f"значение {choice!r} содержит запрещённую фразу {phrase!r}"
                 )
-    return {"questions": questions, "scenario_facts": facts, "forbidden": forbidden}
+
+
+def _quiz_sections(
+    sections: dict[str, str], params: dict[str, Any], out: _Collector
+) -> dict[str, Any]:
+    """Вопрос, варианты кейса и запрещённые фразы тестовой задачки.
+
+    Запрещённые фразы сверяются с вопросом и фактами, но не с ответами: ответы кандидат
+    видит списком, а запрет действует на кейс, который не должен назвать верный ответ.
+    """
+    question = sections.get(SECTION_QUESTION)
+    question_label = section_label(SECTION_QUESTION)
+    if question is None:
+        out.add(question_label, "раздел обязателен для заданий kind=quiz")
+    elif not question:
+        out.add(question_label, "раздел пуст")
+    else:
+        _check_placeholders(question_label, question, params, out)
+
+    variants = _variants(sections, params, out)
+    forbidden = _forbidden(sections, out)
+    if question:
+        for phrase in find_phrases(question, forbidden):
+            out.add(question_label, f"вопрос содержит запрещённую фразу {phrase!r}")
+    for variant in variants:
+        for fact in variant["facts"]:
+            for phrase in find_phrases(fact["text"], forbidden):
+                out.add(
+                    section_label(SECTION_VARIANTS),
+                    f"факт {fact['id']!r} варианта {variant['id']!r} содержит запрещённую "
+                    f"фразу {phrase!r}",
+                )
+    _check_param_choices(params, forbidden, out)
+    return {"question": question, "variants": variants, "forbidden": forbidden}
+
+
+VARIANT_HEADING = re.compile(r"^###\s+([A-Za-z0-9_.-]+)\s*$")
+_FACTS_LABEL = "Факты:"
+_ANSWERS_LABEL = "Ответ:"
+ANSWER_ITEM = re.compile(r"^([+-])\s+(\S.*)$")
+
+
+def _variants(
+    sections: dict[str, str], params: dict[str, Any], out: _Collector
+) -> list[dict[str, Any]]:
+    """Варианты кейса: '### id', затем 'Факты:' со списком '- id: текст' и 'Ответ:' со
+    списком '+ верный' и '- неверный'."""
+    text = sections.get(SECTION_VARIANTS)
+    label = section_label(SECTION_VARIANTS)
+    if text is None:
+        out.add(label, "раздел обязателен для заданий kind=quiz")
+        return []
+    variants: list[dict[str, Any]] = []
+    block: str | None = None
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        if heading := VARIANT_HEADING.match(line):
+            variants.append({"id": heading.group(1), "facts": [], "correct": [], "wrong": []})
+            block = None
+            continue
+        if not variants:
+            out.add(label, f"строка {number}: текст до первого варианта '### id'")
+            continue
+        variant = variants[-1]
+        stripped = line.strip()
+        if stripped in (_FACTS_LABEL, _ANSWERS_LABEL):
+            block = stripped
+        elif block == _FACTS_LABEL and (fact := RUBRIC_ITEM.match(stripped)):
+            variant["facts"].append({"id": fact.group(1), "text": fact.group(2).strip()})
+        elif block == _ANSWERS_LABEL and (answer := ANSWER_ITEM.match(stripped)):
+            key = "correct" if answer.group(1) == "+" else "wrong"
+            variant[key].append(answer.group(2).strip())
+        else:
+            out.add(
+                label,
+                f"строка {number}: ожидается '### id', '{_FACTS_LABEL}', факт '- id: текст' "
+                f"или после '{_ANSWERS_LABEL}' ответ '+ верный' / '- неверный'",
+            )
+    _check_placeholders(label, text, params, out)
+    for variant in variants:
+        _check_variant(variant, label, out)
+    if len(variants) < MIN_VARIANTS:
+        out.add(
+            label,
+            f"нужно не меньше {MIN_VARIANTS} вариантов '### id': иначе утёкший ответ одного "
+            f"экземпляра подходит ко всем; найдено {len(variants)}",
+        )
+    ids = [variant["id"] for variant in variants]
+    for duplicate in sorted({i for i in ids if ids.count(i) > 1}):
+        out.add(label, f"идентификатор варианта {duplicate!r} повторяется")
+    answers = {tuple(variant["correct"]) for variant in variants}
+    if len(variants) >= MIN_VARIANTS and len(answers) < 2:
+        out.add(
+            label,
+            "у всех вариантов один и тот же верный ответ: утёкший ответ подходит к любому "
+            "экземпляру; хотя бы два варианта должны вести к разным ответам",
+        )
+    return [
+        {
+            "id": variant["id"],
+            "facts": variant["facts"],
+            "correct": variant["correct"][0] if variant["correct"] else "",
+            "wrong": variant["wrong"],
+        }
+        for variant in variants
+    ]
+
+
+def _check_variant(variant: dict[str, Any], label: str, out: _Collector) -> None:
+    name = variant["id"]
+    if not variant["facts"]:
+        out.add(label, f"у варианта {name!r} нужен хотя бы один факт '- id: текст'")
+    fact_ids = [fact["id"] for fact in variant["facts"]]
+    for duplicate in sorted({i for i in fact_ids if fact_ids.count(i) > 1}):
+        out.add(label, f"идентификатор факта {duplicate!r} в варианте {name!r} повторяется")
+    if len(variant["correct"]) != 1:
+        out.add(
+            label,
+            f"у варианта {name!r} должен быть ровно один верный ответ '+ текст', "
+            f"найдено {len(variant['correct'])}",
+        )
+    if len(variant["wrong"]) < MIN_WRONG_ANSWERS:
+        out.add(
+            label,
+            f"у варианта {name!r} нужно не меньше {MIN_WRONG_ANSWERS} неверных ответов "
+            f"'- текст', найдено {len(variant['wrong'])}",
+        )
+    answers = [normalize_phrase(text) for text in variant["correct"] + variant["wrong"]]
+    if len(set(answers)) != len(answers):
+        out.add(label, f"ответы варианта {name!r} повторяются")
 
 
 def _facts(

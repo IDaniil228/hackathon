@@ -40,7 +40,18 @@ def _evaluator(request: Request) -> Evaluator:
 
 
 class AnswerSubmit(BaseModel):
-    content: str = Field(min_length=1, max_length=200_000, description="Текст ответа или код")
+    content: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=200_000,
+        description="Текст ответа или код; для тестовой задачки не передаётся",
+    )
+    choice: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=16,
+        description="Только для тестовой задачки: id выбранного варианта из public.options",
+    )
     language: str | None = Field(
         default=None,
         description="Язык ответа для задания с кодом; по умолчанию — язык задания",
@@ -74,12 +85,17 @@ class SummaryOut(BaseModel):
     description=(
         "Сохраняет ответ кандидата и поведенческие сигналы фронтенда. Код сразу прогоняется "
         "на скрытых тестах в песочнице и статическими анализаторами; результат прогона "
-        "в ответе не раскрывается. Повторная отправка до оценки сессии заменяет ответ"
+        "в ответе не раскрывается. На тестовую задачку отвечают полем choice — id варианта, "
+        "на остальные задания — полем content. Повторная отправка до оценки сессии заменяет "
+        "ответ"
     ),
     responses={
         404: {"description": "Задание не найдено"},
         409: {"description": "Сессия уже оценена или задание ещё не готово"},
-        422: {"description": "Язык ответа не совпадает с языком задания"},
+        422: {
+            "description": "Язык ответа не совпадает с языком задания, вариант задачки "
+            "неизвестен или вместо choice передан content и наоборот"
+        },
         500: {"description": "Скрытые данные задания повреждены"},
         503: {"description": "Песочница не настроена или недоступна"},
     },
@@ -87,6 +103,7 @@ class SummaryOut(BaseModel):
 async def submit_answer(task_id: uuid.UUID, body: AnswerSubmit, request: Request) -> AnswerAccepted:
     submission = Submission(
         content=body.content,
+        choice=body.choice,
         language=body.language,
         behavior=Behavior(
             paste_count=body.paste_count,

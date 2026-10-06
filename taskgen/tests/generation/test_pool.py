@@ -21,7 +21,7 @@ from tests.generation.world import ADMIN, ModelStub, World
 
 pytestmark = pytest.mark.integration
 
-ONE_TASK = {"selection_override": {"tasks_per_test": 1}}
+ONE_TASK = {"selection_override": {"code_tasks": 1}}
 
 
 @pytest.fixture

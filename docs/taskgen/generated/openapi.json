@@ -431,7 +431,7 @@
           "Тестовые сессии"
         ],
         "summary": "Создать тестовую сессию",
-        "description": "Отбирает шаблоны области по заявленному грейду и навыкам кандидата и создаёт сессию со всеми заданиями. Ответ приходит, когда готово первое задание; остальные создаются в фоне и появляются в GET /sessions/{id} по мере готовности, сессия при этом в статусе generating. Задание с кодом выдаётся только после того, как эталон прошёл все его тесты в песочнице. Шаблон, который не дал экземпляра, заменяется другим того же грейда. Параметры отбора берутся из настроек теста; переопределить их может только admin. Если первое задание создать не удалось, сессия остаётся со статусом failed, а detail ответа содержит message и session_id",
+        "description": "Отбирает шаблоны области по заявленному грейду и навыкам кандидата отдельно для каждого типа заданий и создаёт сессию со всеми заданиями. Первые задания каждого типа, по квоте min_claimed_per_kind, всегда заявленного грейда. Ответ приходит, когда готово первое задание; остальные создаются в фоне и появляются в GET /sessions/{id} по мере готовности, сессия при этом в статусе generating. Задание с кодом выдаётся только после того, как эталон прошёл все его тесты в песочнице. Шаблон, который не дал экземпляра, заменяется другим того же грейда и типа. Параметры отбора берутся из настроек теста; переопределить их может только admin. Если первое задание создать не удалось, сессия остаётся со статусом failed, а detail ответа содержит message и session_id",
         "operationId": "create_session_sessions_post",
         "requestBody": {
           "content": {
@@ -461,7 +461,7 @@
             "description": "Ключ не имеет нужной роли или client передал selection_override"
           },
           "409": {
-            "description": "В области нет шаблонов"
+            "description": "В области нет шаблонов или шаблонов заявленного грейда какого-то типа меньше квоты min_claimed_per_kind; detail называет тип и число"
           },
           "422": {
             "description": "Неизвестная область, грейд или навык; неверные параметры отбора"
@@ -727,7 +727,7 @@
           "Оценка"
         ],
         "summary": "Отправить ответ на задание",
-        "description": "Сохраняет ответ кандидата и поведенческие сигналы фронтенда. Код сразу прогоняется на скрытых тестах в песочнице и статическими анализаторами; результат прогона в ответе не раскрывается. Повторная отправка до оценки сессии заменяет ответ",
+        "description": "Сохраняет ответ кандидата и поведенческие сигналы фронтенда. Код сразу прогоняется на скрытых тестах в песочнице и статическими анализаторами; результат прогона в ответе не раскрывается. На тестовую задачку отвечают полем choice — id варианта, на остальные задания — полем content. Повторная отправка до оценки сессии заменяет ответ",
         "operationId": "submit_answer_tasks__task_id__answer_post",
         "security": [
           {
@@ -780,7 +780,7 @@
             "description": "Сессия уже оценена или задание ещё не готово"
           },
           "422": {
-            "description": "Язык ответа не совпадает с языком задания"
+            "description": "Язык ответа не совпадает с языком задания, вариант задачки неизвестен или вместо choice передан content и наоборот"
           },
           "500": {
             "description": "Скрытые данные задания повреждены"
@@ -1033,11 +1033,32 @@
       "AnswerSubmit": {
         "properties": {
           "content": {
-            "type": "string",
-            "maxLength": 200000,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Content",
-            "description": "Текст ответа или код"
+            "description": "Текст ответа или код; для тестовой задачки не передаётся"
+          },
+          "choice": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choice",
+            "description": "Только для тестовой задачки: id выбранного варианта из public.options"
           },
           "language": {
             "anyOf": [
@@ -1092,9 +1113,6 @@
           }
         },
         "type": "object",
-        "required": [
-          "content"
-        ],
         "title": "AnswerSubmit"
       },
       "Behavior": {
@@ -1500,6 +1518,15 @@
             "description": "Публичные примеры; остальные скрыты",
             "default": []
           },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/QuizOption"
+            },
+            "type": "array",
+            "title": "Options",
+            "description": "Только для тестовых задачек: варианты ответа в порядке показа. Кандидат отвечает id варианта, верный ответ не помечен",
+            "default": []
+          },
           "expected_minutes": {
             "type": "integer",
             "title": "Expected Minutes",
@@ -1525,6 +1552,51 @@
         ],
         "title": "PublicPayload",
         "description": "То, что видит кандидат помимо текста условия. Хранится в tasks.public_payload."
+      },
+      "QuizBlock": {
+        "properties": {
+          "correct": {
+            "type": "integer",
+            "title": "Correct",
+            "description": "Сколько тестовых задачек решено верно"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Сколько тестовых задачек было в сессии"
+          },
+          "share": {
+            "type": "number",
+            "title": "Share",
+            "description": "Доля верных ответов"
+          }
+        },
+        "type": "object",
+        "required": [
+          "correct",
+          "total",
+          "share"
+        ],
+        "title": "QuizBlock"
+      },
+      "QuizOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Непрозрачный id ответа; его кандидат и присылает"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "QuizOption"
       },
       "Recommendation": {
         "properties": {
@@ -1618,6 +1690,13 @@
             "type": "string",
             "title": "Grade"
           },
+          "kind": {
+            "$ref": "#/components/schemas/TaskKind"
+          },
+          "slot": {
+            "$ref": "#/components/schemas/Slot",
+            "description": "quota — слот квоты, выбран только среди шаблонов заявленного грейда своего типа; explore — разведочный слот, выбран среди всех шаблонов типа"
+          },
           "grade_gap": {
             "type": "integer",
             "title": "Grade Gap",
@@ -1635,7 +1714,7 @@
           "probability": {
             "type": "number",
             "title": "Probability",
-            "description": "Вероятность выпасть первым из всего пула"
+            "description": "Вероятность выпасть первым из пула своего слота: шаблонов заявленного грейда этого типа для quota, всех шаблонов типа для explore"
           },
           "step_probability": {
             "type": "number",
@@ -1649,6 +1728,8 @@
           "name",
           "version",
           "grade",
+          "kind",
+          "slot",
           "grade_gap",
           "similarity",
           "distance",
@@ -1710,7 +1791,7 @@
             },
             "type": "array",
             "title": "Replacements",
-            "description": "Шаблоны, которые не дали экземпляра и заменены следующим по вероятности шаблоном того же грейда; в порядке замен"
+            "description": "Шаблоны, которые не дали экземпляра и заменены следующим по вероятности шаблоном того же грейда и типа; в порядке замен"
           }
         },
         "type": "object",
@@ -1764,7 +1845,7 @@
             "title": "Beta",
             "description": "Вес несходства навыков"
           },
-          "tasks_per_test": {
+          "code_tasks": {
             "anyOf": [
               {
                 "type": "integer"
@@ -1773,8 +1854,44 @@
                 "type": "null"
               }
             ],
-            "title": "Tasks Per Test",
-            "description": "Число заданий в тесте"
+            "title": "Code Tasks",
+            "description": "Число заданий с кодом"
+          },
+          "essay_tasks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Essay Tasks",
+            "description": "Число эссе"
+          },
+          "quiz_tasks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quiz Tasks",
+            "description": "Число тестовых задачек"
+          },
+          "min_claimed_per_kind": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Claimed Per Kind",
+            "description": "Квота заданий заявленного грейда в каждом типе"
           }
         },
         "additionalProperties": false,
@@ -1987,9 +2104,11 @@
               "passed",
               "failed",
               "upgraded",
-              "downgraded"
+              "downgraded",
+              "insufficient"
             ],
-            "title": "Outcome"
+            "title": "Outcome",
+            "description": "passed, upgraded, downgraded или failed — вердикт по уровням; insufficient — заданий с кодом и эссе заявленного уровня меньше min_evidence_per_level, и вердикта нет"
           },
           "recommendation": {
             "$ref": "#/components/schemas/Recommendation"
@@ -1999,10 +2118,15 @@
               "$ref": "#/components/schemas/LevelResult"
             },
             "type": "array",
-            "title": "Levels"
+            "title": "Levels",
+            "description": "Уровни по заданиям с кодом и эссе; тестовые задачки сюда не входят"
           },
           "thresholds": {
             "$ref": "#/components/schemas/Thresholds"
+          },
+          "score": {
+            "$ref": "#/components/schemas/SessionScore",
+            "description": "Общий балл: средний балл заданий с кодом и эссе и блок тестовых задачек с весом weight_quiz"
           },
           "tasks": {
             "items": {
@@ -2021,9 +2145,59 @@
           "recommendation",
           "levels",
           "thresholds",
+          "score",
           "tasks"
         ],
         "title": "SessionResult"
+      },
+      "SessionScore": {
+        "properties": {
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "description": "Общий балл сессии от 0 до 1"
+          },
+          "tasks": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tasks",
+            "description": "Средний балл заданий с кодом и эссе; null — таких заданий нет"
+          },
+          "quiz": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuizBlock"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Блок тестовых задачек; null — задачек нет"
+          },
+          "weights": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Weights",
+            "description": "Веса блоков tasks и quiz, которые вошли в балл"
+          }
+        },
+        "type": "object",
+        "required": [
+          "score",
+          "tasks",
+          "quiz",
+          "weights"
+        ],
+        "title": "SessionScore",
+        "description": "Общий балл сессии: средний балл заданий с кодом и эссе и доля верных задачек."
       },
       "SessionStatus": {
         "type": "string",
@@ -2055,6 +2229,15 @@
           "runtime"
         ],
         "title": "Signature"
+      },
+      "Slot": {
+        "type": "string",
+        "enum": [
+          "quota",
+          "explore"
+        ],
+        "title": "Slot",
+        "description": "Откуда взят шаблон: из квоты заявленного грейда или из общего разведочного отбора."
       },
       "SummaryOut": {
         "properties": {
@@ -2092,7 +2275,8 @@
         "type": "string",
         "enum": [
           "code",
-          "essay"
+          "essay",
+          "quiz"
         ],
         "title": "TaskKind"
       },

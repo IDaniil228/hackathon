@@ -146,7 +146,10 @@ class TestConfig(Base):
     temperature: Mapped[float | None] = mapped_column(Float)
     alpha: Mapped[float | None] = mapped_column(Float)
     beta: Mapped[float | None] = mapped_column(Float)
-    tasks_per_test: Mapped[int | None] = mapped_column(SmallInteger)
+    code_tasks: Mapped[int | None] = mapped_column(SmallInteger)
+    essay_tasks: Mapped[int | None] = mapped_column(SmallInteger)
+    quiz_tasks: Mapped[int | None] = mapped_column(SmallInteger)
+    min_claimed_per_kind: Mapped[int | None] = mapped_column(SmallInteger)
 
 
 class TestSession(Base):

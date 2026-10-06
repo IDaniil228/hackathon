@@ -1,19 +1,19 @@
-"""Балл за задание: чистые функции без ввода-вывода.
+"""Балл за задание и общий балл сессии: чистые функции без ввода-вывода.
 
 Балл задания с кодом — взвешенная сумма компонентов из диапазона 0..1 с весами из
 ScoringSettings, которые шаблон может переопределить. Задание с развёрнутым ответом
-получает балл судьи без изменений.
+получает балл судьи без изменений. Тестовая задачка получает 1 за ключ и 0 за остальное.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from statistics import fmean
 
 from pydantic import BaseModel, Field
 
 from taskgen.config import ScoringSettings
-from taskgen.contracts import TestReport
+from taskgen.contracts import TaskKind, TestReport
 
 # Компонент балла и поле ScoringSettings, которое задаёт его вес.
 WEIGHT_OF = {
@@ -61,6 +61,57 @@ def code_task_score(components: Components, weights: Mapping[str, float]) -> flo
         raise ValueError("Все веса измеренных компонентов балла равны нулю")
     weighted = sum(weights[WEIGHT_OF[name]] * value for name, value in measured.items())
     return weighted / total_weight
+
+
+def quiz_score(choice: str, key: str) -> float:
+    return 1.0 if choice == key else 0.0
+
+
+class QuizBlock(BaseModel):
+    correct: int = Field(description="Сколько тестовых задачек решено верно")
+    total: int = Field(description="Сколько тестовых задачек было в сессии")
+    share: float = Field(description="Доля верных ответов")
+
+
+class SessionScore(BaseModel):
+    """Общий балл сессии: средний балл заданий с кодом и эссе и доля верных задачек."""
+
+    score: float = Field(description="Общий балл сессии от 0 до 1")
+    tasks: float | None = Field(
+        description="Средний балл заданий с кодом и эссе; null — таких заданий нет"
+    )
+    quiz: QuizBlock | None = Field(description="Блок тестовых задачек; null — задачек нет")
+    weights: dict[str, float] = Field(description="Веса блоков tasks и quiz, которые вошли в балл")
+
+
+def session_score(scored: Iterable[tuple[TaskKind, float]], *, weight_quiz: float) -> SessionScore:
+    """Блок задачек входит одним компонентом с весом weight_quiz, задания — с остальным.
+
+    Блок, которого в сессии нет, отдаёт свой вес другому блоку, как неизмеренный компонент
+    балла задания с кодом.
+    """
+    pairs = list(scored)
+    tasks = [score for kind, score in pairs if kind is not TaskKind.QUIZ]
+    answers = [score for kind, score in pairs if kind is TaskKind.QUIZ]
+    quiz = None
+    if answers:
+        correct = sum(score == 1.0 for score in answers)
+        quiz = QuizBlock(correct=correct, total=len(answers), share=correct / len(answers))
+    parts = {
+        "tasks": (fmean(tasks) if tasks else None, 1.0 - weight_quiz),
+        "quiz": (quiz.share if quiz else None, weight_quiz),
+    }
+    present = {name: pair for name, pair in parts.items() if pair[0] is not None}
+    total = sum(weight for _, weight in present.values())
+    if total <= 0:
+        # Единственный блок с нулевым весом: балл сессии — его балл, а не 0.
+        present = {name: (value, 1.0) for name, (value, _) in present.items()}
+        total = float(len(present))
+    weights = {name: weight / total for name, (_, weight) in present.items()}
+    score = sum(value * weights[name] for name, (value, _) in present.items()) if present else 0.0
+    return SessionScore(
+        score=score, tasks=fmean(tasks) if tasks else None, quiz=quiz, weights=weights
+    )
 
 
 def _ratio(reference: float, candidate: float, floor: float) -> float:

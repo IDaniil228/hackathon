@@ -41,6 +41,9 @@ class TaskStatus(StrEnum):
 class TaskKind(StrEnum):
     CODE = "code"
     ESSAY = "essay"
+    # Теоретический вопрос в кейсе с выбором одного ответа. Оценивается кодом по ключу и в
+    # оценку грейда по уровням не входит.
+    QUIZ = "quiz"
 
 
 class ParamSpec(BaseModel):
@@ -69,6 +72,19 @@ class ScenarioFact(BaseModel):
     text: str
 
 
+class QuizVariant(BaseModel):
+    """Вариант кейса тестовой задачки: из его фактов следует ровно один верный ответ.
+
+    Разные варианты одного шаблона ведут к разным верным ответам, поэтому утёкший ответ
+    одного экземпляра не подходит к другому.
+    """
+
+    id: str
+    facts: list[ScenarioFact]
+    correct: str
+    wrong: list[str]
+
+
 class TemplateSpec(BaseModel):
     """Разобранный md-шаблон. Формат файла описан в taskgen/TEMPLATE_FORMAT.md."""
 
@@ -90,11 +106,16 @@ class TemplateSpec(BaseModel):
     reference_solution: str | None = None
     test_generator: str | None = None
     # Только для kind=essay: вопросы идут в условие дословно, ситуацию пишет LLM по фактам,
-    # а запрещённые фразы не должны появиться в ситуации.
+    # а запрещённые фразы не должны появиться в ситуации. Фразы действуют и для kind=quiz.
     questions: str | None = None
     scenario_facts: list[ScenarioFact] = []
     forbidden: list[str] = []
-    rubric: list[RubricItem]
+    # Только для kind=quiz: вопрос идёт в условие дословно, кейс пишет LLM по фактам варианта,
+    # который выбран по seed.
+    question: str | None = None
+    variants: list[QuizVariant] = []
+    # У kind=quiz рубрики нет: ответ сверяется с ключом.
+    rubric: list[RubricItem] = []
 
 
 # --- LLM и эмбеддинги -------------------------------------------------------------------
@@ -199,6 +220,14 @@ class SandboxRunner(Protocol):
     async def run_tests(self, request: TestRunRequest) -> TestReport: ...
 
 
+class SolverRecord(BaseModel):
+    """Как слепой решатель принял экземпляр: сколько раз решал и сколько черновиков отклонил."""
+
+    passed: bool
+    attempts: int
+    rejected_drafts: int
+
+
 class HiddenPayload(BaseModel):
     """Содержимое tasks.hidden_payload: пишет генерация, читает оценка, наружу не уходит.
 
@@ -213,6 +242,11 @@ class HiddenPayload(BaseModel):
     rubric: list[RubricItem] = []
     reference_report: TestReport | None = None
     scoring: dict[str, float] = {}
+    # Для kind=quiz: id верного ответа среди публичных вариантов и вариант кейса шаблона.
+    answer_key: str | None = None
+    quiz_variant: str | None = None
+    # Итог слепого решателя для статистики ложных отказов; None — решатель не запускался.
+    solver: SolverRecord | None = None
 
 
 # --- Оценка -----------------------------------------------------------------------------

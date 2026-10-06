@@ -45,8 +45,9 @@ _OUTCOME_TEXT = {
     "failed": "ни один уровень не подтверждён",
     "upgraded": "подтверждён грейд выше заявленного",
     "downgraded": "подтверждён грейд ниже заявленного",
+    "insufficient": "заданий заявленного уровня недостаточно для вердикта",
 }
-_KIND_TEXT = {"code": "код", "essay": "развёрнутый ответ"}
+_KIND_TEXT = {"code": "код", "essay": "развёрнутый ответ", "quiz": "тестовая задачка"}
 
 _SYSTEM = """Ты пишешь краткую справку о результатах технического теста кандидата для рекрутера.
 
@@ -105,11 +106,20 @@ def summary_data(candidate_ref: str, sessions: list[SessionFacts]) -> dict[str, 
                     {name: level.get(name) for name in ("grade", "total", "solved", "share")}
                     for level in session.result.get("levels", [])
                 ],
+                "quiz": _quiz_facts(session.result),
                 "tasks": [_task_facts(task) for task in session.result.get("tasks", [])],
             }
             for index, session in enumerate(sessions, start=1)
         ],
     }
+
+
+def _quiz_facts(result: dict[str, Any]) -> dict[str, int] | None:
+    """Сколько тестовых задачек верно из скольких; None — задачек в сессии не было."""
+    block = (result.get("score") or {}).get("quiz")
+    if not block:
+        return None
+    return {"correct": block["correct"], "total": block["total"]}
 
 
 def _numbers_in(data: Any) -> list[float]:
@@ -164,6 +174,11 @@ def fallback_text(data: dict[str, Any]) -> str:
         for level in session["levels"]:
             sentences.append(
                 f"Уровень {level['grade']}: решено {level['solved']} из {level['total']} заданий."
+            )
+        if quiz := session.get("quiz"):
+            sentences.append(
+                f"Тест {session['number']}: тестовых задачек верно {quiz['correct']} из "
+                f"{quiz['total']}."
             )
         for task in session["tasks"]:
             line = (

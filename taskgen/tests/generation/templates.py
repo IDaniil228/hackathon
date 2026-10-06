@@ -6,7 +6,7 @@ from typing import Any
 
 from taskgen.bank.parser import parse_template
 from taskgen.contracts import TemplateSpec
-from tests.bank.factory import make_essay, make_template
+from tests.bank.factory import make_essay, make_quiz, make_template
 
 ENTRYPOINT = "top_sum"
 
@@ -59,3 +59,11 @@ def code_spec(**frontmatter: Any) -> TemplateSpec:
 
 def essay_spec(**frontmatter: Any) -> TemplateSpec:
     return parse_template(essay_template_md(**frontmatter), source="тест")
+
+
+def quiz_template_md(**frontmatter: Any) -> str:
+    return make_quiz(**frontmatter)
+
+
+def quiz_spec(**frontmatter: Any) -> TemplateSpec:
+    return parse_template(quiz_template_md(**frontmatter), source="тест")

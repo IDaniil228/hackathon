@@ -1,13 +1,46 @@
 import pytest
 
 from taskgen.config import ScoringSettings
-from taskgen.contracts import CaseOutcome, TestReport
+from taskgen.contracts import CaseOutcome, TaskKind, TestReport
 from taskgen.evaluation.scoring import (
     Components,
     code_task_score,
     performance_score,
+    quiz_score,
     resolve_weights,
+    session_score,
 )
+
+CODE, ESSAY, QUIZ = TaskKind.CODE, TaskKind.ESSAY, TaskKind.QUIZ
+
+
+def test_quiz_answer_scores_one_only_for_the_key():
+    assert quiz_score("c", "c") == 1.0
+    assert quiz_score("a", "c") == 0.0
+
+
+def test_session_score_mixes_tasks_mean_and_quiz_share_by_weight():
+    scored = [(CODE, 0.8), (ESSAY, 0.6), (QUIZ, 1.0), (QUIZ, 0.0), (QUIZ, 1.0), (QUIZ, 1.0)]
+    result = session_score(scored, weight_quiz=0.1)
+    assert result.tasks == pytest.approx(0.7)
+    assert (result.quiz.correct, result.quiz.total) == (3, 4)
+    assert result.quiz.share == pytest.approx(0.75)
+    assert result.score == pytest.approx(0.9 * 0.7 + 0.1 * 0.75)
+    assert result.weights == {"tasks": pytest.approx(0.9), "quiz": pytest.approx(0.1)}
+
+
+def test_session_score_without_one_block_takes_the_other_whole():
+    only_tasks = session_score([(CODE, 0.4)], weight_quiz=0.1)
+    assert only_tasks.quiz is None and only_tasks.score == pytest.approx(0.4)
+    only_quiz = session_score([(QUIZ, 1.0), (QUIZ, 0.0)], weight_quiz=0.1)
+    assert only_quiz.tasks is None and only_quiz.score == pytest.approx(0.5)
+
+
+def test_quiz_block_cannot_outweigh_failed_practical_tasks():
+    # Все задачки верны, практические задания провалены: итог не выше веса задачек.
+    result = session_score([(CODE, 0.0), (ESSAY, 0.0), *[(QUIZ, 1.0)] * 5], weight_quiz=0.1)
+    assert result.score == pytest.approx(0.1)
+
 
 WEIGHTS = {
     "weight_tests": 0.6,

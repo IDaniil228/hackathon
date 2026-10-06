@@ -20,6 +20,8 @@ AUTH = {"Authorization": f"Bearer {ADMIN_KEY}"}
 SECRET_EXPECTED = 987654321
 CODE = "def add(a: int, b: int) -> int:\n    return a + b\n"
 RUBRIC = [{"id": "uses_plus_operator", "text": "Складывает числа оператором +"}]
+QUIZ_KEY = "c"
+QUIZ_OPTIONS = [{"id": i, "text": f"Ответ {i}"} for i in ("a", "b", "c", "d")]
 
 
 class Responder:
@@ -108,6 +110,10 @@ class World:
                             "runtime": "python",
                             "reference_report": _report([True]).model_dump(),
                         }
+                    public = {"signature": "def add(a, b)"}
+                    if spec["kind"] == "quiz":
+                        hidden = {"answer_key": QUIZ_KEY, "quiz_variant": "positive"}
+                        public = {"title": "Задачка", "options": QUIZ_OPTIONS}
                     task = Task(
                         session_id=session.id,
                         template_id=template.id,
@@ -117,7 +123,7 @@ class World:
                         statement="Сложите два числа",
                         params={},
                         seed=1,
-                        public_payload={"signature": "def add(a, b)"},
+                        public_payload=public,
                         hidden_payload=hidden,
                         generated_by="test",
                     )
@@ -259,6 +265,78 @@ def test_score_session_end_to_end(world):
     # Модель ответила текстом без чисел, поэтому в summary — текст по шаблону.
     assert "молодец" not in body["text"]
     assert "Тест 1 из 1" in body["text"]
+
+
+def _choose(world: World, task_id, choice: str, **body):
+    payload = {"choice": choice} | body
+    return world.client.post(f"/tasks/{task_id}/answer", json=payload, headers=AUTH)
+
+
+def test_quiz_answer_is_option_id_and_wrong_shapes_are_422(world):
+    _, (code, quiz) = world.make_session(
+        [{"grade": "middle", "kind": "code"}, {"grade": "middle", "kind": "quiz"}]
+    )
+    assert _choose(world, quiz, "b").status_code == 200
+    (answer,) = world.answers(quiz)
+    assert answer.content == "b"
+    # Неизвестный вариант, текст вместо варианта и вариант для задания с кодом — 422.
+    unknown = _choose(world, quiz, "z")
+    assert unknown.status_code == 422 and "z" in unknown.json()["detail"]
+    as_text = world.client.post(f"/tasks/{quiz}/answer", json={"content": "c"}, headers=AUTH)
+    assert as_text.status_code == 422
+    both = _choose(world, quiz, "c", content="c")
+    assert both.status_code == 422
+    assert _choose(world, code, "a").status_code == 422
+    assert world.client.post(f"/tasks/{code}/answer", json={}, headers=AUTH).status_code == 422
+
+
+def test_quiz_block_is_one_component_and_stays_out_of_levels(world):
+    session_id, task_ids = world.make_session(
+        [
+            {"grade": "middle", "kind": "code"},
+            {"grade": "senior", "kind": "quiz"},
+            {"grade": "senior", "kind": "quiz"},
+            {"grade": "middle", "kind": "quiz"},
+        ]
+    )
+    code, *quizzes = task_ids
+    assert _answer(world, code).status_code == 200
+    for task_id, choice in zip(quizzes, (QUIZ_KEY, "a", QUIZ_KEY), strict=True):
+        assert _choose(world, task_id, choice).status_code == 200
+
+    response = world.client.post(f"/sessions/{session_id}/score", headers=AUTH)
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert [task["score"] for task in result["tasks"][1:]] == [1.0, 0.0, 1.0]
+    # Уровень senior есть только у задачек, поэтому в оценке по уровням его нет.
+    assert [level["grade"] for level in result["levels"]] == ["middle"]
+    assert result["outcome"] == "passed"
+    block = result["score"]
+    assert block["quiz"] == {"correct": 2, "total": 3, "share": pytest.approx(2 / 3)}
+    weight = world.state.settings.scoring.weight_quiz
+    expected = (1 - weight) * result["tasks"][0]["score"] + weight * 2 / 3
+    assert block["score"] == pytest.approx(expected)
+    # Ключ ответа наружу не уходит.
+    assert "answer_key" not in response.text and "quiz_variant" not in response.text
+
+    summary = world.client.get(f"/candidates/{world.candidate}/summary", headers=AUTH).json()
+    session = summary["data"]["sessions"][0]
+    assert session["quiz"] == {"correct": 2, "total": 3}
+    assert "задачек верно 2 из 3" in summary["text"]
+
+
+def test_session_without_claimed_level_tasks_is_insufficient(world):
+    session_id, task_ids = world.make_session(
+        [{"grade": "junior", "kind": "code"}, {"grade": "senior", "kind": "code"}]
+    )
+    for task_id in task_ids:
+        _answer(world, task_id)
+    result = world.client.post(f"/sessions/{session_id}/score", headers=AUTH).json()
+    assert result["outcome"] == "insufficient"
+    assert result["assigned_grade"] is None
+    recommendation = result["recommendation"]
+    assert (recommendation["action"], recommendation["grade"]) == ("take_test", "middle")
+    assert "middle" in recommendation["text"]
 
 
 def test_zero_pass_rate_scores_zero_without_judge(world):

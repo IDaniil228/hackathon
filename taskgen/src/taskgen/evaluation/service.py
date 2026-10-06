@@ -11,7 +11,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any
 
 import httpx
 from pydantic import BaseModel, Field, ValidationError
@@ -43,6 +43,7 @@ from taskgen.evaluation.detector import LLMAIDetector
 from taskgen.evaluation.grading import (
     GradeLevel,
     LevelResult,
+    Outcome,
     Recommendation,
     TaskScore,
     assess_grade,
@@ -52,9 +53,12 @@ from taskgen.evaluation.languages import canonical_language
 from taskgen.evaluation.metrics import MetricScore, compute_quality, judge_facts, load_rubric
 from taskgen.evaluation.scoring import (
     Components,
+    SessionScore,
     code_task_score,
     performance_score,
+    quiz_score,
     resolve_weights,
+    session_score,
 )
 from taskgen.evaluation.summary import SessionFacts, fallback_text, summary_data, write_summary
 from taskgen.llm import limited_llm
@@ -196,15 +200,28 @@ class SessionResult(BaseModel):
     session_id: uuid.UUID
     claimed_grade: str
     assigned_grade: str | None = Field(description="Подтверждённый грейд; null — ни один")
-    outcome: Literal["passed", "failed", "upgraded", "downgraded"]
+    outcome: Outcome = Field(
+        description="passed, upgraded, downgraded или failed — вердикт по уровням; "
+        "insufficient — заданий с кодом и эссе заявленного уровня меньше "
+        "min_evidence_per_level, и вердикта нет"
+    )
     recommendation: Recommendation
-    levels: list[LevelResult]
+    levels: list[LevelResult] = Field(
+        description="Уровни по заданиям с кодом и эссе; тестовые задачки сюда не входят"
+    )
     thresholds: Thresholds
+    score: SessionScore = Field(
+        description="Общий балл: средний балл заданий с кодом и эссе и блок тестовых задачек "
+        "с весом weight_quiz"
+    )
     tasks: list[TaskResult]
 
 
 class Submission(BaseModel):
-    content: str
+    """Ответ кандидата: content для кода и эссе, choice — id варианта для задачки."""
+
+    content: str | None = None
+    choice: str | None = None
     language: str | None = None
     behavior: Behavior = Behavior()
 
@@ -238,6 +255,11 @@ async def evaluate_task(task: TaskInput, *, judge: Judge, scoring: ScoringSettin
     behavior = Behavior.model_validate(answer.behavior)
     base |= {"answered": True, "language": answer.language, "behavior": behavior}
     rubric = task.hidden.rubric
+
+    if task.kind == TaskKind.QUIZ:
+        if task.hidden.answer_key is None:
+            raise BrokenTaskError(f"У задачки {task.task_id} нет ключа ответа")
+        return TaskOutcome(**base, score=quiz_score(answer.content, task.hidden.answer_key))
 
     if task.kind == TaskKind.ESSAY:
         if not rubric:
@@ -368,6 +390,24 @@ def _same_language(left: str, right: str) -> bool:
 # --- Приём ответа --------------------------------------------------------------------------
 
 
+def _answer_content(task: Task, submission: Submission) -> str:
+    """Что хранится в answers.content: id варианта для задачки, иначе текст ответа."""
+    if task.kind != TaskKind.QUIZ:
+        if submission.choice is not None or not submission.content:
+            raise InvalidAnswerError(
+                "На это задание отвечают полем content; choice — только для тестовой задачки"
+            )
+        return submission.content
+    if submission.content is not None or submission.choice is None:
+        raise InvalidAnswerError("На тестовую задачку отвечают полем choice — id варианта")
+    known = [option["id"] for option in (task.public_payload or {}).get("options", [])]
+    if submission.choice not in known:
+        raise InvalidAnswerError(
+            f"Варианта {submission.choice!r} у задачки нет; допустимы: {', '.join(known)}"
+        )
+    return submission.choice
+
+
 async def submit_answer(ev: Evaluator, task_id: uuid.UUID, submission: Submission) -> uuid.UUID:
     """Сохраняет ответ; для кода сразу прогоняет тесты и анализаторы.
 
@@ -392,6 +432,7 @@ async def submit_answer(ev: Evaluator, task_id: uuid.UUID, submission: Submissio
     hidden = _hidden(task)
     language = submission.language
     test_report = analysis = None
+    content = _answer_content(task, submission)
 
     if task.kind == TaskKind.CODE:
         if not (hidden.cases and hidden.entrypoint and hidden.runtime):
@@ -406,7 +447,7 @@ async def submit_answer(ev: Evaluator, task_id: uuid.UUID, submission: Submissio
         request = TestRunRequest(
             runtime=hidden.runtime,
             entrypoint=hidden.entrypoint,
-            solution=submission.content,
+            solution=content,
             cases=hidden.cases,
             limits=RunLimits(
                 timeout_ms=ev.settings.sandbox.run_timeout_ms,
@@ -419,16 +460,17 @@ async def submit_answer(ev: Evaluator, task_id: uuid.UUID, submission: Submissio
             raise SandboxUnavailableError("Песочница недоступна, повторите позже") from error
         test_report = report.model_dump(mode="json")
         # Анализаторы запускают внешние процессы; в потоке они не блокируют цикл событий.
-        reports = await asyncio.to_thread(run_analyzers, ev.analyzers, submission.content, language)
+        reports = await asyncio.to_thread(run_analyzers, ev.analyzers, content, language)
         analysis = [item.model_dump(mode="json") for item in reports]
 
     ai_signal = None
-    if ev.detector is not None:
-        signal = await ev.detector.detect(submission.content, language or "text")
+    # В ответе на задачку только id варианта: детектору нечего читать.
+    if ev.detector is not None and task.kind != TaskKind.QUIZ:
+        signal = await ev.detector.detect(content, language or "text")
         ai_signal = signal.model_dump(mode="json")
 
     values = {
-        "content": submission.content,
+        "content": content,
         "language": language,
         "behavior": submission.behavior.model_dump(mode="json"),
         "test_report": test_report,
@@ -524,11 +566,15 @@ async def score_session(ev: Evaluator, session_id: uuid.UUID) -> SessionResult:
 
     solved = ev.settings.scoring.solved_threshold
     assessment = assess_grade(
-        [TaskScore(grade=outcome.grade, score=outcome.score) for outcome in outcomes],
+        [
+            TaskScore(grade=outcome.grade, score=outcome.score, kind=outcome.kind)
+            for outcome in outcomes
+        ],
         [GradeLevel(code=grade.code, level=grade.level) for grade in grades],
         session.claimed_grade_code,
         solved_threshold=solved,
         pass_threshold=ev.settings.scoring.pass_threshold,
+        min_evidence=ev.settings.scoring.min_evidence_per_level,
     )
     result = SessionResult(
         session_id=session_id,
@@ -538,6 +584,10 @@ async def score_session(ev: Evaluator, session_id: uuid.UUID) -> SessionResult:
         recommendation=assessment.recommendation,
         levels=assessment.levels,
         thresholds=Thresholds(solved=solved, pass_level=ev.settings.scoring.pass_threshold),
+        score=session_score(
+            [(outcome.kind, outcome.score) for outcome in outcomes],
+            weight_quiz=ev.settings.scoring.weight_quiz,
+        ),
         tasks=[_task_result(outcome, solved) for outcome in outcomes],
     )
 

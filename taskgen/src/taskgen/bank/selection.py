@@ -10,6 +10,7 @@ import math
 import random
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 
 # Расстояния считаются одной формулой из одинаковых входов, поэтому настоящие ничьи
 # совпадают побитово; допуск гасит только ошибку округления при разном порядке операций.
@@ -83,6 +84,62 @@ def draw(distances: Sequence[float], k: int, t: float, rng: random.Random) -> li
         position = _sample(p, rng)
         picks.append(Draw(remaining[position], p[position]))
         del remaining[position]
+    return picks
+
+
+class Slot(StrEnum):
+    """Откуда взят шаблон: из квоты заявленного грейда или из общего разведочного отбора."""
+
+    QUOTA = "quota"
+    EXPLORE = "explore"
+
+
+@dataclass(frozen=True)
+class SlotDraw:
+    index: int
+    probability: float
+    slot: Slot
+
+
+class QuotaError(ValueError):
+    """Шаблонов заявленного грейда меньше квоты: тест такого состава собрать нельзя."""
+
+    def __init__(self, available: int, quota: int) -> None:
+        super().__init__(f"шаблонов заявленного грейда {available}, а квота требует {quota}")
+        self.available = available
+        self.quota = quota
+
+
+def draw_with_quota(
+    distances: Sequence[float],
+    claimed: Sequence[bool],
+    *,
+    k: int,
+    quota: int,
+    t: float,
+    rng: random.Random,
+) -> list[SlotDraw]:
+    """До k кандидатов: первые min(quota, k) — только из claimed, остальные — из всех.
+
+    Внутри квоты работает тот же softmax по расстоянию, что и в разведке: при квоте без
+    случайности утёкший список шаблонов грейда выдавал бы всем один и тот же шаблон.
+    Разведочные слоты ограничены размером пула, квотные — нет: нехватка шаблонов
+    заявленного грейда — ошибка банка, а не повод тихо взять чужой грейд.
+    """
+    quota = min(quota, k)
+    pool = [i for i, own in enumerate(claimed) if own]
+    if len(pool) < quota:
+        raise QuotaError(len(pool), quota)
+    picks = [
+        SlotDraw(pool[pick.index], pick.probability, Slot.QUOTA)
+        for pick in draw([distances[i] for i in pool], quota, t, rng)
+    ]
+    taken = {pick.index for pick in picks}
+    rest = [i for i in range(len(distances)) if i not in taken]
+    picks += [
+        SlotDraw(rest[pick.index], pick.probability, Slot.EXPLORE)
+        for pick in draw([distances[i] for i in rest], k - quota, t, rng)
+    ]
     return picks
 
 

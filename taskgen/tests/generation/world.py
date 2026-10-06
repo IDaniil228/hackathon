@@ -25,7 +25,7 @@ from taskgen.db import (
 from tests.conftest import ADMIN_KEY
 from tests.evaluation.fakes import FakeLLM, http_error
 from tests.generation.fakes import GatedLLM, LocalSandbox, essay_reply
-from tests.generation.templates import code_template_md, essay_template_md
+from tests.generation.templates import code_template_md, essay_template_md, quiz_template_md
 
 ADMIN = {"Authorization": f"Bearer {ADMIN_KEY}"}
 ENTRYPOINT_IN_PROMPT = re.compile(r"функцию `(\w+)`")
@@ -98,6 +98,10 @@ class World:
     def essay(self, suffix: str = "essay", **frontmatter) -> str:
         frontmatter.setdefault("skills", ["python"])
         return essay_template_md(name=f"{self.prefix}-{suffix}", area=self.area, **frontmatter)
+
+    def quiz(self, suffix: str = "quiz", **frontmatter) -> str:
+        frontmatter.setdefault("skills", ["python"])
+        return quiz_template_md(name=f"{self.prefix}-{suffix}", area=self.area, **frontmatter)
 
     def gate(self, free: int) -> GatedLLM:
         """Пропустить free вызовов LLM, а остальные держать до gated.open()."""

@@ -1,5 +1,6 @@
 import pytest
 
+from taskgen.contracts import TaskKind
 from taskgen.evaluation.grading import GradeLevel, TaskScore, assess_grade
 
 GRADES = [
@@ -11,9 +12,48 @@ SOLVED = 0.7
 PASS = 0.6
 
 
-def _assess(scores: list[tuple[str, float]], claimed: str):
+def _assess(scores: list[tuple[str, float]], claimed: str, *, min_evidence: int = 1, quiz=()):
     tasks = [TaskScore(grade=grade, score=score) for grade, score in scores]
-    return assess_grade(tasks, GRADES, claimed, solved_threshold=SOLVED, pass_threshold=PASS)
+    tasks += [TaskScore(grade=grade, score=score, kind=TaskKind.QUIZ) for grade, score in quiz]
+    return assess_grade(
+        tasks,
+        GRADES,
+        claimed,
+        solved_threshold=SOLVED,
+        pass_threshold=PASS,
+        min_evidence=min_evidence,
+    )
+
+
+def test_claimed_level_without_enough_evidence_is_insufficient():
+    # Одно решённое задание senior при нуле заданий middle — не повод для вердикта о middle.
+    result = _assess([("junior", 1.0), ("senior", 1.0)], "middle")
+    assert result.outcome == "insufficient"
+    assert result.assigned is None
+    assert result.recommendation.action == "take_test"
+    assert result.recommendation.grade == "middle"
+    assert "middle" in result.recommendation.text and "0" in result.recommendation.text
+    # Уровни всё равно посчитаны: работодатель видит, что было в тесте.
+    assert [level.grade for level in result.levels] == ["junior", "senior"]
+
+
+def test_min_evidence_counts_tasks_of_claimed_level():
+    scores = [("middle", 1.0), ("middle", 1.0)]
+    assert _assess(scores, "middle", min_evidence=2).outcome == "passed"
+    assert _assess(scores, "middle", min_evidence=3).outcome == "insufficient"
+
+
+def test_quiz_tasks_do_not_take_part_in_levels_or_evidence():
+    # Тестовые задачки middle решены, но в оценку по уровням не входят: доказательств нет.
+    quiz = [("middle", 1.0)] * 5
+    result = _assess([("junior", 1.0)], "middle", quiz=quiz)
+    assert result.outcome == "insufficient"
+    assert [level.grade for level in result.levels] == ["junior"]
+    # И не портят вердикт: проваленные задачки не снимают подтверждённый уровень.
+    failed_quiz = [("middle", 0.0)] * 5
+    passed = _assess([("middle", 1.0)], "middle", quiz=failed_quiz)
+    assert passed.outcome == "passed"
+    assert [(level.grade, level.total) for level in passed.levels] == [("middle", 1)]
 
 
 def test_all_levels_solved_assigns_highest_represented():
@@ -40,7 +80,9 @@ def test_order_follows_level_even_when_names_sort_otherwise():
     # trainee по алфавиту последний, но по level самый младший.
     grades = [*GRADES, GradeLevel(code="trainee", level=5)]
     tasks = [TaskScore(grade="trainee", score=1.0), TaskScore(grade="junior", score=1.0)]
-    result = assess_grade(tasks, grades, "trainee", solved_threshold=SOLVED, pass_threshold=PASS)
+    result = assess_grade(
+        tasks, grades, "trainee", solved_threshold=SOLVED, pass_threshold=PASS, min_evidence=1
+    )
     assert [item.grade for item in result.levels] == ["trainee", "junior"]
     assert result.assigned == "junior"
     assert result.outcome == "upgraded"
@@ -101,8 +143,9 @@ def test_upgraded_recommends_full_test_on_assigned_grade():
     assert result.recommendation.grade == "senior"
 
 
-def test_no_tasks_is_failed():
-    assert _assess([], "junior").outcome == "failed"
+def test_no_tasks_is_insufficient_and_without_evidence_rule_failed():
+    assert _assess([], "junior").outcome == "insufficient"
+    assert _assess([], "junior", min_evidence=0).outcome == "failed"
 
 
 def test_unknown_grade_is_rejected():

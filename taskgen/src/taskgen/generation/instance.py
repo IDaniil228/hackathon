@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import random
 import secrets
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,6 +27,7 @@ from taskgen.contracts import (
     ReasoningEffort,
     RunLimits,
     SandboxRunner,
+    SolverRecord,
     TaskKind,
     TemplateSpec,
     TestCase,
@@ -47,6 +48,19 @@ from taskgen.generation.leaks import (
     public_count,
 )
 from taskgen.generation.params import draw_params, fill_placeholders
+from taskgen.generation.quiz import (
+    QuizCaseError,
+    QuizOption,
+    choose_variant,
+    shuffled_options,
+    write_case,
+)
+from taskgen.generation.solver import (
+    SolverConfig,
+    SolverSandboxError,
+    SolverVerdict,
+    solve_code,
+)
 from taskgen.sandbox.environment import describe_all, describe_runtime
 from taskgen.sandbox.errors import SandboxError
 
@@ -95,6 +109,11 @@ class PublicPayload(BaseModel):
     title: str
     signature: Signature | None = Field(default=None, description="Только для заданий с кодом")
     examples: list[Example] = Field(default=[], description="Публичные примеры; остальные скрыты")
+    options: list[QuizOption] = Field(
+        default=[],
+        description="Только для тестовых задачек: варианты ответа в порядке показа. Кандидат "
+        "отвечает id варианта, верный ответ не помечен",
+    )
     expected_minutes: int = Field(description="Ожидаемое время на задание, минуты")
     environment: str | None = Field(
         default=None,
@@ -230,6 +249,20 @@ class InstanceDeps:
     # None — ситуацию эссе проверяет та же модель, что её пишет.
     checker_model: str | None = None
     checker_reasoning_effort: ReasoningEffort | None = None
+    # None — решает модель проверяльщика, а без неё — модель генерации.
+    solver_model: str | None = None
+    solver_reasoning_effort: ReasoningEffort | None = None
+
+    def solver(self) -> SolverConfig | None:
+        """Настройки слепого решателя; None — решатель выключен."""
+        if not self.options.solver_enabled:
+            return None
+        return SolverConfig(
+            llm=self.llm,
+            model=self.solver_model or self.checker_model or self.model,
+            attempts=self.options.solver_attempts,
+            reasoning_effort=self.solver_reasoning_effort,
+        )
 
 
 # --- Генерация ------------------------------------------------------------------------------
@@ -256,7 +289,54 @@ async def generate_instance(
     context = _LegendContext(personalization, adjacent)
     if spec.kind == TaskKind.ESSAY:
         return await _essay(spec, seed, deps, context)
+    if spec.kind == TaskKind.QUIZ:
+        return await _quiz(spec, seed, deps, context)
     return await _code(spec, seed, deps, context)
+
+
+async def _quiz(
+    spec: TemplateSpec, seed: int, deps: InstanceDeps, context: _LegendContext
+) -> TaskInstance:
+    """Кейс от LLM по фактам варианта, вопрос автора и ответы вперемешку (quiz.py)."""
+    params = draw_params(spec.params, random.Random(seed))
+    variant = choose_variant(spec, seed)
+    options, key = shuffled_options(variant, params, seed)
+    system_suffix, request_suffix = _personal_suffixes(context)
+    try:
+        draft = await write_case(
+            deps.llm,
+            spec,
+            variant,
+            params,
+            options,
+            key,
+            model=deps.model,
+            checker_model=deps.checker_model or deps.model,
+            temperature=deps.options.legend_temperature,
+            attempts=deps.options.legend_attempts,
+            reasoning_effort=deps.reasoning_effort,
+            checker_reasoning_effort=deps.checker_reasoning_effort,
+            solver=deps.solver(),
+            system_suffix=system_suffix,
+            request_suffix=request_suffix,
+        )
+    except httpx.HTTPError as error:
+        raise LLMUnavailableError("Модель генерации недоступна, повторите позже") from error
+    except QuizCaseError as error:
+        raise ModelOutputError(str(error)) from error
+    return TaskInstance(
+        kind=TaskKind.QUIZ,
+        statement=draft.statement,
+        params=params,
+        seed=seed,
+        public=PublicPayload(
+            title=draft.title, options=options, expected_minutes=spec.expected_minutes
+        ),
+        hidden=HiddenPayload(answer_key=key, quiz_variant=variant.id, solver=draft.solver),
+        validated=False,
+        generated_by=deps.model,
+        personalization=context.record(),
+    )
 
 
 async def _essay(
@@ -344,7 +424,27 @@ async def _code(
             return "условие оборвано посреди блока кода; допиши его целиком и закрой блок"
         return None
 
-    legend = await _write_legend(spec, request, check, deps, context)
+    solver = deps.solver()
+    solve = None
+    if solver is not None:
+
+        async def solve(legend: Legend) -> SolverVerdict:
+            try:
+                return await solve_code(
+                    solver,
+                    sandbox,
+                    statement=legend.statement,
+                    entrypoint=entrypoint,
+                    runtime=spec.runtime or "",
+                    environment=environment,
+                    examples=public_cases,
+                    cases=cases,
+                    limits=deps.limits,
+                )
+            except SolverSandboxError as error:
+                raise SandboxUnavailableError("Песочница недоступна, повторите позже") from error
+
+    legend, record = await _write_legend(spec, request, check, deps, context, solve)
     return TaskInstance(
         kind=TaskKind.CODE,
         statement=legend.statement,
@@ -364,6 +464,7 @@ async def _code(
             rubric=spec.rubric,
             reference_report=report,
             scoring=spec.scoring,
+            solver=record,
         ),
         validated=True,
         generated_by=deps.model,
@@ -474,10 +575,16 @@ async def _write_legend(
     check: Callable[[Legend], str | None],
     deps: InstanceDeps,
     context: _LegendContext,
-) -> Legend:
-    """Легенда от LLM, прошедшая check; check возвращает причину отказа или None."""
+    solve: Callable[[Legend], Awaitable[SolverVerdict]] | None = None,
+) -> tuple[Legend, SolverRecord | None]:
+    """Легенда от LLM, прошедшая check и решатель solve, и итог решателя.
+
+    check возвращает причину отказа или None. solve вызывается только для легенды, которая
+    прошла check; None — решатель выключен.
+    """
     messages = _legend_messages(request, context)
     reason = ""
+    solver_calls = rejected = 0
     for _ in range(deps.options.legend_attempts):
         try:
             legend = await complete_structured(
@@ -498,8 +605,20 @@ async def _write_legend(
             reason = "ответ модели не соответствует формату"
             continue
         reason = check(legend) or ""
-        if not reason:
-            return legend
+        if not reason and solve is None:
+            return legend, None
+        if not reason and solve is not None:
+            try:
+                verdict = await solve(legend)
+            except httpx.HTTPError as error:
+                raise LLMUnavailableError("Модель решателя недоступна, повторите позже") from error
+            solver_calls += verdict.attempts
+            if verdict.passed:
+                return legend, SolverRecord(
+                    passed=True, attempts=solver_calls, rejected_drafts=rejected
+                )
+            rejected += 1
+            reason = verdict.reason
         # Отказ объясняется модели без самих скрытых значений: она их не видела и не должна.
         messages = [
             *messages[:2],

@@ -489,13 +489,14 @@ def render_templates() -> str:
     for _, spec in specs:
         cells[spec.area, spec.grade].append(spec)
     summary = table(
-        ["Область", "Грейд", "С кодом", "Эссе", "Сложность", "Время, мин"],
+        ["Область", "Грейд", "С кодом", "Эссе", "Задачки", "Сложность", "Время, мин"],
         [
             [
                 code(area),
                 code(grade),
                 sum(s.kind == "code" for s in group),
                 sum(s.kind == "essay" for s in group),
+                sum(s.kind == "quiz" for s in group),
                 span([s.difficulty for s in group]),
                 span([s.expected_minutes for s in group]),
             ]
@@ -518,7 +519,7 @@ def render_templates() -> str:
                 spec.difficulty,
                 spec.expected_minutes,
                 ", ".join(code(skill) for skill in spec.skills),
-                len(spec.rubric),
+                len(spec.variants) if spec.kind == "quiz" else len(spec.rubric),
                 cell(spec.description),
             ]
             for path, spec in specs
@@ -535,7 +536,7 @@ def render_templates() -> str:
                     "Сложность",
                     "Время, мин",
                     "Навыки",
-                    "Пунктов рубрики",
+                    "Пунктов рубрики или вариантов кейса",
                     "Описание",
                 ],
                 rows,

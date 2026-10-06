@@ -63,6 +63,37 @@ ESSAY_SECTIONS: dict[str, str] = {
     "Рубрика": "- memory: сказано про общую память потоков",
 }
 
+QUIZ_VARIANTS = """### positive
+
+Факты:
+- weights: время проезда по каждой дороге — положительное число минут
+- size: в городе {n} перекрёстков
+
+Ответ:
++ Алгоритм Дейкстры
+- Обход в ширину
+- Алгоритм Беллмана — Форда
+- Алгоритм Флойда — Уоршелла
+
+### unit
+
+Факты:
+- weights: проезд по любой дороге занимает ровно одну минуту
+- size: в городе {n} перекрёстков
+
+Ответ:
++ Обход в ширину
+- Алгоритм Дейкстры
+- Алгоритм Беллмана — Форда
+- Алгоритм Флойда — Уоршелла"""
+
+QUIZ_SECTIONS: dict[str, str] = {
+    "Генерация": "Опиши диспетчерскую такси, которая ищет быстрый путь до клиента.",
+    "Вопрос": "Какой алгоритм быстрее всех даст верные кратчайшие пути от диспетчерской?",
+    "Варианты": QUIZ_VARIANTS,
+    "Нельзя раскрывать": "- дейкстр\n- в ширину",
+}
+
 
 def make_template(
     *,
@@ -76,7 +107,7 @@ def make_template(
     for key in drop:
         meta.pop(key, None)
     meta = {k: v for k, v in meta.items() if v is not None}
-    base = CODE_SECTIONS if meta.get("kind", "code") == "code" else ESSAY_SECTIONS
+    base = {"essay": ESSAY_SECTIONS, "quiz": QUIZ_SECTIONS}.get(meta.get("kind"), CODE_SECTIONS)
     merged: dict[str, str | None] = dict(base)
     merged.update(sections or {})
     body = "\n\n".join(
@@ -90,4 +121,11 @@ def make_essay(**frontmatter: Any) -> str:
     frontmatter.setdefault("kind", "essay")
     frontmatter.setdefault("runtime", None)
     frontmatter.setdefault("params", {})
+    return make_template(**frontmatter)
+
+
+def make_quiz(**frontmatter: Any) -> str:
+    frontmatter.setdefault("kind", "quiz")
+    frontmatter.setdefault("runtime", None)
+    frontmatter.setdefault("params", {"n": {"type": "int", "min": 50, "max": 90}})
     return make_template(**frontmatter)
