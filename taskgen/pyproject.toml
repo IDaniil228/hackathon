@@ -13,6 +13,7 @@ dependencies = [
     "pgvector",
     "httpx",
     "pyyaml",
+    "python-multipart>=0.0.32",
 ]
 
 [dependency-groups]
