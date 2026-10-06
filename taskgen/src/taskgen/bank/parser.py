@@ -21,16 +21,29 @@ from taskgen.contracts import RubricItem, TaskKind, TemplateSpec
 from taskgen.db import Template
 
 SECTION_GENERATION = "Генерация"
+SECTION_QUESTIONS = "Вопросы"
+SECTION_FACTS = "Факты"
+SECTION_FORBIDDEN = "Нельзя раскрывать"
 SECTION_REFERENCE = "Эталон"
 SECTION_SIGNATURE = "Сигнатура"
 SECTION_TESTS = "Тесты"
 SECTION_RUBRIC = "Рубрика"
+ESSAY_ONLY_SECTIONS = (SECTION_QUESTIONS, SECTION_FACTS, SECTION_FORBIDDEN)
 CODE_ONLY_SECTIONS = (SECTION_REFERENCE, SECTION_SIGNATURE, SECTION_TESTS)
-KNOWN_SECTIONS = (SECTION_GENERATION, *CODE_ONLY_SECTIONS, SECTION_RUBRIC)
+KNOWN_SECTIONS = (SECTION_GENERATION, *ESSAY_ONLY_SECTIONS, *CODE_ONLY_SECTIONS, SECTION_RUBRIC)
 
 # Поля TemplateSpec, которые берутся из разделов тела; остальные задаёт frontmatter.
 BODY_FIELDS = frozenset(
-    {"generator_prompt", "entrypoint", "reference_solution", "test_generator", "rubric"}
+    {
+        "generator_prompt",
+        "entrypoint",
+        "reference_solution",
+        "test_generator",
+        "questions",
+        "scenario_facts",
+        "forbidden",
+        "rubric",
+    }
 )
 FRONTMATTER_FIELDS = frozenset(TemplateSpec.model_fields) - BODY_FIELDS
 SCORING_WEIGHTS = frozenset(k for k in ScoringSettings.model_fields if k.startswith("weight_"))
@@ -43,6 +56,24 @@ SECTION_HEADING = re.compile(r"^##\s+(.+?)\s*#*\s*$")
 TITLE_HEADING = re.compile(r"^#\s+\S")
 RUBRIC_ITEM = re.compile(r"^-\s+([A-Za-z0-9_.-]+):\s+(\S.*)$")
 RUBRIC_EXAMPLE = re.compile(r"^\s+([+-])\s+(\S.*)$")
+FORBIDDEN_ITEM = re.compile(r"^-\s+(\S.*)$")
+# Подчёркивание входит в \w, но в фразах вроде select_related оно разделитель, как дефис.
+_NOT_WORD = re.compile(r"[\W_]+")
+
+
+def normalize_phrase(text: str) -> str:
+    """Текст для поиска запрещённых фраз: регистр, ё/е, пунктуация и пробелы не различаются."""
+    return " ".join(_NOT_WORD.sub(" ", text.casefold().replace("ё", "е")).split())
+
+
+def find_phrases(text: str, phrases: list[str]) -> list[str]:
+    """Фразы, которые входят в текст подстрокой после нормализации, в исходном написании.
+
+    Словоформы не сводятся к основе: автор шаблона пишет общую часть слова, например
+    "утечк", и она найдётся в "утечка" и "утечки", но и внутри более длинных слов.
+    """
+    haystack = normalize_phrase(text)
+    return [phrase for phrase in phrases if normalize_phrase(phrase) in haystack]
 
 
 @dataclass(frozen=True)
@@ -107,7 +138,11 @@ def parse_template(text: str, *, source: str) -> TemplateSpec:
     data["rubric"] = _rubric(sections, out)
     if is_code:
         data.update(_code_sections(sections, meta.get("runtime"), out))
+        for name in ESSAY_ONLY_SECTIONS:
+            if name in sections:
+                out.add(section_label(name), "раздел задаётся только заданиям kind=essay")
     elif kind == TaskKind.ESSAY.value:
+        data.update(_essay_sections(sections, params, out))
         for name in CODE_ONLY_SECTIONS:
             if name in sections:
                 out.add(section_label(name), "раздел задаётся только заданиям kind=code")
@@ -259,11 +294,99 @@ def _generation(sections: dict[str, str], params: dict[str, Any], out: _Collecto
         return ""
     if not text:
         out.add(label, "раздел пуст")
+    _check_placeholders(label, text, params, out)
+    return text
+
+
+def _check_placeholders(label: str, text: str, params: dict[str, Any], out: _Collector) -> None:
     unknown = sorted(set(PLACEHOLDER.findall(text)) - set(params))
     if unknown:
         names = ", ".join(f"{{{name}}}" for name in unknown)
         out.add(label, f"подстановки без параметра в frontmatter: {names}")
-    return text
+
+
+def _essay_sections(
+    sections: dict[str, str], params: dict[str, Any], out: _Collector
+) -> dict[str, Any]:
+    questions = sections.get(SECTION_QUESTIONS)
+    questions_label = section_label(SECTION_QUESTIONS)
+    if questions is None:
+        out.add(questions_label, "раздел обязателен для заданий kind=essay")
+    elif not questions:
+        out.add(questions_label, "раздел пуст")
+    else:
+        _check_placeholders(questions_label, questions, params, out)
+
+    facts = _facts(sections, params, out)
+    forbidden = _forbidden(sections, out)
+
+    # Вопрос с запрещённой фразой сам раскрывает ответ. Факт с ней обязан попасть в
+    # ситуацию, но проверка ситуации его отклонит: шаблон не даст ни одного экземпляра.
+    # По той же причине проверяются значения параметров, которые попадают в текст.
+    if questions:
+        for phrase in find_phrases(questions, forbidden):
+            out.add(questions_label, f"вопросы содержат запрещённую фразу {phrase!r}")
+    for fact in facts:
+        for phrase in find_phrases(fact["text"], forbidden):
+            out.add(
+                section_label(SECTION_FACTS),
+                f"факт {fact['id']!r} содержит запрещённую фразу {phrase!r}",
+            )
+    for name, spec in params.items():
+        choices = spec.get("choices") if isinstance(spec, dict) else None
+        for choice in choices if isinstance(choices, list) else []:
+            for phrase in find_phrases(str(choice), forbidden):
+                out.add(
+                    f"params.{name}", f"значение {choice!r} содержит запрещённую фразу {phrase!r}"
+                )
+    return {"questions": questions, "scenario_facts": facts, "forbidden": forbidden}
+
+
+def _facts(
+    sections: dict[str, str], params: dict[str, Any], out: _Collector
+) -> list[dict[str, str]]:
+    text = sections.get(SECTION_FACTS)
+    label = section_label(SECTION_FACTS)
+    if text is None:
+        out.add(label, "раздел обязателен для заданий kind=essay")
+        return []
+    facts: list[dict[str, str]] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        if item := RUBRIC_ITEM.match(line):
+            facts.append({"id": item.group(1), "text": item.group(2).strip()})
+        else:
+            out.add(label, f"строка {number}: ожидается факт '- id: текст'")
+    if not facts:
+        out.add(label, "нужен хотя бы один факт '- id: текст'")
+    ids = [fact["id"] for fact in facts]
+    for duplicate in sorted({i for i in ids if ids.count(i) > 1}):
+        out.add(label, f"идентификатор факта {duplicate!r} повторяется")
+    _check_placeholders(label, text, params, out)
+    return facts
+
+
+def _forbidden(sections: dict[str, str], out: _Collector) -> list[str]:
+    text = sections.get(SECTION_FORBIDDEN)
+    if text is None:
+        return []
+    label = section_label(SECTION_FORBIDDEN)
+    phrases: list[str] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            continue
+        item = FORBIDDEN_ITEM.match(line)
+        if item is None:
+            out.add(label, f"строка {number}: ожидается фраза '- текст'")
+        elif not normalize_phrase(item.group(1)):
+            # Пустая после нормализации фраза входит в любой текст и отклонит каждую ситуацию.
+            out.add(label, f"строка {number}: во фразе нет ни букв, ни цифр")
+        else:
+            phrases.append(item.group(1).strip())
+    if not phrases:
+        out.add(label, "нужна хотя бы одна фраза '- текст'; если фраз нет, уберите раздел")
+    return phrases
 
 
 def _rubric(sections: dict[str, str], out: _Collector) -> list[RubricItem]:
