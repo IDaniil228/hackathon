@@ -10,7 +10,7 @@ from functools import lru_cache
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from taskgen.contracts import ReasoningEffort
+from taskgen.contracts import EssayCheckMethod, ReasoningEffort
 
 
 class LLMSettings(BaseModel):
@@ -94,6 +94,15 @@ class GenerationSettings(BaseModel):
     # Легенда — творческий текст: при нулевой температуре экземпляры звучат одинаково.
     legend_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     public_examples: int = Field(default=2, ge=0)
+    # Чем проверять ситуацию эссе на факты и пересказ запрещённых фраз: llm, embeddings или
+    # both (generation/essay.py). Без эмбеддера режимы с эмбеддингами проверяет LLM.
+    essay_check_method: EssayCheckMethod = "llm"
+    # Пороги косинусного сходства с предложением ситуации для bge-m3; другой модели эмбеддингов
+    # нужны свои пороги.
+    essay_fact_threshold: float = Field(default=0.6, ge=-1.0, le=1.0)
+    essay_forbidden_threshold: float = Field(default=0.6, ge=-1.0, le=1.0)
+    # Полуширина серой зоны вокруг порогов в режиме both: такие факты и фразы решает LLM.
+    essay_grey_zone: float = Field(default=0.05, ge=0.0, le=1.0)
 
 
 class SandboxSettings(BaseModel):

@@ -9,7 +9,7 @@ import pytest
 
 from taskgen.config import GenerationSettings
 from taskgen.contracts import HiddenPayload, RunLimits, TestReport
-from taskgen.generation.essay import essay_questions
+from taskgen.generation.essay import EmbeddingCache, essay_questions
 from taskgen.generation.instance import (
     InstanceDeps,
     LLMUnavailableError,
@@ -21,7 +21,12 @@ from taskgen.generation.instance import (
 from taskgen.generation.params import draw_params
 from taskgen.sandbox.environment import describe_runtime
 from tests.evaluation.fakes import FakeLLM, http_error
-from tests.generation.fakes import LocalSandbox, call_entrypoint, essay_reply
+from tests.generation.fakes import (
+    BagOfWordsEmbedder,
+    LocalSandbox,
+    call_entrypoint,
+    essay_reply,
+)
 from tests.generation.templates import ENTRYPOINT, code_spec, essay_spec
 
 MODEL = "generator-model"
@@ -39,6 +44,7 @@ def deps(
     reasoning_effort=None,
     checker_model=None,
     checker_reasoning_effort=None,
+    embedder=None,
     **options,
 ) -> InstanceDeps:
     return InstanceDeps(
@@ -50,6 +56,8 @@ def deps(
         reasoning_effort=reasoning_effort,
         checker_model=checker_model,
         checker_reasoning_effort=checker_reasoning_effort,
+        embedder=embedder,
+        embedding_cache=EmbeddingCache() if embedder is not None else None,
     )
 
 
@@ -311,6 +319,30 @@ async def test_essay_checker_without_own_model_uses_generator_model_and_efforts(
     scenario, check = llm.calls
     assert scenario["model"] == check["model"] == MODEL
     assert (scenario["reasoning_effort"], check["reasoning_effort"]) == ("none", "low")
+
+
+async def test_essay_check_method_comes_from_generation_settings():
+    llm = FakeLLM(essay_reply)
+    embedder = BagOfWordsEmbedder()
+    settings = {"essay_check_method": "embeddings", "essay_fact_threshold": 0.9}
+
+    instance = await generate_instance(
+        essay_spec(), 1, deps(llm, None, embedder=embedder, **settings)
+    )
+
+    # Ситуацию проверили эмбеддинги: в LLM ушёл только запрос ситуации.
+    [scenario] = llm.calls
+    assert "situation" in scenario["json_schema"]["properties"]
+    assert embedder.calls and instance.statement
+
+
+async def test_essay_embeddings_without_embedder_are_checked_by_llm():
+    llm = FakeLLM(essay_reply)
+
+    await generate_instance(essay_spec(), 1, deps(llm, None, essay_check_method="embeddings"))
+
+    _scenario, check = llm.calls
+    assert "facts" in check["json_schema"]["properties"]
 
 
 async def test_essay_with_llm_down_is_unavailable():

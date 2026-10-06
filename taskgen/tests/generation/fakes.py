@@ -48,6 +48,25 @@ def essay_reply(messages, schema, *, keep_facts: bool = True) -> str | None:
     return None
 
 
+class BagOfWordsEmbedder:
+    """Эмбеддер "мешок слов": одинаковые тексты дают сходство 1, тексты без общих слов — 0."""
+
+    model_name = "bag-of-words"
+
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        self.calls.append(list(texts))
+        vectors = []
+        for text in texts:
+            vector = [0.0] * 256
+            for word in re.findall(r"\w+", text.casefold()):
+                vector[sum(map(ord, word)) % 256] += 1.0
+            vectors.append(vector)
+        return vectors
+
+
 class GatedLLM:
     """LLMClient, который пропускает первые free вызовов, а остальные держит до open().
 
