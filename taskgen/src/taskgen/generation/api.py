@@ -13,7 +13,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from taskgen.auth import Role, require
+from taskgen.auth import AUTH_ERRORS, Role, require
 from taskgen.contracts import SessionStatus, TaskKind, TaskStatus
 from taskgen.db import Task
 from taskgen.generation import service
@@ -28,18 +28,13 @@ from taskgen.generation.profile import CandidateProfile, profile_hash
 from taskgen.generation.service import Generator, SessionSpec
 from taskgen.generation.worker import GenerationWorker
 
-router = APIRouter(tags=["Тестовые сессии"])
+router = APIRouter(tags=["Тестовые сессии"], responses=AUTH_ERRORS)
 
 _FAILURE_STATUS = {
     SandboxUnavailableError: status.HTTP_503_SERVICE_UNAVAILABLE,
     LLMUnavailableError: status.HTTP_502_BAD_GATEWAY,
     ModelOutputError: status.HTTP_502_BAD_GATEWAY,
     TemplateDefectError: status.HTTP_500_INTERNAL_SERVER_ERROR,
-}
-
-_AUTH_ERRORS: dict[int | str, dict[str, Any]] = {
-    401: {"description": "Нет ключа или ключ отозван"},
-    403: {"description": "Ключ не имеет нужной роли"},
 }
 
 
@@ -240,7 +235,7 @@ class SelectionOut(BaseModel):
         "статусом failed, а detail ответа содержит message и session_id"
     ),
     responses={
-        **_AUTH_ERRORS,
+        403: {"description": "Ключ не имеет нужной роли или client передал selection_override"},
         409: {"description": "В области нет шаблонов"},
         422: {"description": "Неизвестная область, грейд или навык; неверные параметры отбора"},
         500: {"description": "Шаблон первого задания и его замены не дали экземпляра"},
@@ -295,7 +290,7 @@ async def create_session(
         "сессия в статусе generating, клиент опрашивает этот эндпоинт и получает задания по "
         "мере готовности"
     ),
-    responses={**_AUTH_ERRORS, 404: {"description": "Сессия не найдена"}},
+    responses={404: {"description": "Сессия не найдена"}},
     dependencies=[Depends(require(Role.CLIENT))],
 )
 async def get_session(session_id: uuid.UUID, request: Request) -> SessionOut:
@@ -315,7 +310,6 @@ async def get_session(session_id: uuid.UUID, request: Request) -> SessionOut:
         "только фиксация факта: задания и статус сессии не меняются"
     ),
     responses={
-        **_AUTH_ERRORS,
         404: {"description": "Сессия не найдена"},
         422: {"description": "Нужно ровно одно поле: profile или profile_hash"},
     },
@@ -342,7 +336,6 @@ async def check_profile(
         "и тесты не выдаются"
     ),
     responses={
-        **_AUTH_ERRORS,
         404: {"description": "Сессия не найдена"},
         409: {"description": "Сессия создана не генерацией, объяснения отбора нет"},
     },
@@ -380,7 +373,7 @@ async def get_selection(session_id: uuid.UUID, request: Request) -> SelectionOut
         "Статус задания, а у готового — условие и публичная часть: сигнатура, примеры, "
         "окружение, ожидаемое время"
     ),
-    responses={**_AUTH_ERRORS, 404: {"description": "Задание не найдено"}},
+    responses={404: {"description": "Задание не найдено"}},
     dependencies=[Depends(require(Role.CLIENT))],
 )
 async def get_task(task_id: uuid.UUID, request: Request) -> TaskOut:

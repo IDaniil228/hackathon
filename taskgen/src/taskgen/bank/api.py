@@ -16,14 +16,14 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 from starlette.datastructures import UploadFile
 
-from taskgen.auth import Role, require
+from taskgen.auth import AUTH_ERRORS, Role, require
 from taskgen.bank.embeddings import refresh_embeddings_safely
 from taskgen.bank.importer import ImportOutcome, ImportStatus, TemplateDocument, import_documents
 from taskgen.bank.parser import TemplateError
 from taskgen.contracts import Embedder, TaskKind
 from taskgen.db import Template
 
-router = APIRouter(prefix="/templates", tags=["Шаблоны"])
+router = APIRouter(prefix="/templates", tags=["Шаблоны"], responses=AUTH_ERRORS)
 
 MARKDOWN_TYPES = ("text/markdown", "text/plain")
 
@@ -97,12 +97,7 @@ class TemplateInfo(BaseModel):
         )
 
 
-_AUTH_ERRORS: dict[int | str, dict[str, Any]] = {
-    401: {"description": "Нет ключа или ключ отозван"},
-    403: {"description": "Ключ не имеет нужной роли"},
-}
 _UPLOAD_ERRORS: dict[int | str, dict[str, Any]] = {
-    **_AUTH_ERRORS,
     400: {"description": "Тело запроса не читается: неверный JSON или не UTF-8"},
     415: {"description": "Неподдерживаемый Content-Type"},
     422: {
@@ -215,7 +210,6 @@ async def upload_bulk(request: Request, background: BackgroundTasks) -> BulkImpo
         "Текущие версии шаблонов с фильтрами. Возвращаются только метаданные, без тела "
         "шаблона: эталон и тесты не выдаются"
     ),
-    responses=_AUTH_ERRORS,
     dependencies=[Depends(require(Role.CLIENT))],
 )
 async def list_templates(
@@ -247,7 +241,7 @@ async def list_templates(
     description=(
         "Метаданные текущей версии шаблона. Поле body с исходным md отдаётся только роли admin"
     ),
-    responses={**_AUTH_ERRORS, 404: {"description": "Шаблона с таким именем нет"}},
+    responses={404: {"description": "Шаблона с таким именем нет"}},
 )
 async def get_template(
     name: str, request: Request, role: Annotated[Role, Depends(require(Role.CLIENT))]

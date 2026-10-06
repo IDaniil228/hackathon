@@ -9,9 +9,10 @@ from __future__ import annotations
 import hashlib
 import secrets
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.routing import APIRoute
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -58,10 +59,32 @@ def require(*roles: Role):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Недостаточно прав для операции")
         return role
 
+    check.allowed_roles = (Role.ADMIN, *(role for role in roles if role is not Role.ADMIN))
     return check
 
 
-router = APIRouter(prefix="/keys", tags=["Ключи"])
+def route_roles(route: APIRoute) -> tuple[Role, ...] | None:
+    """Роли, которые пропускает эндпоинт; None — эндпоинт без ключа.
+
+    Ищет проверку require() среди зависимостей эндпоинта и его роутера на любой глубине.
+    """
+    pending = [route.dependant]
+    while pending:
+        dependant = pending.pop()
+        roles = getattr(dependant.call, "allowed_roles", None)
+        if roles is not None:
+            return roles
+        pending.extend(dependant.dependencies)
+    return None
+
+
+# Ответы, которые даёт любая проверка роли; эндпоинт с require() перечисляет их в OpenAPI.
+AUTH_ERRORS: dict[int | str, dict[str, Any]] = {
+    401: {"description": "Нет ключа или ключ отозван"},
+    403: {"description": "Ключ не имеет нужной роли"},
+}
+
+router = APIRouter(prefix="/keys", tags=["Ключи"], responses=AUTH_ERRORS)
 
 
 class KeyCreate(BaseModel):

@@ -13,11 +13,13 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from taskgen.auth import Role, require
+from taskgen.auth import AUTH_ERRORS, Role, require
 from taskgen.evaluation import service
 from taskgen.evaluation.service import Behavior, Evaluator, SessionResult, Submission
 
-router = APIRouter(tags=["Оценка"], dependencies=[Depends(require(Role.CLIENT))])
+router = APIRouter(
+    tags=["Оценка"], dependencies=[Depends(require(Role.CLIENT))], responses=AUTH_ERRORS
+)
 
 _STATUS = {
     service.NotFoundError: status.HTTP_404_NOT_FOUND,
