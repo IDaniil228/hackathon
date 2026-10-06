@@ -634,8 +634,9 @@ def main(argv: list[str] | None = None) -> int:
     build.add_argument("--check", action="store_true", help="только сверить cases.json")
     bench = sub.add_parser("run", help="прогнать режимы и напечатать таблицу")
     bench.add_argument("--out", required=True, help="куда записать результаты в JSON")
-    bench.add_argument("--checker-model", default="qwen3.5:9b")
-    # С рассуждениями по умолчанию qwen3.5:9b тратила ответ на них и возвращала пустой content.
+    bench.add_argument("--checker-model", required=True, help="модель LLM-проверяльщика")
+    # С рассуждениями по умолчанию локальная модель тратила на них весь ответ и возвращала
+    # пустой content, поэтому по умолчанию рассуждения выключены.
     bench.add_argument("--reasoning-effort", default="none")
     bench.add_argument("--llm-sample", type=int, default=60, help="размер подвыборки для LLM")
     bench.add_argument("--seed", type=int, default=7, help="seed подвыборки для LLM")
