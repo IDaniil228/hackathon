@@ -1,13 +1,14 @@
-"""Тестовая сессия: отбор шаблонов и генерация заданий по ним.
+"""Тестовая сессия: отбор шаблонов, задания по ним и генерация каждого задания.
 
-Сессия выдаётся целиком или не выдаётся: если не удалось создать хотя бы одно задание, сессия
-получает статус failed с причиной и остаётся без заданий. Неполный набор исказил бы оценку
-грейда по уровням.
+Сессия создаётся сразу со всеми заданиями в статусе pending. Первое задание генерируется до
+ответа клиенту, остальные — в фоне (worker.py) и появляются в сессии по мере готовности.
+Шаблон, который не дал экземпляра, заменяется следующим по вероятности шаблоном того же
+грейда из отбора. Если замены нет или сервис генерации недоступен, сессия получает статус
+failed с причиной и больше не генерируется: неполный набор исказил бы оценку грейда.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import random
 import secrets
@@ -21,14 +22,20 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from taskgen.bank.parser import TemplateError, parse_template
 from taskgen.bank.selector import SelectionError, SelectionResult, select_templates
 from taskgen.config import GenerationSettings, Settings
-from taskgen.contracts import Embedder, LLMClient, RunLimits, SandboxRunner, SessionStatus
-from taskgen.db import AreaSkill, Skill, Task, TestSession
+from taskgen.contracts import (
+    Embedder,
+    LLMClient,
+    RunLimits,
+    SandboxRunner,
+    SessionStatus,
+    TaskStatus,
+    TemplateSpec,
+)
+from taskgen.db import AreaSkill, Skill, Task, Template, TestSession
 from taskgen.generation.instance import (
     GenerationError,
     InstanceDeps,
-    LLMUnavailableError,
     ModelOutputError,
-    SandboxUnavailableError,
     TaskInstance,
     TemplateDefectError,
     generate_instance,
@@ -37,20 +44,16 @@ from taskgen.llm import limited_llm
 
 logger = logging.getLogger(__name__)
 
-# Ключ, который сессия добавляет к объяснению отбора в test_sessions.selection.
+# Ключи, которые сессия добавляет к объяснению отбора в test_sessions.selection.
 SEED_KEY = "seed"
+RANKING_KEY = "ranking"
 
 # seed хранится в tasks.seed типа BIGINT со знаком.
 SEED_BITS = 63
 
-# Какую ошибку назвать клиенту, если задания сессии упали по разным причинам: недоступный
-# сервис чинится повтором, а дефект шаблона — только правкой банка.
-_ERROR_PRIORITY = (
-    SandboxUnavailableError,
-    LLMUnavailableError,
-    TemplateDefectError,
-    ModelOutputError,
-)
+# Отказ самого шаблона лечится другим шаблоном. Недоступная песочница или модель — нет:
+# любой шаблон упадёт так же.
+_REPLACEABLE = (TemplateDefectError, ModelOutputError)
 
 
 class InvalidRequestError(Exception):
@@ -66,11 +69,20 @@ class ConflictError(Exception):
 
 
 class SessionFailedError(Exception):
-    """Сессия создана, но задания не сгенерированы; причина — в cause и в самой сессии."""
+    """Первое задание не создано, сессия failed; причина — в cause и в самой сессии."""
 
-    def __init__(self, session_id: uuid.UUID, cause: GenerationError) -> None:
+    def __init__(self, session_id: uuid.UUID, cause: BaseException) -> None:
         super().__init__(str(cause))
         self.session_id = session_id
+        self.cause = cause
+
+
+class SessionAbortedError(Exception):
+    """Задание не создано и не заменено: остальные задания сессии больше не нужны."""
+
+    def __init__(self, reason: str, cause: GenerationError) -> None:
+        super().__init__(reason)
+        self.reason = reason
         self.cause = cause
 
 
@@ -130,6 +142,7 @@ class Generator:
 
 
 async def create_session(gen: Generator, spec: SessionSpec) -> uuid.UUID:
+    """Отбирает шаблоны и записывает сессию с заданиями в статусе pending."""
     seed = spec.seed if spec.seed is not None else secrets.randbits(SEED_BITS)
     rng = random.Random(seed)
     override = spec.selection_override or {}
@@ -157,27 +170,7 @@ async def create_session(gen: Generator, spec: SessionSpec) -> uuid.UUID:
     # Seed заданий берутся из того же генератора после отбора: seed сессии задаёт всё.
     task_seeds = [rng.getrandbits(SEED_BITS) for _ in result.selected]
     selection = result.explanation() | {SEED_KEY: seed}
-    session_id = await _insert_session(gen, spec, result, selection)
-    try:
-        instances = await _generate_all(gen, result, task_seeds)
-    except GenerationError as error:
-        await _mark_failed(gen, session_id, str(error))
-        raise SessionFailedError(session_id, error) from error
-    except Exception:
-        await _mark_failed(gen, session_id, "внутренняя ошибка генерации")
-        raise
-
-    async with gen.sessionmaker() as db, db.begin():
-        for position, (item, instance) in enumerate(
-            zip(result.selected, instances, strict=True), start=1
-        ):
-            db.add(_task_row(session_id, item.template.id, position, instance))
-        await db.execute(
-            update(TestSession)
-            .where(TestSession.id == session_id)
-            .values(status=SessionStatus.READY)
-        )
-    return session_id
+    return await _insert_session(gen, spec, result, selection, task_seeds)
 
 
 async def _check_skills(db: AsyncSession, area: str, skills: list[str]) -> None:
@@ -198,7 +191,11 @@ async def _check_skills(db: AsyncSession, area: str, skills: list[str]) -> None:
 
 
 async def _insert_session(
-    gen: Generator, spec: SessionSpec, result: SelectionResult, selection: dict[str, Any]
+    gen: Generator,
+    spec: SessionSpec,
+    result: SelectionResult,
+    selection: dict[str, Any],
+    task_seeds: list[int],
 ) -> uuid.UUID:
     async with gen.sessionmaker() as db, db.begin():
         row = TestSession(
@@ -212,66 +209,180 @@ async def _insert_session(
         )
         db.add(row)
         await db.flush()
+        for position, (item, seed) in enumerate(
+            zip(result.selected, task_seeds, strict=True), start=1
+        ):
+            db.add(
+                Task(
+                    session_id=row.id,
+                    template_id=item.template.id,
+                    position=position,
+                    status=TaskStatus.PENDING,
+                    kind=item.template.kind,
+                    seed=seed,
+                )
+            )
         return row.id
 
 
-async def _mark_failed(gen: Generator, session_id: uuid.UUID, reason: str) -> None:
+# --- Генерация заданий ----------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PendingTask:
+    id: uuid.UUID
+    position: int
+
+
+async def pending_tasks(gen: Generator, session_id: uuid.UUID) -> list[PendingTask]:
+    async with gen.sessionmaker() as db:
+        rows = await db.execute(
+            select(Task.id, Task.position)
+            .where(Task.session_id == session_id, Task.status == TaskStatus.PENDING)
+            .order_by(Task.position)
+        )
+        return [PendingTask(task_id, position) for task_id, position in rows]
+
+
+async def run_task(gen: Generator, task_id: uuid.UUID) -> None:
+    """Генерирует задание, при отказе шаблона берёт замену того же грейда.
+
+    SessionAbortedError — задание не создано и не заменено; задание уже помечено failed.
+    """
+    while True:
+        async with gen.sessionmaker() as db:
+            row = (
+                await db.execute(
+                    select(Task, Template)
+                    .join(Template, Task.template_id == Template.id)
+                    .where(Task.id == task_id)
+                )
+            ).one_or_none()
+        # Задание удалено вместе с сессией или уже обработано: делать нечего.
+        if row is None or row[0].status != TaskStatus.PENDING:
+            return
+        task, template = row
+        try:
+            instance = await generate_instance(_spec(template), task.seed, gen.instance_deps())
+        except _REPLACEABLE as error:
+            if await _replace(gen, task, template, str(error)):
+                continue
+            reason = (
+                f"Задание {task.position}: {error}. Заменить шаблон нечем: другие шаблоны "
+                f"грейда {template.grade_code} из отбора уже в сессии, уже пробовались или "
+                "исчерпан лимит замен"
+            )
+            await _fail_task(gen, task_id, reason)
+            raise SessionAbortedError(reason, error) from error
+        except GenerationError as error:
+            reason = f"Задание {task.position}: {error}"
+            await _fail_task(gen, task_id, reason)
+            raise SessionAbortedError(reason, error) from error
+        await _save_instance(gen, task_id, instance)
+        return
+
+
+def _spec(template: Template) -> TemplateSpec:
+    try:
+        return parse_template(template.body, source=template.name)
+    except TemplateError as error:
+        raise TemplateDefectError(f"Шаблон {template.name} не разбирается: {error}") from error
+
+
+async def _replace(gen: Generator, task: Task, template: Template, reason: str) -> bool:
+    """Ставит в задание следующий по вероятности шаблон того же грейда, которого нет в сессии.
+
+    Сессия блокируется на время выбора: два задания, упавшие одновременно, иначе взяли бы
+    одну и ту же замену.
+    """
+    async with gen.sessionmaker() as db, db.begin():
+        session = await db.get(TestSession, task.session_id, with_for_update=True)
+        current = await db.get(Task, task.id)
+        if session is None or current is None:
+            return False
+        if len(current.replacements) >= gen.options.replacements_per_task:
+            return False
+        used: set[str] = set()
+        rows = await db.execute(
+            select(Task.template_id, Task.replacements).where(Task.session_id == session.id)
+        )
+        for template_id, replaced in rows:
+            used.add(str(template_id))
+            used.update(item["template_id"] for item in replaced)
+        for entry in (session.selection or {}).get(RANKING_KEY, []):
+            if entry["grade"] != template.grade_code or entry["template_id"] in used:
+                continue
+            history = {"template_id": str(template.id), "name": template.name, "reason": reason}
+            await db.execute(
+                update(Task)
+                .where(Task.id == task.id)
+                .values(
+                    template_id=uuid.UUID(entry["template_id"]),
+                    kind=entry["kind"],
+                    replacements=[*current.replacements, history],
+                )
+            )
+            logger.warning("Задание %s: шаблон %s заменён на %s", task.id, template.name, entry)
+            return True
+    return False
+
+
+async def _fail_task(gen: Generator, task_id: uuid.UUID, reason: str) -> None:
     async with gen.sessionmaker() as db, db.begin():
         await db.execute(
-            update(TestSession)
-            .where(TestSession.id == session_id)
-            .values(status=SessionStatus.FAILED, failure=reason)
+            update(Task)
+            .where(Task.id == task_id, Task.status == TaskStatus.PENDING)
+            .values(status=TaskStatus.FAILED, failure=reason)
         )
 
 
-async def _generate_all(
-    gen: Generator, result: SelectionResult, seeds: list[int]
-) -> list[TaskInstance]:
-    specs = []
-    for item in result.selected:
-        try:
-            specs.append(parse_template(item.template.body, source=item.template.name))
-        except TemplateError as error:
-            message = f"Шаблон {item.template.name} не разбирается: {error}"
-            raise TemplateDefectError(message) from error
-    deps = gen.instance_deps()
-    try:
-        # Задания генерируются параллельно; число вызовов LLM ограничивает LimitedLLM.
-        # TaskGroup отменяет остальные задания после первой ошибки: сессия всё равно не выйдет.
-        async with asyncio.TaskGroup() as group:
-            jobs = [
-                group.create_task(generate_instance(spec, seed, deps))
-                for spec, seed in zip(specs, seeds, strict=True)
-            ]
-    except* GenerationError as errors:
-        raise _most_relevant(list(errors.exceptions)) from None
-    return [job.result() for job in jobs]
+async def _save_instance(gen: Generator, task_id: uuid.UUID, instance: TaskInstance) -> None:
+    async with gen.sessionmaker() as db, db.begin():
+        await db.execute(
+            update(Task)
+            .where(Task.id == task_id, Task.status == TaskStatus.PENDING)
+            .values(status=TaskStatus.READY, **instance_values(instance))
+        )
 
 
-def _most_relevant(errors: list[BaseException]) -> BaseException:
-    for kind in _ERROR_PRIORITY:
-        for error in errors:
-            if isinstance(error, kind):
-                return error
-    return errors[0]
+def instance_values(instance: TaskInstance) -> dict[str, Any]:
+    """Колонки задания, которые заполняет готовый экземпляр."""
+    return {
+        "kind": instance.kind.value,
+        "statement": instance.statement,
+        "params": instance.params,
+        "seed": instance.seed,
+        "public_payload": instance.public_dump(),
+        "hidden_payload": instance.hidden_dump(),
+        "generated_by": instance.generated_by,
+        "validated": instance.validated,
+    }
 
 
-def _task_row(
-    session_id: uuid.UUID, template_id: uuid.UUID, position: int, instance: TaskInstance
-) -> Task:
-    return Task(
-        session_id=session_id,
-        template_id=template_id,
-        position=position,
-        kind=instance.kind.value,
-        statement=instance.statement,
-        params=instance.params,
-        seed=instance.seed,
-        public_payload=instance.public_dump(),
-        hidden_payload=instance.hidden_dump(),
-        generated_by=instance.generated_by,
-        validated=instance.validated,
-    )
+async def finish_session(gen: Generator, session_id: uuid.UUID, failure: str | None = None) -> None:
+    """Переводит сессию из generating в ready или, если задан failure, в failed.
+
+    При сбое оставшиеся pending-задания получают failed: генерировать их больше незачем.
+    """
+    async with gen.sessionmaker() as db, db.begin():
+        session = await db.get(TestSession, session_id, with_for_update=True)
+        if session is None or session.status != SessionStatus.GENERATING:
+            return
+        if failure is not None:
+            await db.execute(
+                update(Task)
+                .where(Task.session_id == session_id, Task.status == TaskStatus.PENDING)
+                .values(
+                    status=TaskStatus.FAILED,
+                    failure=f"Задание не создано: генерация сессии остановлена. {failure}",
+                )
+            )
+            session.status = SessionStatus.FAILED
+            session.failure = failure
+            return
+        statuses = set(await db.scalars(select(Task.status).where(Task.session_id == session_id)))
+        if statuses == {TaskStatus.READY}:
+            session.status = SessionStatus.READY
 
 
 # --- Чтение ---------------------------------------------------------------------------------

@@ -33,6 +33,7 @@ from taskgen.contracts import (
     SandboxRunner,
     SessionStatus,
     TaskKind,
+    TaskStatus,
     TestReport,
     TestRunRequest,
 )
@@ -385,6 +386,9 @@ async def submit_answer(ev: Evaluator, task_id: uuid.UUID, submission: Submissio
     task, status = row
     if status == SCORED:
         raise ConflictError("Сессия уже оценена, ответы больше не принимаются")
+    # Ответ на готовое задание принимается и пока остальные задания сессии генерируются.
+    if task.status != TaskStatus.READY:
+        raise ConflictError("Задание ещё не готово или не создано, ответ на него не принимается")
     hidden = _hidden(task)
     language = submission.language
     test_report = analysis = None

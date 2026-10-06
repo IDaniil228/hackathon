@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
 from taskgen.app import create_app
-from taskgen.contracts import AISignal, CaseOutcome, SessionStatus, TestReport
+from taskgen.contracts import AISignal, CaseOutcome, SessionStatus, TaskStatus, TestReport
 from taskgen.db import Answer, CandidateSummary, Task, Template, TestSession
 from tests.conftest import ADMIN_KEY
 from tests.evaluation.fakes import FakeLLM, FakeSandbox
@@ -112,6 +112,7 @@ class World:
                         session_id=session.id,
                         template_id=template.id,
                         position=position,
+                        status=TaskStatus.READY,
                         kind=spec["kind"],
                         statement="Сложите два числа",
                         params={},

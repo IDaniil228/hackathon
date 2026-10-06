@@ -19,6 +19,37 @@ import httpx
 from taskgen.contracts import CaseOutcome, RunRequest, RunResult, TestReport, TestRunRequest
 
 
+class GatedLLM:
+    """LLMClient, который пропускает первые free вызовов, а остальные держит до open().
+
+    Так тест видит сессию в момент, когда первое задание готово, а остальные ещё пишутся.
+    """
+
+    def __init__(self, inner: Any, *, free: int) -> None:
+        self.inner = inner
+        self.free = free
+        self._gate: asyncio.Event | None = None
+
+    def _event(self) -> asyncio.Event:
+        # Событие создаётся в цикле приложения, а не в потоке теста.
+        if self._gate is None:
+            self._gate = asyncio.Event()
+        return self._gate
+
+    async def complete(self, messages, **kwargs) -> str:
+        if self.free > 0:
+            self.free -= 1
+        else:
+            await self._event().wait()
+        return await self.inner.complete(messages, **kwargs)
+
+    def open(self) -> None:
+        self._event().set()
+
+    async def aclose(self) -> None:
+        """Приложение закрывает клиента LLM при остановке."""
+
+
 def connect_error() -> httpx.ConnectError:
     return httpx.ConnectError("песочница недоступна", request=httpx.Request("POST", "http://pb"))
 
@@ -73,6 +104,12 @@ class LocalSandbox:
                 process.kill()
                 await process.wait()
                 return RunResult(stdout="", stderr="", exit_code=None, timed_out=True)
+            except asyncio.CancelledError:
+                # Остановка приложения отменяет фоновую генерацию; процесс не должен пережить
+                # цикл событий, иначе его транспорт закрывается уже в закрытом цикле.
+                process.kill()
+                await asyncio.shield(process.wait())
+                raise
         return RunResult(
             stdout=stdout.decode(), stderr=stderr.decode(), exit_code=process.returncode
         )

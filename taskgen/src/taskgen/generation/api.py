@@ -1,4 +1,4 @@
-"""HTTP API тестовых сессий. Логика — в service.py, здесь только перевод в HTTP.
+"""HTTP API тестовых сессий. Логика — в service.py и worker.py, здесь только перевод в HTTP.
 
 Наружу уходит только публичная часть заданий: hidden_payload не попадает ни в один ответ,
 потому что модели ответов его не содержат.
@@ -10,11 +10,11 @@ import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from taskgen.auth import Role, require
-from taskgen.contracts import TaskKind
+from taskgen.contracts import SessionStatus, TaskKind, TaskStatus
 from taskgen.db import Task
 from taskgen.generation import service
 from taskgen.generation.instance import (
@@ -25,6 +25,7 @@ from taskgen.generation.instance import (
     TemplateDefectError,
 )
 from taskgen.generation.service import Generator, SessionSpec
+from taskgen.generation.worker import GenerationWorker
 
 router = APIRouter(tags=["Тестовые сессии"])
 
@@ -43,6 +44,10 @@ _AUTH_ERRORS: dict[int | str, dict[str, Any]] = {
 
 def _generator(request: Request) -> Generator:
     return Generator.from_state(request.app.state)
+
+
+def _worker(request: Request) -> GenerationWorker:
+    return request.app.state.generation_worker
 
 
 # --- Модели ---------------------------------------------------------------------------------
@@ -86,19 +91,26 @@ class TaskOut(BaseModel):
     id: uuid.UUID
     session_id: uuid.UUID
     position: int = Field(description="Номер задания в сессии, с 1")
+    status: TaskStatus = Field(
+        description="pending — задание ещё создаётся, ready — готово, failed — не создано"
+    )
     kind: TaskKind
-    statement: str = Field(description="Текст условия в Markdown")
-    public: PublicPayload
+    statement: str | None = Field(description="Текст условия в Markdown; есть только у ready")
+    public: PublicPayload | None = Field(description="Публичная часть; есть только у ready")
+    failure: str | None = Field(description="Почему задание не создано")
 
     @classmethod
     def of(cls, task: Task) -> TaskOut:
+        ready = task.status == TaskStatus.READY
         return cls(
             id=task.id,
             session_id=task.session_id,
             position=task.position,
+            status=TaskStatus(task.status),
             kind=TaskKind(task.kind),
-            statement=task.statement,
-            public=PublicPayload.model_validate(task.public_payload),
+            statement=task.statement if ready else None,
+            public=PublicPayload.model_validate(task.public_payload) if ready else None,
+            failure=task.failure,
         )
 
 
@@ -108,14 +120,15 @@ class SessionOut(BaseModel):
     area: str
     claimed_grade: str
     skills: list[str]
-    status: str = Field(
-        description="generating — задания создаются, ready — выданы, failed — не созданы, "
-        "scored — сессия оценена"
+    status: SessionStatus = Field(
+        description="generating — первое задание выдано, остальные создаются; ready — все "
+        "задания готовы; failed — набор заданий не собран, причина в failure; scored — "
+        "сессия оценена"
     )
     failure: str | None = Field(description="Причина статуса failed")
     assigned_grade: str | None = Field(description="Грейд по итогам оценки; null — до оценки")
     created_at: datetime
-    tasks: list[TaskOut]
+    tasks: list[TaskOut] = Field(description="Все задания сессии по порядку, с их статусами")
 
     @classmethod
     def of(cls, view: service.SessionView) -> SessionOut:
@@ -127,7 +140,7 @@ class SessionOut(BaseModel):
             area=session.area_code,
             claimed_grade=session.claimed_grade_code,
             skills=list(session.skills),
-            status=session.status,
+            status=SessionStatus(session.status),
             failure=session.failure,
             assigned_grade=result.get("assigned_grade"),
             created_at=session.created_at,
@@ -147,6 +160,13 @@ class SelectedOut(BaseModel):
     step_probability: float = Field(description="Вероятность на том шаге, где шаблон выпал")
 
 
+class ReplacementOut(BaseModel):
+    position: int = Field(description="Номер задания, в котором заменён шаблон")
+    template_id: uuid.UUID = Field(description="Заменённый шаблон")
+    name: str
+    reason: str = Field(description="Почему шаблон не дал экземпляра")
+
+
 class SelectionOut(BaseModel):
     session_id: uuid.UUID
     seed: int
@@ -155,6 +175,10 @@ class SelectionOut(BaseModel):
     parameters: dict[str, Any] = Field(description="Параметры отбора, с которыми он шёл")
     candidates: int = Field(description="Сколько шаблонов области участвовало в отборе")
     selected: list[SelectedOut] = Field(description="Выбранные шаблоны в порядке заданий")
+    replacements: list[ReplacementOut] = Field(
+        description="Шаблоны, которые не дали экземпляра и заменены следующим по вероятности "
+        "шаблоном того же грейда; в порядке замен"
+    )
 
 
 # --- Эндпоинты ------------------------------------------------------------------------------
@@ -166,17 +190,20 @@ class SelectionOut(BaseModel):
     status_code=status.HTTP_201_CREATED,
     summary="Создать тестовую сессию",
     description=(
-        "Отбирает шаблоны области по заявленному грейду и навыкам кандидата и генерирует по "
-        "ним задания. Задание с кодом выдаётся только после того, как эталон прошёл все его "
-        "тесты в песочнице. Параметры отбора берутся из настроек теста; переопределить их "
-        "может только admin. Если задания создать не удалось, сессия остаётся со статусом "
-        "failed, а detail ответа содержит message и session_id"
+        "Отбирает шаблоны области по заявленному грейду и навыкам кандидата и создаёт "
+        "сессию со всеми заданиями. Ответ приходит, когда готово первое задание; остальные "
+        "создаются в фоне и появляются в GET /sessions/{id} по мере готовности, сессия при "
+        "этом в статусе generating. Задание с кодом выдаётся только после того, как эталон "
+        "прошёл все его тесты в песочнице. Шаблон, который не дал экземпляра, заменяется "
+        "другим того же грейда. Параметры отбора берутся из настроек теста; переопределить "
+        "их может только admin. Если первое задание создать не удалось, сессия остаётся со "
+        "статусом failed, а detail ответа содержит message и session_id"
     ),
     responses={
         **_AUTH_ERRORS,
         409: {"description": "В области нет шаблонов"},
         422: {"description": "Неизвестная область, грейд или навык; неверные параметры отбора"},
-        500: {"description": "Шаблон не даёт проверенного экземпляра; сессия failed"},
+        500: {"description": "Шаблон первого задания и его замены не дали экземпляра"},
         502: {"description": "Модель генерации недоступна или не написала условие"},
         503: {"description": "Песочница не настроена или недоступна; сессия failed"},
     },
@@ -184,6 +211,7 @@ class SelectionOut(BaseModel):
 async def create_session(
     body: SessionCreate,
     request: Request,
+    response: Response,
     role: Annotated[Role, Depends(require(Role.CLIENT))],
 ) -> SessionOut:
     if body.selection_override is not None and role is not Role.ADMIN:
@@ -207,10 +235,13 @@ async def create_session(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
     except service.ConflictError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+    try:
+        await _worker(request).start(session_id)
     except service.SessionFailedError as error:
         code = _FAILURE_STATUS.get(type(error.cause), status.HTTP_500_INTERNAL_SERVER_ERROR)
         detail = {"message": str(error.cause), "session_id": str(error.session_id)}
         raise HTTPException(code, detail) from error
+    response.headers["Location"] = f"/sessions/{session_id}"
     return SessionOut.of(await service.get_session(gen, session_id))
 
 
@@ -218,7 +249,11 @@ async def create_session(
     "/sessions/{session_id}",
     response_model=SessionOut,
     summary="Тестовая сессия",
-    description="Статус сессии и её задания: условие и публичная часть, без скрытых тестов",
+    description=(
+        "Статус сессии и её задания: условие и публичная часть, без скрытых тестов. Пока "
+        "сессия в статусе generating, клиент опрашивает этот эндпоинт и получает задания по "
+        "мере готовности"
+    ),
     responses={**_AUTH_ERRORS, 404: {"description": "Сессия не найдена"}},
     dependencies=[Depends(require(Role.CLIENT))],
 )
@@ -234,8 +269,9 @@ async def get_session(session_id: uuid.UUID, request: Request) -> SessionOut:
     response_model=SelectionOut,
     summary="Объяснение отбора заданий",
     description=(
-        "Для работодателя: как отбирались шаблоны — режим сходства, параметры, расстояния и "
-        "вероятности. Тела шаблонов, эталоны и тесты не выдаются"
+        "Для работодателя: как отбирались шаблоны — режим сходства, параметры, расстояния, "
+        "вероятности и замены шаблонов, которые не дали экземпляра. Тела шаблонов, эталоны "
+        "и тесты не выдаются"
     ),
     responses={
         **_AUTH_ERRORS,
@@ -260,6 +296,11 @@ async def get_selection(session_id: uuid.UUID, request: Request) -> SelectionOut
         parameters=selection["parameters"],
         candidates=selection["candidates"],
         selected=[SelectedOut.model_validate(item) for item in selection["selected"]],
+        replacements=[
+            ReplacementOut(position=task.position, **item)
+            for task in view.tasks
+            for item in task.replacements
+        ],
     )
 
 
@@ -267,7 +308,10 @@ async def get_selection(session_id: uuid.UUID, request: Request) -> SelectionOut
     "/tasks/{task_id}",
     response_model=TaskOut,
     summary="Задание",
-    description="Условие и публичная часть задания: сигнатура, примеры, ожидаемое время",
+    description=(
+        "Статус задания, а у готового — условие и публичная часть: сигнатура, примеры, "
+        "окружение, ожидаемое время"
+    ),
     responses={**_AUTH_ERRORS, 404: {"description": "Задание не найдено"}},
     dependencies=[Depends(require(Role.CLIENT))],
 )

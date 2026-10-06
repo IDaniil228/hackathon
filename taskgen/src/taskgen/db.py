@@ -14,6 +14,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -31,7 +32,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from taskgen.contracts import SessionStatus
+from taskgen.contracts import SessionStatus, TaskStatus
 
 SCHEMA = "taskgen"
 
@@ -172,23 +173,43 @@ class TestSession(Base):
 
 
 class Task(Base):
+    """Задание сессии. Строка появляется при создании сессии со статусом pending, а условие
+    и скрытые данные получает, когда генерация переводит её в ready."""
+
     __tablename__ = "tasks"
+    __table_args__ = (
+        UniqueConstraint("session_id", "position"),
+        # Оценка и API читают содержимое готового задания без проверок на NULL.
+        CheckConstraint(
+            "status <> 'ready' OR (statement IS NOT NULL AND params IS NOT NULL "
+            "AND public_payload IS NOT NULL AND hidden_payload IS NOT NULL "
+            "AND generated_by IS NOT NULL)",
+            name="tasks_ready_has_content",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
     session_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("test_sessions.id", ondelete="CASCADE"), index=True
     )
+    # Шаблон меняется, если прежний не дал экземпляра; прежние — в replacements.
     template_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("templates.id"))
     position: Mapped[int] = mapped_column(SmallInteger)
+    status: Mapped[str] = mapped_column(String(16), default=TaskStatus.PENDING)
+    failure: Mapped[str | None] = mapped_column(Text)
     kind: Mapped[str] = mapped_column(String(16))
-    statement: Mapped[str] = mapped_column(Text)
-    params: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    statement: Mapped[str | None] = mapped_column(Text)
+    params: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     seed: Mapped[int] = mapped_column(BigInteger)
     # То, что видит кандидат: сигнатура, примеры. Скрытая часть кандидату не отдаётся никогда.
-    public_payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
-    hidden_payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
-    generated_by: Mapped[str] = mapped_column(String(100))
+    public_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    hidden_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    generated_by: Mapped[str | None] = mapped_column(String(100))
     validated: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Шаблоны, которые стояли в задании раньше: [{template_id, name, reason}].
+    replacements: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
     created_at: Mapped[datetime] = _now()
 
 
