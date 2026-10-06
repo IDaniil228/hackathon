@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 
 import pytest
 
@@ -14,6 +15,7 @@ from taskgen.generation.instance import (
     InstanceDeps,
     LLMUnavailableError,
     ModelOutputError,
+    Personalization,
     SandboxUnavailableError,
     TemplateDefectError,
     generate_instance,
@@ -257,7 +259,25 @@ async def test_cut_off_legend_is_rewritten():
     instance = await generate_instance(code_spec(), 3, deps(llm, LocalSandbox()))
     assert len(llm.calls) == 2
     assert instance.statement == CLEAN
-    assert "оборвано" in prompt_of(llm.calls[1])
+    assert "оборвался" in prompt_of(llm.calls[1])
+
+
+async def test_legend_with_formula_spoiled_by_json_escape_is_rewritten():
+    # Модель пишет \frac в JSON одним обратным слэшем, как qwen3:8b в ml-logreg-gradient-step.
+    spoiled = '{"title": "Склад", "statement": "' + CLEAN + ' Доля $\\frac{k}{n}$."}'
+    llm = FakeLLM([spoiled, legend()])
+    instance = await generate_instance(code_spec(), 3, deps(llm, LocalSandbox()))
+    assert len(llm.calls) == 2
+    assert instance.statement == CLEAN
+    assert "обратные слэши" in prompt_of(llm.calls[1])
+
+
+async def test_legend_with_service_marker_is_rewritten():
+    llm = FakeLLM([legend(f"<<<КОНЕЦ-ПРОФИЛЯ-5519fed5cdaabc35>>>\n{CLEAN}"), legend()])
+    instance = await generate_instance(code_spec(), 3, deps(llm, LocalSandbox()))
+    assert len(llm.calls) == 2
+    assert instance.statement == CLEAN
+    assert "маркер" in prompt_of(llm.calls[1])
 
 
 async def test_legend_that_never_passes_checks_is_model_error():
@@ -317,6 +337,29 @@ async def test_essay_situation_without_facts_is_retried_then_model_error():
     # Две попытки: ситуация и проверка в каждой; вторая ситуация знает причину отказа.
     assert len(llm.calls) == 4
     assert "Предыдущий вариант отклонён" in prompt_of(llm.calls[2])
+
+
+async def test_essay_situation_echoing_profile_markers_is_rewritten():
+    # Saiga начала ситуацию с маркеров профиля из своего запроса, без самого профиля.
+    profile = Personalization(resume="Инженер логистики", skills=[], extra={})
+    situations = []
+
+    def respond(messages, schema):
+        reply = essay_reply(messages, schema)
+        if "situation" in (schema or {}).get("properties", {}):
+            situations.append(messages)
+            if len(situations) == 1:
+                request = prompt_of({"messages": messages})
+                echoed = re.findall(r"<<<[^>\n]*ПРОФИЛ[^>\n]*>>>", request)
+                data = json.loads(reply)
+                data["situation"] = "".join(echoed) + "\n\n" + data["situation"]
+                return json.dumps(data, ensure_ascii=False)
+        return reply
+
+    instance = await generate_instance(essay_spec(), 1, deps(FakeLLM(respond)), profile)
+    assert len(situations) == 2
+    assert "маркер" in situations[1][-1].content
+    assert "ПРОФИЛ" not in instance.statement
 
 
 async def test_essay_checker_without_own_model_uses_generator_model_and_efforts():
