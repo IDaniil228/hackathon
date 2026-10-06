@@ -214,6 +214,9 @@ class Task(Base):
     hidden_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     generated_by: Mapped[str | None] = mapped_column(String(100))
     validated: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Что из профиля кандидата повлияло на легенду: {profile, adjacent_skill}; NULL — задание
+    # стандартное, например из пула.
+    personalization: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     # Шаблоны, которые стояли в задании раньше: [{template_id, name, reason}].
     replacements: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, default=list, server_default=text("'[]'::jsonb")

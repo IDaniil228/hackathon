@@ -37,6 +37,7 @@ from taskgen.generation.instance import (
     GenerationError,
     InstanceDeps,
     ModelOutputError,
+    Personalization,
     TaskInstance,
     TemplateDefectError,
     generate_instance,
@@ -270,18 +271,22 @@ async def run_task(gen: Generator, task_id: uuid.UUID) -> None:
         async with gen.sessionmaker() as db:
             row = (
                 await db.execute(
-                    select(Task, Template)
+                    select(Task, Template, TestSession.profile)
                     .join(Template, Task.template_id == Template.id)
+                    .join(TestSession, Task.session_id == TestSession.id)
                     .where(Task.id == task_id)
                 )
             ).one_or_none()
-        # Задание удалено вместе с сессией или уже обработано: делать нечего.
-        if row is None or row[0].status != TaskStatus.PENDING:
-            return
-        task, template = row
+            # Задание удалено вместе с сессией или уже обработано: делать нечего.
+            if row is None or row[0].status != TaskStatus.PENDING:
+                return
+            task, template, profile = row
+            personalization = await _personalization(db, profile)
         try:
             spec = pool.template_spec(template)
-            instance = await generate_instance(spec, task.seed, gen.instance_deps())
+            instance = await generate_instance(
+                spec, task.seed, gen.instance_deps(), personalization
+            )
         except _REPLACEABLE as error:
             if await _replace(gen, task, template, str(error)):
                 continue
@@ -352,8 +357,31 @@ async def _save_instance(gen: Generator, task_id: uuid.UUID, instance: TaskInsta
         await db.execute(
             update(Task)
             .where(Task.id == task_id, Task.status == TaskStatus.PENDING)
-            .values(status=TaskStatus.READY, **instance.columns())
+            .values(
+                status=TaskStatus.READY,
+                personalization=instance.personalization,
+                **instance.columns(),
+            )
         )
+
+
+async def _personalization(
+    db: AsyncSession, profile: dict[str, Any] | None
+) -> Personalization | None:
+    """Профиль из снимка сессии для легенды; навыки — с названиями из справочника."""
+    if profile is None:
+        return None
+    snapshot = CandidateProfile.model_validate(profile)
+    titles: dict[str, str] = dict(
+        (
+            await db.execute(select(Skill.code, Skill.title).where(Skill.code.in_(snapshot.skills)))
+        ).all()
+    )
+    return Personalization(
+        resume=snapshot.resume,
+        skills=[(code, titles.get(code, code)) for code in snapshot.skills],
+        extra=snapshot.extra,
+    )
 
 
 async def finish_session(gen: Generator, session_id: uuid.UUID, failure: str | None = None) -> None:

@@ -57,6 +57,18 @@ def test_snapshot_lives_until_last_task_then_only_hash_stays(world):
     assert "resume" not in str(view)
 
 
+def test_personal_tasks_see_profile_and_pool_task_does_not(world):
+    world.add_templates(world.code("a"), world.essay())
+    session = world.create_ready(profile=PROFILE)
+    prompts = ["\n".join(m.content for m in call["messages"]) for call in world.state.llm.calls]
+    assert len(prompts) == 2
+    assert all(PROFILE["resume"] in prompt for prompt in prompts)
+    # Навык профиля вне шаблонов пишется названием из справочника, а не кодом.
+    assert all("PyTorch" in prompt for prompt in prompts)
+    for task in world.tasks(session["id"]):
+        assert task.personalization["profile"] is True
+
+
 def test_snapshot_is_deleted_when_session_fails(world):
     world.add_templates(world.broken())
     response = world.create(profile=PROFILE)

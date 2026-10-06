@@ -33,6 +33,18 @@ def mentions_entrypoint(text: str, entrypoint: str) -> bool:
     return re.search(rf"(?<![A-Za-z0-9_]){re.escape(entrypoint)}(?![A-Za-z0-9_])", text) is not None
 
 
+def defines_entrypoint(text: str, entrypoint: str) -> bool:
+    """Есть ли в тексте определение функции кандидата: def в Python или тело в C++.
+
+    Упоминание вида `name(a, b)` в прозе определением не считается: у него нет ни def, ни
+    фигурной скобки после списка аргументов.
+    """
+    name = re.escape(entrypoint)
+    python = re.search(rf"\bdef\s+{name}\s*\(", text)
+    cpp = re.search(rf"(?<![A-Za-z0-9_]){name}\s*\([^)]*\)\s*(?:const\s*)?\{{", text)
+    return python is not None or cpp is not None
+
+
 def _normalize(text: str) -> str:
     # Модель может переформатировать значение: пробелы, одинарные кавычки, True вместо true.
     return _SPACE.sub("", text).replace("'", '"').lower()
