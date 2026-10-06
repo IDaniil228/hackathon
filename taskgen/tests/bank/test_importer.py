@@ -73,6 +73,17 @@ async def test_unknown_references_are_reported(db_session, unique):
     assert "x" in str(caught.value)
 
 
+async def test_skill_outside_template_area_is_reported(db_session, unique):
+    # django есть в справочнике, но не связан с областью algo в area_skills.
+    text = make_template(name=f"{unique}-a", area="algo", skills=["python", "django"])
+    with pytest.raises(TemplateError) as caught:
+        await import_documents(db_session, [doc(text, "area.md")])
+    issues = [issue for issue in caught.value.issues if issue.location == "skills"]
+    assert len(issues) == 1
+    assert "django" in issues[0].message
+    assert "python" not in issues[0].message
+
+
 async def test_any_bad_file_aborts_whole_batch_and_all_errors_are_listed(db_session, unique):
     good = doc(make_template(name=f"{unique}-good"), "good.md")
     bad_parse = doc(make_template(name=f"{unique}-p", difficulty=99), "parse.md")

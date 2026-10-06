@@ -3,14 +3,14 @@ import math
 import random
 
 import pytest
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from taskgen.bank.embeddings import refresh_embeddings
 from taskgen.bank.importer import TemplateDocument, import_documents
 from taskgen.bank.selection import jaccard_similarity
 from taskgen.bank.selector import SelectionError, SelectionMode, select_templates
 from taskgen.config import SelectionSettings
-from taskgen.db import Area, Grade, TemplateEmbedding, TestConfig
+from taskgen.db import Area, AreaSkill, Grade, Skill, TemplateEmbedding, TestConfig
 from tests.bank.conftest import FakeEmbedder
 from tests.bank.factory import make_template
 
@@ -25,8 +25,14 @@ FAR = [0.0, 0.0, 1.0]
 
 @pytest.fixture
 async def area(db_session, unique) -> str:
-    """Своя область в откатываемой транзакции: в отбор не попадут чужие шаблоны."""
+    """Своя область в откатываемой транзакции: в отбор не попадут чужие шаблоны.
+
+    С областью связаны все навыки справочника, иначе импорт отклонит шаблоны тестов.
+    """
     db_session.add(Area(code=unique, title="тестовая область"))
+    await db_session.flush()
+    for code in await db_session.scalars(select(Skill.code)):
+        db_session.add(AreaSkill(area_code=unique, skill_code=code))
     await db_session.flush()
     return unique
 

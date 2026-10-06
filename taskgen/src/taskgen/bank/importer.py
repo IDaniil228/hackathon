@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from taskgen.bank.parser import TemplateError, TemplateIssue, content_hash, parse_template
 from taskgen.contracts import TemplateSpec
-from taskgen.db import Area, Grade, Skill, Template
+from taskgen.db import Area, AreaSkill, Grade, Skill, Template
 
 # Первый ключ рекомендательной блокировки отделяет блокировки импорта от любых других
 # пользователей pg_advisory_xact_lock в той же БД; второй ключ — хэш имени шаблона.
@@ -99,6 +99,8 @@ async def _check_references(
     areas = set(await session.scalars(select(Area.code)))
     grades = set(await session.scalars(select(Grade.code)))
     skills = set(await session.scalars(select(Skill.code)))
+    rows = await session.execute(select(AreaSkill.area_code, AreaSkill.skill_code))
+    area_skills = {(area, skill) for area, skill in rows}
     issues: list[TemplateIssue] = []
     for doc, spec in parsed:
         if spec.area not in areas:
@@ -114,6 +116,20 @@ async def _check_references(
             names = ", ".join(repr(code) for code in unknown)
             issues.append(
                 TemplateIssue("skills", f"нет навыков в справочнике: {names}", doc.source)
+            )
+        # Навык вне области шаблона искажает отбор по сходству навыков; связь задаёт
+        # area_skills, так что новый навык области добавляется строкой данных.
+        foreign = [
+            code
+            for code in spec.skills
+            if code in skills and spec.area in areas and (spec.area, code) not in area_skills
+        ]
+        if foreign:
+            names = ", ".join(repr(code) for code in foreign)
+            issues.append(
+                TemplateIssue(
+                    "skills", f"навыки не относятся к области {spec.area!r}: {names}", doc.source
+                )
             )
     return issues
 

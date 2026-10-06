@@ -21,6 +21,8 @@ class LLMSettings(BaseModel):
     judge_model: str = "qwen3.5:4b"
     embedding_model: str = "bge-m3"
     timeout_seconds: float = 120.0
+    # Локальная модель отвечает на запросы по очереди; облачному провайдеру можно больше.
+    concurrency: int = Field(default=1, ge=1)
 
 
 class SelectionSettings(BaseModel):
@@ -45,7 +47,14 @@ class ScoringSettings(BaseModel):
     weight_performance: float = 0.05
     # Доля решённых заданий уровня, начиная с которой уровень считается подтверждённым.
     pass_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    # Балл, начиная с которого задание считается решённым. При весах по умолчанию 0.7
+    # недостижим, если упала половина тестов: 0.6·0.5 + 0.4 = 0.7 только при идеальных
+    # рубрике, качестве и скорости. Все тесты без замечаний судьи дают 0.6 и тоже не проходят.
+    solved_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     judge_samples: int = Field(default=3, ge=1)
+    # Ненулевая температура нужна, чтобы сэмплы судьи различались и разброс что-то значил.
+    judge_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    analyzer_timeout_seconds: float = Field(default=30.0, gt=0.0)
 
 
 class SandboxSettings(BaseModel):

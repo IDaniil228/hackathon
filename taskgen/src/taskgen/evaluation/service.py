@@ -1,16 +1,7 @@
 """Оценка ответов и сессий: связывает песочницу, анализаторы, судью, формулу балла и summary.
 
-Контракт tasks.hidden_payload для модуля генерации — модель HiddenPayload ниже:
-
-- cases — список TestCase ({"input": ..., "expected": ...}), скрытые тесты задания с кодом;
-- entrypoint — имя функции, которую пишет кандидат;
-- runtime — окружение песочницы, например "python"; ответ кандидата должен быть на этом языке;
-- rubric — список RubricItem, рубрика судьи; нужна и коду, и развёрнутому ответу;
-- reference_report — TestReport прогона эталона на тех же cases в той же песочнице, база для
-  оценки скорости и памяти; без него компонент performance не измеряется;
-- scoring — необязательное переопределение весов балла из шаблона (TemplateSpec.scoring).
-
-Ни одно из этих полей не уходит наружу: кандидат и работодатель видят только SessionResult.
+Содержимое tasks.hidden_payload описывает HiddenPayload в taskgen.contracts. Ни одно его поле
+не уходит наружу: кандидат и работодатель видят только SessionResult.
 """
 
 from __future__ import annotations
@@ -33,15 +24,14 @@ from taskgen.contracts import (
     AIDetector,
     AnalysisReport,
     Analyzer,
+    HiddenPayload,
     Judge,
     JudgeRequest,
     JudgeResult,
     LLMClient,
-    RubricItem,
     RunLimits,
     SandboxRunner,
     TaskKind,
-    TestCase,
     TestReport,
     TestRunRequest,
 )
@@ -65,7 +55,6 @@ from taskgen.evaluation.scoring import (
     performance_score,
     resolve_weights,
 )
-from taskgen.evaluation.settings import EvaluationSettings
 from taskgen.evaluation.summary import SessionFacts, fallback_text, summary_data, write_summary
 
 logger = logging.getLogger(__name__)
@@ -105,15 +94,6 @@ class BrokenTaskError(EvaluationError):
 
 
 # --- Модели --------------------------------------------------------------------------------
-
-
-class HiddenPayload(BaseModel):
-    cases: list[TestCase] = []
-    entrypoint: str | None = None
-    runtime: str | None = None
-    rubric: list[RubricItem] = []
-    reference_report: TestReport | None = None
-    scoring: dict[str, float] = {}
 
 
 class Behavior(BaseModel):
@@ -318,7 +298,6 @@ async def evaluate_task(task: TaskInput, *, judge: Judge, scoring: ScoringSettin
 @dataclass
 class Evaluator:
     settings: Settings
-    evaluation: EvaluationSettings
     sessionmaker: async_sessionmaker[AsyncSession]
     llm: LLMClient
     judge: Judge
@@ -334,18 +313,17 @@ class Evaluator:
         Детектор ИИ работает только при ai_detector_enabled, даже если он задан в state.
         """
         settings: Settings = state.settings
-        evaluation = getattr(state, "evaluation_settings", None) or EvaluationSettings()
         # Ограничитель живёт в state, чтобы одновременные запросы к API делили один лимит.
         # Новый клиент в state.llm получает новый ограничитель.
         llm = getattr(state, "evaluation_llm", None)
         if llm is None or llm.inner is not state.llm:
-            llm = LimitedLLM(state.llm, limit=evaluation.llm_concurrency)
+            llm = LimitedLLM(state.llm, limit=settings.llm.concurrency)
             state.evaluation_llm = llm
         judge = getattr(state, "judge", None) or LLMJudge(
             llm,
             model=settings.llm.judge_model,
             samples=settings.scoring.judge_samples,
-            temperature=evaluation.judge_temperature,
+            temperature=settings.scoring.judge_temperature,
         )
         detector = None
         if settings.ai_detector_enabled:
@@ -355,14 +333,13 @@ class Evaluator:
         analyzers = getattr(state, "analyzers", None)
         return cls(
             settings=settings,
-            evaluation=evaluation,
             sessionmaker=state.sessionmaker,
             llm=llm,
             judge=judge,
             sandbox=getattr(state, "sandbox", None),
             analyzers=analyzers
             if analyzers is not None
-            else default_analyzers(evaluation.analyzer_timeout_seconds),
+            else default_analyzers(settings.scoring.analyzer_timeout_seconds),
             detector=detector,
         )
 
@@ -527,7 +504,7 @@ async def score_session(ev: Evaluator, session_id: uuid.UUID) -> SessionResult:
     except (JudgeError, httpx.HTTPError) as error:
         raise JudgeUnavailableError("Судья недоступен, сессия не оценена") from error
 
-    solved = ev.evaluation.solved_threshold
+    solved = ev.settings.scoring.solved_threshold
     assessment = assess_grade(
         [TaskScore(grade=outcome.grade, score=outcome.score) for outcome in outcomes],
         [GradeLevel(code=grade.code, level=grade.level) for grade in grades],

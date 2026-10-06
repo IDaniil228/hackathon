@@ -1,11 +1,10 @@
 import asyncio
 from types import SimpleNamespace
 
-from taskgen.config import Settings
+from taskgen.config import LLMSettings, Settings
 from taskgen.contracts import ChatMessage
 from taskgen.evaluation.limits import LimitedLLM
 from taskgen.evaluation.service import Evaluator
-from taskgen.evaluation.settings import EvaluationSettings
 
 
 class SlowLLM:
@@ -31,10 +30,9 @@ async def test_limited_llm_caps_concurrent_calls():
 
 def test_evaluator_shares_one_limiter_until_llm_is_replaced():
     state = SimpleNamespace(
-        settings=Settings(),
+        settings=Settings(llm=LLMSettings(concurrency=3)),
         sessionmaker=None,
         llm=SlowLLM(),
-        evaluation_settings=EvaluationSettings(llm_concurrency=3),
     )
     first = Evaluator.from_state(state)
     second = Evaluator.from_state(state)

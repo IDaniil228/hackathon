@@ -156,6 +156,22 @@ class SandboxRunner(Protocol):
     async def run_tests(self, request: TestRunRequest) -> TestReport: ...
 
 
+class HiddenPayload(BaseModel):
+    """Содержимое tasks.hidden_payload: пишет генерация, читает оценка, наружу не уходит.
+
+    Для kind=code обязательны cases, entrypoint и runtime. reference_report — прогон эталона
+    на тех же cases в той же песочнице: без него скорость и память не оцениваются.
+    scoring — переопределение весов балла из TemplateSpec.scoring.
+    """
+
+    cases: list[TestCase] = []
+    entrypoint: str | None = None
+    runtime: str | None = None
+    rubric: list[RubricItem] = []
+    reference_report: TestReport | None = None
+    scoring: dict[str, float] = {}
+
+
 # --- Оценка -----------------------------------------------------------------------------
 
 

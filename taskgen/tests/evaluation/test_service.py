@@ -5,9 +5,9 @@ import uuid
 import pytest
 
 from taskgen.config import ScoringSettings
-from taskgen.contracts import AnalysisReport, CaseOutcome, TaskKind, TestReport
+from taskgen.contracts import AnalysisReport, CaseOutcome, HiddenPayload, TaskKind, TestReport
 from taskgen.evaluation.judge import LLMJudge
-from taskgen.evaluation.service import AnswerInput, HiddenPayload, TaskInput, evaluate_task
+from taskgen.evaluation.service import AnswerInput, TaskInput, evaluate_task
 from tests.evaluation.fakes import FakeLLM
 
 CODE = "def add(a: int, b: int) -> int:\n    return a + b\n"

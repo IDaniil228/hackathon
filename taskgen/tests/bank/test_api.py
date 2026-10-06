@@ -126,8 +126,8 @@ def test_bulk_requires_admin(api, client_headers):
 
 
 def test_client_lists_current_metadata_without_body(api, client_headers, unique):
-    post_md(api, make_template(name=f"{unique}-a", grade="junior", skills=["python", "sql"]))
-    post_md(api, make_template(name=f"{unique}-a", grade="middle", skills=["python", "sql"]))
+    post_md(api, make_template(name=f"{unique}-a", grade="junior", skills=["python", "sorting"]))
+    post_md(api, make_template(name=f"{unique}-a", grade="middle", skills=["python", "sorting"]))
     post_md(api, make_template(name=f"{unique}-b", grade="middle", skills=["python"]))
     post_md(api, make_essay(name=f"{unique}-c", grade="middle", skills=["python"]))
 
@@ -143,7 +143,7 @@ def test_client_lists_current_metadata_without_body(api, client_headers, unique)
         assert "body" not in row
         assert "def two_sum" not in str(row)
 
-    assert set(listed(area="algo", grade="middle", skill="sql")) == {f"{unique}-a"}
+    assert set(listed(area="algo", grade="middle", skill="sorting")) == {f"{unique}-a"}
     assert set(listed(area="algo", kind="essay")) == {f"{unique}-c"}
     assert listed(area="ml") == {}
 
