@@ -39,6 +39,34 @@ def test_unclosed_code_block_is_a_cut_off():
     assert "блока кода" in problem
 
 
+CUT_OFF = {
+    # Настоящий вывод GigaChat на algo-grid-weighted-path: модель сама закрыла строку JSON.
+    "gigachat-grid": "Если start == finish, вернуть 0.\n\nПример: shortest_path([[",
+    "open-code-span": "Пример вызова: `shortest_path([[1, 2], [3",
+    "open-paren-after-list": "Вызов:\nf([1, 2],\n  (3, ",
+}
+
+HONEST_ENDINGS = {
+    "half-open-interval": "Значения лежат в интервале [0, 1).",
+    "numbered-item": "Порядок:\n1) прочитать журнал",
+    "bracket-in-code-span": "Символ `[` открывает список.",
+    "closed-code-block": "Пример:\n```python\nf([[1, 2],\n```",
+    "multiline-call": "Пример:\nshortest_path([[1, 2],\n[3, 4]], 2)",
+    "plain-sentence": "Ответ — развёрнутый текст на 10–20 предложений.",
+}
+
+
+@pytest.mark.parametrize("text", CUT_OFF.values(), ids=CUT_OFF.keys())
+def test_text_cut_off_outside_code_block_is_rejected(text):
+    [problem] = text_problems(text)
+    assert "оборвался" in problem
+
+
+@pytest.mark.parametrize("text", HONEST_ENDINGS.values(), ids=HONEST_ENDINGS.keys())
+def test_honest_last_line_is_not_a_cut_off(text):
+    assert text_problems(text) == []
+
+
 def decoded(json_text: str) -> str:
     """Строка так, как её получает сервис из JSON-ответа модели."""
     return json.loads(f'"{json_text}"')

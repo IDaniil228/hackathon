@@ -59,11 +59,34 @@ def spoiled_escapes(text: str) -> bool:
     )
 
 
+def cut_off_line(text: str) -> bool:
+    """Оборвана ли последняя строка вне блока кода: в ней не закрыты скобки или код.
+
+    Модель может сама закрыть строку JSON посреди примера, и тогда ответ разбирается без
+    ошибки. Скобки считаются без учёта вида, поэтому полуоткрытый интервал [0, 1) честный.
+    Лишние закрывающие скобки, как в пункте "1)", не обрыв. Скобки внутри фрагмента кода
+    в обратных кавычках не считаются: "символ `[`" честный.
+    """
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines or FENCE.match(lines[-1]):
+        return False
+    last = lines[-1]
+    if last.count("`") % 2:
+        return True
+    plain = _INLINE_CODE.sub(" ", last)
+    return sum(map(plain.count, "([{")) > sum(map(plain.count, ")]}"))
+
+
 def text_problems(text: str) -> list[str]:
     """Причины отказа для писателя; пустой список — дефектов нет."""
     problems = []
     if unclosed_fence(text):
         problems.append("текст оборвался посреди блока кода; допиши его целиком и закрой блок")
+    elif cut_off_line(text):
+        problems.append(
+            "текст оборвался на последней строке: в ней не закрыты скобки или код; "
+            "допиши текст до конца"
+        )
     if spoiled_escapes(text):
         problems.append(SPOILED_ESCAPES)
     return problems
