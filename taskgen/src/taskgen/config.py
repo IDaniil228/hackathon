@@ -107,7 +107,7 @@ class SelectionSettings(BaseModel):
     )
     essay_tasks: int = Field(default=2, ge=0, description="Число эссе в тесте")
     quiz_tasks: int = Field(
-        default=0,
+        default=5,
         ge=0,
         description="Число тестовых задачек с выбором ответа. Задачка занимает у кандидата "
         "пару минут, поэтому их больше, чем остальных заданий",

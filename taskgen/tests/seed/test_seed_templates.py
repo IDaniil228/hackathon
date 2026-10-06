@@ -63,6 +63,9 @@ def _spec(path: Path) -> TemplateSpec:
 
 CODE_PATHS = [p for p in PATHS if _spec(p).kind is TaskKind.CODE]
 ESSAY_PATHS = [p for p in PATHS if _spec(p).kind is TaskKind.ESSAY]
+QUIZ_PATHS = [p for p in PATHS if _spec(p).kind is TaskKind.QUIZ]
+# Задачек в ячейке не меньше двух: одна задачка ячейки выпадала бы каждому кандидату.
+MIN_QUIZ_PER_CELL = 2
 
 
 @pytest.fixture
@@ -144,6 +147,75 @@ def param_variants(specs: dict[str, ParamSpec]) -> list[dict[str, Any]]:
         for name in names
     ]
     return [dict(zip(names, combo, strict=True)) for combo in itertools.product(*values)]
+
+
+def quiz_problems(spec: TemplateSpec) -> list[str]:
+    """Нарушения правил банка для задачки сверх тех, что проверяет разбор.
+
+    Разбор сверяет сырой текст, а фраза может сложиться только после подстановки
+    параметров, поэтому здесь сверяется готовый текст при каждом сочетании параметров.
+    """
+    problems = []
+    if not spec.forbidden:
+        problems.append("нет раздела «Нельзя раскрывать»: кейс может назвать ответ")
+    for variant in spec.variants:
+        if len(variant.wrong) < 3:
+            problems.append(f"{variant.id}: неверных ответов {len(variant.wrong)}, нужно 3")
+        # Верный ответ, которого нет среди запрещённых фраз, кейс может назвать прямо.
+        if not find_phrases(variant.correct, spec.forbidden):
+            problems.append(f"{variant.id}: верный ответ не закрыт ни одной фразой запрета")
+    if len({variant.correct for variant in spec.variants}) < 2:
+        problems.append("у всех вариантов один верный ответ")
+    # Один набор ответов у всех вариантов: по набору ответов вариант не узнать.
+    answer_sets = {frozenset([v.correct, *v.wrong]) for v in spec.variants}
+    if len(answer_sets) != 1:
+        problems.append("у вариантов разные наборы ответов: по ним узнаётся вариант")
+    for params in param_variants(spec.params):
+        texts = {"вопрос": fill_placeholders(spec.question or "", params)}
+        for variant in spec.variants:
+            for fact in variant.facts:
+                texts[f"факт {variant.id}.{fact.id}"] = fill_placeholders(fact.text, params)
+        for where, text in texts.items():
+            for phrase in find_phrases(text, spec.forbidden):
+                problems.append(f"{where} содержит запрещённую фразу {phrase!r} при {params}")
+    return problems
+
+
+@pytest.mark.parametrize("path", QUIZ_PATHS, ids=_source)
+def test_quiz_variants_are_unambiguous_and_hide_answers(path: Path):
+    spec = _spec(path)
+    assert spec.question and len(spec.variants) >= 2
+    assert not quiz_problems(spec), quiz_problems(spec)
+
+
+def test_quiz_check_reports_broken_template():
+    # Проверка правил банка сама должна краснеть: ответ не закрыт запретом, наборы ответов
+    # разные, а вопрос после подстановки раскрывает ответ.
+    spec = _spec(QUIZ_PATHS[0])
+    first, second, *_ = spec.variants
+    broken = spec.model_copy(
+        update={
+            "question": "Подойдёт ли {domain}?",
+            "forbidden": [
+                phrase for phrase in spec.forbidden if not find_phrases(first.correct, [phrase])
+            ]
+            + [spec.params["domain"].choices[0]],
+            "variants": [first, second.model_copy(update={"wrong": second.wrong[:2] + ["x"]})],
+        }
+    )
+    problems = quiz_problems(broken)
+    assert any("не закрыт" in problem for problem in problems), problems
+    assert any("наборы ответов" in problem for problem in problems), problems
+    assert any("вопрос содержит" in problem for problem in problems), problems
+
+
+def test_every_cell_has_enough_quiz_templates():
+    cells: Counter[tuple[str, str]] = Counter(
+        (spec.area, spec.grade) for spec in map(_spec, QUIZ_PATHS)
+    )
+    every = {(spec.area, spec.grade) for spec in map(_spec, PATHS)}
+    short = {cell: cells[cell] for cell in every if cells[cell] < MIN_QUIZ_PER_CELL}
+    assert not short, f"задачек меньше {MIN_QUIZ_PER_CELL} в ячейках: {short}"
 
 
 @pytest.mark.parametrize("path", ESSAY_PATHS, ids=_source)

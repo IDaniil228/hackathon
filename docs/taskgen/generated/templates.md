@@ -3,33 +3,39 @@
 > [!NOTE]
 > Файл собран командой `uv run python scripts/gen_docs.py` из каталога `taskgen/`. Не правьте его руками: правьте источник и пересоберите файл. Источник — шаблоны [`seed/templates`](../../../taskgen/seed/templates), разобранные `parse_template`, и вакансии [`seed/vacancies`](../../../taskgen/seed/vacancies)
 
-В банке 27 шаблонов. Формат шаблона описан в [`TEMPLATE_FORMAT.md`](../../../taskgen/TEMPLATE_FORMAT.md)
+В банке 45 шаблонов. Формат шаблона описан в [`TEMPLATE_FORMAT.md`](../../../taskgen/TEMPLATE_FORMAT.md)
 
 ## Сводка по ячейкам
 
 | Область | Грейд | С кодом | Эссе | Задачки | Сложность | Время, мин |
 |---|---|---|---|---|---|---|
-| `algo` | `junior` | 2 | 1 | 0 | 3 | 15–20 |
-| `algo` | `middle` | 2 | 1 | 0 | 5 | 20–30 |
-| `algo` | `senior` | 2 | 1 | 0 | 7 | 30–40 |
-| `backend` | `junior` | 2 | 1 | 0 | 3 | 20–25 |
-| `backend` | `middle` | 2 | 1 | 0 | 5 | 25–30 |
-| `backend` | `senior` | 2 | 1 | 0 | 6–7 | 35–40 |
-| `ml` | `junior` | 2 | 1 | 0 | 3 | 15–20 |
-| `ml` | `middle` | 2 | 1 | 0 | 5 | 20–30 |
-| `ml` | `senior` | 2 | 1 | 0 | 7 | 30–40 |
+| `algo` | `junior` | 2 | 1 | 2 | 3 | 3–20 |
+| `algo` | `middle` | 2 | 1 | 2 | 5 | 3–30 |
+| `algo` | `senior` | 2 | 1 | 2 | 7 | 4–40 |
+| `backend` | `junior` | 2 | 1 | 2 | 3 | 3–25 |
+| `backend` | `middle` | 2 | 1 | 2 | 5 | 4–30 |
+| `backend` | `senior` | 2 | 1 | 2 | 6–7 | 4–40 |
+| `ml` | `junior` | 2 | 1 | 2 | 3 | 3–20 |
+| `ml` | `middle` | 2 | 1 | 2 | 5 | 4–30 |
+| `ml` | `senior` | 2 | 1 | 2 | 7 | 4–40 |
 
 ## Область `algo`
 
 | Шаблон | Грейд | Тип | Окружение | Сложность | Время, мин | Навыки | Пунктов рубрики или вариантов кейса | Описание |
 |---|---|---|---|---|---|---|---|---|
+| [`algo-lookup-structure-quiz`](../../../taskgen/seed/templates/algo/junior/algo-lookup-structure-quiz.md) | `junior` | quiz |  | 3 | 3 | `data-structures`, `python` | 3 | Выбор структуры данных под операции: проверка принадлежности, запросы по диапазону значений, обработка в обратном порядке поступления |
 | [`algo-pairs-sum-at-most`](../../../taskgen/seed/templates/algo/junior/algo-pairs-sum-at-most.md) | `junior` | code | `python` | 3 | 20 | `python`, `two-pointers` | 5 | Подсчёт пар элементов отсортированного массива, сумма которых не превышает порог, быстрее квадратичного перебора: два указателя или бинарный поиск |
+| [`algo-sort-choice-quiz`](../../../taskgen/seed/templates/algo/junior/algo-sort-choice-quiz.md) | `junior` | quiz |  | 3 | 3 | `sorting`, `python` | 3 | Выбор алгоритма сортировки по свойствам данных и ограничениям: устойчивость, диапазон ключей, дополнительная память, худший случай |
 | [`algo-sorting-stability-essay`](../../../taskgen/seed/templates/algo/junior/algo-sorting-stability-essay.md) | `junior` | essay |  | 3 | 15 | `sorting`, `python` | 6 | Вопрос о сортировках: устойчивость и сортировка по нескольким ключам, нижняя оценка сортировок сравнением и сортировка подсчётом, поведение встроенной сортировки |
 | [`algo-top-k-ranking-cpp`](../../../taskgen/seed/templates/algo/junior/algo-top-k-ranking-cpp.md) | `junior` | code | `cpp` | 3 | 20 | `cpp`, `sorting` | 5 | Отбор k лучших участников рейтинга на C++: сортировка по убыванию баллов с разрешением ничьих по имени, частичная сортировка и обработка k вне диапазона |
 | [`algo-grid-weighted-path`](../../../taskgen/seed/templates/algo/middle/algo-grid-weighted-path.md) | `middle` | code | `python` | 5 | 30 | `python`, `graphs` | 6 | Кратчайший путь по клетчатому полю с двумя ценами клеток и стенами: алгоритм Дейкстры или его вариант для малых целых весов, недостижимая цель |
 | [`algo-max-meetings-cpp`](../../../taskgen/seed/templates/algo/middle/algo-max-meetings-cpp.md) | `middle` | code | `cpp` | 5 | 25 | `cpp`, `greedy`, `sorting` | 6 | Максимальное число непересекающихся полуинтервалов на C++: жадный выбор по раннему окончанию, касание концов, доказательство корректности жадного шага |
+| [`algo-range-structure-quiz`](../../../taskgen/seed/templates/algo/middle/algo-range-structure-quiz.md) | `middle` | quiz |  | 5 | 3 | `data-structures`, `python` | 3 | Выбор структуры данных под запросы: объединение групп и проверка связности, суммы на отрезке неизменного массива, суммы на отрезке при точечных изменениях |
 | [`algo-shortest-path-choice-essay`](../../../taskgen/seed/templates/algo/middle/algo-shortest-path-choice-essay.md) | `middle` | essay |  | 5 | 20 | `graphs`, `python` | 7 | Выбор алгоритма кратчайших путей по свойствам графа: BFS, 0-1 BFS, Дейкстра, Беллман — Форд, отрицательные веса и циклы, оценки сложности |
+| [`algo-shortest-path-quiz`](../../../taskgen/seed/templates/algo/middle/algo-shortest-path-quiz.md) | `middle` | quiz |  | 5 | 3 | `graphs`, `python` | 3 | Выбор алгоритма кратчайших путей от одной вершины по весам рёбер: нули и единицы, положительные веса, отрицательные веса без отрицательных циклов |
 | [`algo-cheapest-route-cpp`](../../../taskgen/seed/templates/algo/senior/algo-cheapest-route-cpp.md) | `senior` | code | `cpp` | 7 | 40 | `cpp`, `graphs`, `dynamic-programming` | 6 | Самый дешёвый маршрут с ограничением на число пересадок на C++: Беллман — Форд по слоям или Дейкстра по состояниям, вторичный критерий — наименьшее число рейсов |
+| [`algo-graph-problem-quiz`](../../../taskgen/seed/templates/algo/senior/algo-graph-problem-quiz.md) | `senior` | quiz |  | 7 | 4 | `graphs` | 4 | Распознать графовую задачу по постановке: минимальное остовное дерево, порядок с зависимостями, компоненты сильной связности, максимальный поток |
+| [`algo-sketch-structure-quiz`](../../../taskgen/seed/templates/algo/senior/algo-sketch-structure-quiz.md) | `senior` | quiz |  | 7 | 4 | `data-structures` | 3 | Вероятностные структуры данных для потоков: проверка принадлежности с ложными срабатываниями, оценка частот, оценка числа различных элементов |
 | [`algo-streaming-top-k-essay`](../../../taskgen/seed/templates/algo/senior/algo-streaming-top-k-essay.md) | `senior` | essay |  | 7 | 30 | `data-structures` | 8 | Проектирование подсчёта самых частых элементов потока при ограниченной памяти: точное решение с кучей, Misra — Gries и Count-Min Sketch, гарантии ошибки, распределённое слияние |
 | [`algo-weighted-jobs`](../../../taskgen/seed/templates/algo/senior/algo-weighted-jobs.md) | `senior` | code | `python` | 7 | 35 | `python`, `dynamic-programming`, `binary-search` | 6 | Взвешенный выбор непересекающихся работ с обязательным перерывом между ними: динамика по отсортированным работам и бинарный поиск предшественника за O(n log n) |
 
@@ -38,13 +44,19 @@
 | Шаблон | Грейд | Тип | Окружение | Сложность | Время, мин | Навыки | Пунктов рубрики или вариантов кейса | Описание |
 |---|---|---|---|---|---|---|---|---|
 | [`backend-dockerfile-review-essay`](../../../taskgen/seed/templates/backend/junior/backend-dockerfile-review-essay.md) | `junior` | essay |  | 3 | 20 | `docker`, `django`, `security` | 7 | Ревью Dockerfile для Django-приложения: кэш слоёв и порядок COPY, секреты в образе, запуск от root, runserver вместо WSGI-сервера, тег latest и .dockerignore |
+| [`backend-http-status-quiz`](../../../taskgen/seed/templates/backend/junior/backend-http-status-quiz.md) | `junior` | quiz |  | 3 | 3 | `http-api`, `python` | 4 | Выбор кода ответа HTTP по ситуации: нет учётных данных, некорректное тело запроса, нет ресурса, конфликт версий при правке |
 | [`backend-paginate`](../../../taskgen/seed/templates/backend/junior/backend-paginate.md) | `junior` | code | `python` | 3 | 20 | `python`, `http-api` | 6 | Постраничная выдача списка по параметрам запроса: разбор строковых page и per_page, значения по умолчанию, ограничение размера страницы, метаданные страниц |
+| [`backend-sql-clause-quiz`](../../../taskgen/seed/templates/backend/junior/backend-sql-clause-quiz.md) | `junior` | quiz |  | 3 | 3 | `sql` | 4 | Выбор конструкции SQL под задачу отчёта: отбор строк до группировки, отбор групп по агрегату, соединение таблиц, удаление повторов |
 | [`backend-validate-signup`](../../../taskgen/seed/templates/backend/junior/backend-validate-signup.md) | `junior` | code | `python` | 3 | 25 | `python`, `http-api` | 6 | Валидация тела запроса регистрации: обязательные поля, типы JSON с ловушкой bool как int, правила для email, пароля, возраста и логина, сбор всех ошибок в стабильном порядке |
+| [`backend-cache-control-quiz`](../../../taskgen/seed/templates/backend/middle/backend-cache-control-quiz.md) | `middle` | quiz |  | 5 | 4 | `http-api`, `caching` | 4 | Выбор заголовка Cache-Control по требованиям к ответу: неизменяемая статика, чувствительные данные, обязательная проверка свежести, личные данные с допустимым отставанием |
 | [`backend-django-orm-performance-essay`](../../../taskgen/seed/templates/backend/middle/backend-django-orm-performance-essay.md) | `middle` | essay |  | 5 | 25 | `django`, `sql` | 8 | Отладка медленного эндпоинта Django: проблема N+1, select_related и prefetch_related, индексы и EXPLAIN, лишние поля и count, кэширование и проверка результата |
 | [`backend-idempotency-keys`](../../../taskgen/seed/templates/backend/middle/backend-idempotency-keys.md) | `middle` | code | `python` | 5 | 30 | `python`, `http-api`, `caching` | 6 | Обработка повторных запросов по ключу идемпотентности: повтор с тем же телом, конфликт при другом теле, срок жизни записи, ошибки сервера не сохраняются |
+| [`backend-isolation-level-quiz`](../../../taskgen/seed/templates/backend/middle/backend-isolation-level-quiz.md) | `middle` | quiz |  | 5 | 4 | `sql`, `django` | 3 | Минимальный уровень изоляции транзакций по стандарту SQL, который исключает описанную аномалию чтения |
 | [`backend-sliding-rate-limiter`](../../../taskgen/seed/templates/backend/middle/backend-sliding-rate-limiter.md) | `middle` | code | `python` | 5 | 30 | `python`, `http-api` | 6 | Ограничитель частоты запросов со скользящим окном по журналу принятых запросов: границы окна, одинаковые метки времени, отклонённые запросы не расходуют лимит |
+| [`backend-consistency-pattern-quiz`](../../../taskgen/seed/templates/backend/senior/backend-consistency-pattern-quiz.md) | `senior` | quiz |  | 7 | 5 | `http-api`, `sql` | 3 | Выбор шаблона согласованности для операции, которая затрагивает несколько хранилищ: атомарная запись с событием, долгий бизнес-процесс, короткая атомарная операция над двумя базами |
 | [`backend-django-docker-production-essay`](../../../taskgen/seed/templates/backend/senior/backend-django-docker-production-essay.md) | `senior` | essay |  | 7 | 35 | `django`, `docker`, `security`, `sql` | 8 | Проектирование выката Django в контейнерах: миграции без простоя, секреты и настройки безопасности, проверки готовности, статика, воркеры и наблюдаемость |
 | [`backend-latency-report`](../../../taskgen/seed/templates/backend/senior/backend-latency-report.md) | `senior` | code | `python` | 6 | 40 | `python`, `observability`, `http-api` | 7 | Отчёт по журналу доступа: строгий разбор строк с пропуском битых, нормализация маршрутов с идентификаторами, доля ошибок 5xx и перцентиль задержки методом ближайшего ранга |
+| [`backend-telemetry-signal-quiz`](../../../taskgen/seed/templates/backend/senior/backend-telemetry-signal-quiz.md) | `senior` | quiz |  | 6 | 4 | `observability`, `http-api` | 4 | Выбор вида телеметрии под вопрос эксплуатации: перцентили задержки по многим экземплярам, текущее значение, число событий во времени, путь одного запроса |
 | [`backend-ttl-lru-cache`](../../../taskgen/seed/templates/backend/senior/backend-ttl-lru-cache.md) | `senior` | code | `python` | 7 | 40 | `python`, `caching` | 7 | Кэш с ограничением ёмкости и сроком жизни записей: вытеснение давно не использованных, ленивое и плановое удаление просроченных, логарифмическая стоимость операций |
 
 ## Область `ml`
@@ -52,14 +64,20 @@
 | Шаблон | Грейд | Тип | Окружение | Сложность | Время, мин | Навыки | Пунктов рубрики или вариантов кейса | Описание |
 |---|---|---|---|---|---|---|---|---|
 | [`ml-fbeta-score`](../../../taskgen/seed/templates/ml/junior/ml-fbeta-score.md) | `junior` | code | `python-ml` | 3 | 20 | `python`, `numpy`, `ml-metrics` | 4 | Реализация F-beta меры для бинарной классификации на NumPy: матрица ошибок, вес полноты против точности, деление на ноль при отсутствии положительных примеров |
+| [`ml-metric-choice-quiz`](../../../taskgen/seed/templates/ml/junior/ml-metric-choice-quiz.md) | `junior` | quiz |  | 3 | 3 | `ml-metrics`, `scikit-learn` | 4 | Выбор метрики качества по цене ошибок: сбалансированные классы, дорогой пропуск, дорогая ложная тревога, регрессия с линейным штрафом |
+| [`ml-preprocessing-step-quiz`](../../../taskgen/seed/templates/ml/junior/ml-preprocessing-step-quiz.md) | `junior` | quiz |  | 3 | 3 | `data-preprocessing`, `scikit-learn` | 4 | Выбор шага предобработки по свойству признака: категории без порядка, разные масштабы, пропуски при выбросах, сильная правая асимметрия |
 | [`ml-standardize-features`](../../../taskgen/seed/templates/ml/junior/ml-standardize-features.md) | `junior` | code | `python-ml` | 3 | 20 | `python`, `numpy`, `data-preprocessing` | 5 | Стандартизация признаков на NumPy: статистики только по обучающей выборке, выбор ddof, постоянные признаки и пустая тестовая выборка без утечки данных |
 | [`ml-validation-leakage-essay`](../../../taskgen/seed/templates/ml/junior/ml-validation-leakage-essay.md) | `junior` | essay |  | 3 | 15 | `scikit-learn`, `data-preprocessing` | 6 | Вопрос о проверке модели: переобучение, разбиение на обучающую, валидационную и тестовую выборки, кросс-валидация, утечка данных через предобработку и время |
 | [`ml-imbalanced-threshold-essay`](../../../taskgen/seed/templates/ml/middle/ml-imbalanced-threshold-essay.md) | `middle` | essay |  | 5 | 20 | `scikit-learn`, `ml-metrics` | 7 | Вопрос о несбалансированной классификации: выбор метрики, PR-кривая против ROC, порог по стоимости ошибок, калибровка вероятностей и веса классов |
 | [`ml-kmeans-step`](../../../taskgen/seed/templates/ml/middle/ml-kmeans-step.md) | `middle` | code | `python-ml` | 5 | 30 | `python`, `numpy`, `clustering` | 6 | Одна итерация алгоритма Ллойда для k-средних на NumPy: векторное назначение кластеров, ничьи по расстоянию, пустые кластеры и инерция |
 | [`ml-logreg-gradient-step`](../../../taskgen/seed/templates/ml/middle/ml-logreg-gradient-step.md) | `middle` | code | `python-ml` | 5 | 30 | `python`, `numpy`, `optimization` | 6 | Один шаг градиентного спуска для логистической регрессии с L2-регуляризацией на NumPy: вывод градиента кросс-энтропии, свободный член без штрафа, усреднение по батчу |
+| [`ml-training-diagnosis-quiz`](../../../taskgen/seed/templates/ml/middle/ml-training-diagnosis-quiz.md) | `middle` | quiz |  | 5 | 4 | `optimization`, `python` | 4 | Что исправить по кривым обучения градиентным спуском: расходимость, переобучение, недообучение, признаки разного масштаба |
+| [`ml-validation-split-quiz`](../../../taskgen/seed/templates/ml/middle/ml-validation-split-quiz.md) | `middle` | quiz |  | 5 | 4 | `scikit-learn`, `ml-metrics` | 3 | Выбор схемы кросс-валидации по устройству данных: редкий класс, несколько строк на объект, временной порядок |
 | [`ml-batchnorm-backward`](../../../taskgen/seed/templates/ml/senior/ml-batchnorm-backward.md) | `senior` | code | `python-ml` | 7 | 40 | `python`, `numpy`, `optimization` | 6 | Обратный проход батч-нормализации в режиме обучения на NumPy: градиенты по входу, масштабу и сдвигу, вывод через вычислительный граф, постоянные признаки и батч из одного объекта |
 | [`ml-production-degradation-essay`](../../../taskgen/seed/templates/ml/senior/ml-production-degradation-essay.md) | `senior` | essay |  | 7 | 30 | `scikit-learn`, `pytorch`, `ml-metrics` | 8 | Расследование падения качества модели в продакшене: расхождение обучения и инференса, сдвиг данных и концепции, утечка в офлайн-оценке, мониторинг и безопасный выкат |
+| [`ml-shift-diagnosis-quiz`](../../../taskgen/seed/templates/ml/senior/ml-shift-diagnosis-quiz.md) | `senior` | quiz |  | 7 | 5 | `ml-metrics`, `scikit-learn` | 4 | Распознать причину деградации модели в работе: изменилось распределение входов, связь входов с целью, доли классов или признак содержит будущее |
 | [`ml-softmax-cross-entropy`](../../../taskgen/seed/templates/ml/senior/ml-softmax-cross-entropy.md) | `senior` | code | `python-ml` | 7 | 40 | `python`, `numpy`, `pytorch`, `optimization` | 6 | Численно устойчивые softmax и кросс-энтропия с label smoothing и ignore_index на NumPy или PyTorch: значение функции потерь и аналитический градиент по логитам |
+| [`ml-training-technique-quiz`](../../../taskgen/seed/templates/ml/senior/ml-training-technique-quiz.md) | `senior` | quiz |  | 7 | 4 | `pytorch`, `optimization` | 3 | Выбор приёма обучения нейросети под ограничение: батч не помещается в память, взрывающиеся градиенты, обучение упирается в вычисления в fp32 |
 
 ## Демонстрационные вакансии
 
