@@ -153,10 +153,12 @@ def client_headers(world) -> dict[str, str]:
 
 
 def _secrets(task: Task) -> list[str]:
-    """Значения скрытых кейсов, которых нет среди публичных примеров."""
+    """Значения скрытых кейсов, которых нет среди публичных примеров, в виде из ответа API."""
     hidden = HiddenPayload.model_validate(task.hidden_payload)
     shown = len(task.public_payload["examples"])
-    return [json.dumps(case.input[0]) for case in hidden.cases[shown:]]
+    assert len(hidden.cases) > shown
+    # Ответ FastAPI — компактный JSON; с пробелами после запятых значение в нём не найдётся.
+    return [json.dumps(case.input[0], separators=(",", ":")) for case in hidden.cases[shown:]]
 
 
 def test_requires_key(world):
@@ -197,6 +199,9 @@ def test_session_with_code_and_essay(world, client_headers):
         world.client.get(f"/sessions/{body['id']}/selection", headers=client_headers).text,
     ]
     secrets = [*_secrets(code), "reference_report", "hidden", "rubric", "sorted(nums"]
+    # Контроль формы: публичный пример в том же виде в ответе находится.
+    shown = json.dumps(code.public_payload["examples"][0]["input"][0], separators=(",", ":"))
+    assert shown in texts[2]
     for text in texts:
         for secret in secrets:
             assert secret not in text
