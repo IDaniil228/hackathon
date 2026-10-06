@@ -146,6 +146,24 @@ def test_selection_is_stored_and_explained(world, client_headers):
     assert session.selection["selected"] == explanation["selected"]
 
 
+def test_quota_slots_are_explained_and_shortage_is_a_conflict(world, client_headers):
+    world.add_templates(world.code("a"), world.code("b", grade="middle"), world.essay())
+    quota = {"code_tasks": 2, "essay_tasks": 1, "quiz_tasks": 0, "min_claimed_per_kind": 1}
+    created = world.create_ready(selection_override=quota)
+    explanation = world.client.get(
+        f"/sessions/{created['id']}/selection", headers=client_headers
+    ).json()
+    rows = [(item["kind"], item["slot"]) for item in explanation["selected"]]
+    assert rows == [("code", "quota"), ("code", "explore"), ("essay", "quota")]
+    assert explanation["selected"][0]["grade"] == "junior"
+
+    # Эссе грейда middle в банке нет: тест на middle не собирается, а не берёт junior молча.
+    response = world.create(claimed_grade="middle", selection_override=quota)
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert "essay" in detail and "middle" in detail and "min_claimed_per_kind" in detail
+
+
 def test_same_seed_reproduces_session(world):
     world.add_templates(world.code("a"), world.code("b"), world.essay())
     first = world.create_ready(seed=123)
@@ -161,7 +179,7 @@ def test_same_seed_reproduces_session(world):
 
 def test_client_cannot_override_selection(world, client_headers):
     world.add_templates(world.code(), world.essay())
-    override = {"selection_override": {"tasks_per_test": 1}}
+    override = {"selection_override": {"code_tasks": 1, "essay_tasks": 0}}
     denied = world.create(headers=client_headers, **override)
     assert denied.status_code == 403
     assert world.sessions() == []
@@ -231,13 +249,19 @@ def test_broken_reference_without_replacement_is_500_and_names_template(world):
     _failed(world, world.create(), 500, f"{world.prefix}-bad")
 
 
-def test_failed_template_is_replaced_by_next_of_same_grade(world):
-    # Шаблон middle при равных вероятностях стоит в ранжировании первым (по имени): замена
-    # без проверки грейда взяла бы его.
-    world.add_templates(world.broken(), world.code("good"), world.code("aaa", grade="middle"))
+def test_failed_template_is_replaced_by_next_of_same_grade_and_kind(world):
+    # Шаблон middle при равных вероятностях стоит в ранжировании раньше (по имени): замена
+    # без проверки грейда взяла бы его. Эссе junior — единственное своего типа, у него
+    # вероятность 1, и в ранжировании оно первое: замена без проверки типа взяла бы его.
+    world.add_templates(
+        world.broken(),
+        world.code("good"),
+        world.code("aaa", grade="middle"),
+        world.essay("aaa-essay"),
+    )
     bad, good = f"{world.prefix}-bad", f"{world.prefix}-good"
     # Температура 1 уравнивает вероятности: порядок замен решают только грейд и имя.
-    override = {"selection_override": {"tasks_per_test": 1, "temperature": 1.0}}
+    override = {"selection_override": {"code_tasks": 1, "essay_tasks": 0, "temperature": 1.0}}
     # Какой шаблон выпадет первым, решает seed; ищется seed, при котором выпал сломанный.
     for seed in range(40):
         response = world.create(seed=seed, **override)
@@ -255,8 +279,9 @@ def test_failed_template_is_replaced_by_next_of_same_grade(world):
     [task] = world.tasks(session_id)
     [session] = [row for row in world.sessions() if str(row.id) == session_id]
     ranking = {entry["name"]: entry["template_id"] for entry in session.selection["ranking"]}
-    # Замена — того же грейда: шаблон middle не подходит, хотя он тоже в отборе.
+    # Замена — того же грейда и типа: шаблон middle и эссе не подходят, хотя они в отборе.
     assert str(task.template_id) == ranking[good]
+    assert task.kind == "code"
     explanation = world.client.get(f"/sessions/{session_id}/selection", headers=ADMIN).json()
     [replacement] = explanation["replacements"]
     assert replacement["position"] == 1
@@ -271,16 +296,63 @@ def test_replacement_limit_stops_replacing(world):
         }
     )
     world.add_templates(world.broken(), world.code("good"))
-    override = {"selection_override": {"tasks_per_test": 1, "temperature": 1.0}}
+    override = {"selection_override": {"code_tasks": 1, "temperature": 1.0}}
     statuses = {world.create(seed=seed, **override).status_code for seed in range(20)}
     # Где выпал сломанный шаблон, замены нет даже при свободном шаблоне того же грейда.
     assert statuses == {201, 500}
 
 
+COMPOSITION_SESSIONS = 16
+
+
+def test_replacements_keep_composition_and_claimed_grade_quota(world):
+    # Гарантия состава на уровне сессии: сломанный шаблон кода заявленного грейда выпадает в
+    # квотный слот примерно в половине сессий, и замена обязана оставить задание кодом junior.
+    world.add_templates(
+        world.broken(),
+        world.code("good"),
+        world.code("mid", grade="middle"),
+        world.essay("e-junior"),
+        world.essay("e-middle", grade="middle"),
+    )
+    override = {
+        "code_tasks": 1,
+        "essay_tasks": 1,
+        "quiz_tasks": 0,
+        "min_claimed_per_kind": 1,
+        "temperature": 1.0,
+    }
+    replaced = 0
+    for seed in range(COMPOSITION_SESSIONS):
+        created = world.create_ready(seed=seed, selection_override=override)
+        assert created["status"] == "ready", created
+        rows = world.tasks(created["id"])
+        assert [row.kind for row in rows] == ["code", "essay"]
+        names = {t.id: name for name, t in world.templates().items()}
+        assert [names[row.template_id] for row in rows][0] == "good"
+        assert names[rows[1].template_id] == "e-junior"
+        replaced += bool(rows[0].replacements)
+    assert 0 < replaced < COMPOSITION_SESSIONS
+
+
+def test_code_task_is_not_replaced_by_template_of_another_kind(world):
+    # Свободный шаблон того же грейда есть, но это эссе: состав теста по типам не меняется,
+    # и задание с кодом без замены своего типа не создаётся.
+    world.add_templates(world.broken(), world.essay())
+    response = world.create(selection_override={"code_tasks": 1, "essay_tasks": 0})
+    assert response.status_code == 500, response.text
+    world.wait()
+    [session] = world.sessions()
+    assert session.status == "failed"
+    assert "типа code" in session.failure
+    [task] = world.tasks(session.id)
+    assert (task.kind, task.status, task.replacements) == ("code", "failed", [])
+
+
 def test_failure_without_same_grade_replacement_fails_session(world):
     # Оба шаблона junior попадают в сессию, поэтому заменить сломанный нечем.
     world.add_templates(world.code("good"), world.broken())
-    response = world.create(selection_override={"tasks_per_test": 2})
+    response = world.create(selection_override={"code_tasks": 2})
     # Сломанный шаблон мог выпасть первым (ответ 500) или вторым (сбой в фоне).
     assert response.status_code in (201, 500), response.text
     world.wait()

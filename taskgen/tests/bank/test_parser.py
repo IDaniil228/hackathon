@@ -103,7 +103,7 @@ def test_broken_yaml_is_reported():
         ({"difficulty": 11}, "difficulty"),
         ({"difficulty": 0}, "difficulty"),
         ({"expected_minutes": 0}, "expected_minutes"),
-        ({"kind": "quiz"}, "kind"),
+        ({"kind": "poll"}, "kind"),
         ({"skills": "python"}, "skills"),
         ({"description": "  "}, "description"),
         ({"skills": ["python", "python"]}, "skills"),

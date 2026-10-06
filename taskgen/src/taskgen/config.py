@@ -6,12 +6,14 @@
 через двойное подчёркивание, например TASKGEN_SCORING__PASS_THRESHOLD=0.7.
 """
 
+from __future__ import annotations
+
 from functools import lru_cache
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from taskgen.contracts import ReasoningEffort
+from taskgen.contracts import ReasoningEffort, TaskKind
 
 _REASONING = (
     "Поле reasoning_effort запроса к модели {role}; null — поле не передаётся, и модель "
@@ -75,6 +77,8 @@ class SelectionSettings(BaseModel):
 
     |Δгрейд| — разность позиций грейдов в списке, упорядоченном по level, а не разность level.
     Значения по умолчанию; тест на категорию переопределяет их строкой test_configs.
+    Шаблоны каждого типа отбираются отдельно, и первые min_claimed_per_kind заданий типа
+    берутся только из шаблонов заявленного грейда.
     """
 
     temperature: float = Field(
@@ -86,7 +90,36 @@ class SelectionSettings(BaseModel):
     )
     alpha: float = Field(default=1.0, ge=0.0, description="Вес разницы грейдов в расстоянии d")
     beta: float = Field(default=1.0, ge=0.0, description="Вес несходства навыков в расстоянии d")
-    tasks_per_test: int = Field(default=5, ge=1, description="Число заданий в тесте")
+    code_tasks: int = Field(
+        default=3,
+        ge=0,
+        description="Число заданий с кодом в тесте. Вместе с эссе — пять заданий: на слабой "
+        "машине каждое из них — минуты генерации и десятки минут работы кандидата",
+    )
+    essay_tasks: int = Field(default=2, ge=0, description="Число эссе в тесте")
+    quiz_tasks: int = Field(default=0, ge=0, description="Число тестовых задачек")
+    min_claimed_per_kind: int = Field(
+        default=1,
+        ge=0,
+        description="Квота: сколько первых заданий каждого типа выбираются только среди "
+        "шаблонов заявленного грейда. Без квоты единственное задание типа при t = 0.3 и трёх "
+        "шаблонах на грейд оказывается чужого грейда в 16 % тестов. Если шаблонов "
+        "заявленного грейда меньше квоты, тест не собирается",
+    )
+
+    def tasks_of(self, kind: TaskKind) -> int:
+        """Число заданий типа kind в тесте."""
+        return {
+            TaskKind.CODE: self.code_tasks,
+            TaskKind.ESSAY: self.essay_tasks,
+            TaskKind.QUIZ: self.quiz_tasks,
+        }[kind]
+
+    @model_validator(mode="after")
+    def _some_tasks(self) -> SelectionSettings:
+        if not any(self.tasks_of(kind) for kind in TaskKind):
+            raise ValueError("в тесте должно быть хотя бы одно задание")
+        return self
 
 
 class ScoringSettings(BaseModel):

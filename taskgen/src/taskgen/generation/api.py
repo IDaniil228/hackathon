@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from taskgen.auth import AUTH_ERRORS, Role, require
+from taskgen.bank.selection import Slot
 from taskgen.contracts import SessionStatus, TaskKind, TaskStatus
 from taskgen.db import Task
 from taskgen.generation import service
@@ -57,7 +58,12 @@ class SelectionOverride(BaseModel):
     temperature: float | None = Field(default=None, description="Температура отбора, 0..1")
     alpha: float | None = Field(default=None, description="Вес разницы грейдов")
     beta: float | None = Field(default=None, description="Вес несходства навыков")
-    tasks_per_test: int | None = Field(default=None, description="Число заданий в тесте")
+    code_tasks: int | None = Field(default=None, description="Число заданий с кодом")
+    essay_tasks: int | None = Field(default=None, description="Число эссе")
+    quiz_tasks: int | None = Field(default=None, description="Число тестовых задачек")
+    min_claimed_per_kind: int | None = Field(
+        default=None, description="Квота заданий заявленного грейда в каждом типе"
+    )
 
 
 class SessionCreate(BaseModel):
@@ -188,10 +194,18 @@ class SelectedOut(BaseModel):
     name: str
     version: int
     grade: str
+    kind: TaskKind
+    slot: Slot = Field(
+        description="quota — слот квоты, выбран только среди шаблонов заявленного грейда "
+        "своего типа; explore — разведочный слот, выбран среди всех шаблонов типа"
+    )
     grade_gap: int = Field(description="Разность позиций грейда шаблона и заявленного")
     similarity: float = Field(description="Сходство шаблона с навыками кандидата")
     distance: float
-    probability: float = Field(description="Вероятность выпасть первым из всего пула")
+    probability: float = Field(
+        description="Вероятность выпасть первым из пула своего слота: шаблонов заявленного "
+        "грейда этого типа для quota, всех шаблонов типа для explore"
+    )
     step_probability: float = Field(description="Вероятность на том шаге, где шаблон выпал")
 
 
@@ -212,7 +226,7 @@ class SelectionOut(BaseModel):
     selected: list[SelectedOut] = Field(description="Выбранные шаблоны в порядке заданий")
     replacements: list[ReplacementOut] = Field(
         description="Шаблоны, которые не дали экземпляра и заменены следующим по вероятности "
-        "шаблоном того же грейда; в порядке замен"
+        "шаблоном того же грейда и типа; в порядке замен"
     )
 
 
@@ -225,18 +239,23 @@ class SelectionOut(BaseModel):
     status_code=status.HTTP_201_CREATED,
     summary="Создать тестовую сессию",
     description=(
-        "Отбирает шаблоны области по заявленному грейду и навыкам кандидата и создаёт "
-        "сессию со всеми заданиями. Ответ приходит, когда готово первое задание; остальные "
-        "создаются в фоне и появляются в GET /sessions/{id} по мере готовности, сессия при "
-        "этом в статусе generating. Задание с кодом выдаётся только после того, как эталон "
-        "прошёл все его тесты в песочнице. Шаблон, который не дал экземпляра, заменяется "
-        "другим того же грейда. Параметры отбора берутся из настроек теста; переопределить "
-        "их может только admin. Если первое задание создать не удалось, сессия остаётся со "
+        "Отбирает шаблоны области по заявленному грейду и навыкам кандидата отдельно для "
+        "каждого типа заданий и создаёт сессию со всеми заданиями. Первые задания каждого "
+        "типа, по квоте min_claimed_per_kind, всегда заявленного грейда. Ответ приходит, "
+        "когда готово первое задание; остальные создаются в фоне и появляются в "
+        "GET /sessions/{id} по мере готовности, сессия при этом в статусе generating. "
+        "Задание с кодом выдаётся только после того, как эталон прошёл все его тесты в "
+        "песочнице. Шаблон, который не дал экземпляра, заменяется другим того же грейда и "
+        "типа. Параметры отбора берутся из настроек теста; переопределить их может только "
+        "admin. Если первое задание создать не удалось, сессия остаётся со "
         "статусом failed, а detail ответа содержит message и session_id"
     ),
     responses={
         403: {"description": "Ключ не имеет нужной роли или client передал selection_override"},
-        409: {"description": "В области нет шаблонов"},
+        409: {
+            "description": "В области нет шаблонов или шаблонов заявленного грейда какого-то "
+            "типа меньше квоты min_claimed_per_kind; detail называет тип и число"
+        },
         422: {"description": "Неизвестная область, грейд или навык; неверные параметры отбора"},
         500: {"description": "Шаблон первого задания и его замены не дали экземпляра"},
         502: {"description": "Модель генерации недоступна или не написала условие"},

@@ -5,9 +5,12 @@ from collections import Counter
 import pytest
 
 from taskgen.bank.selection import (
+    QuotaError,
+    Slot,
     cosine_similarity,
     distance,
     draw,
+    draw_with_quota,
     grade_positions,
     jaccard_similarity,
     probabilities,
@@ -174,3 +177,93 @@ def test_step_probability_is_conditional_on_remaining_pool():
     d = [0.0, 0.0, 5.0]
     picks = draw(d, 3, 1.0, random.Random(3))
     assert [p.probability for p in picks] == pytest.approx([1 / 3, 1 / 2, 1.0])
+
+
+# --- Квота заявленного грейда ------------------------------------------------------------
+
+# Ячейка банка: по три шаблона на грейд, заявлен middle, сходство у всех одинаковое.
+CELL_GAPS = [-1, -1, -1, 0, 0, 0, 1, 1, 1]
+CLAIMED = [gap == 0 for gap in CELL_GAPS]
+# Отклонение доли от ожидаемой больше 4.5 стандартных ошибок — вероятность ниже 1e-5.
+Z_LIMIT = 4.5
+
+
+def cell_distances(alpha: float = 1.0) -> list[float]:
+    return [distance(gap, 0.5, alpha=alpha, beta=1.0) for gap in CELL_GAPS]
+
+
+def foreign_share(t: float, *, k: int, quota: int, slot: int, n: int, seed: int) -> float:
+    rng = random.Random(seed)
+    d = cell_distances()
+    foreign = 0
+    for _ in range(n):
+        picks = draw_with_quota(d, CLAIMED, k=k, quota=quota, t=t, rng=rng)
+        foreign += not CLAIMED[picks[slot].index]
+    return foreign / n
+
+
+def assert_share(observed: float, expected: float, n: int) -> None:
+    sigma = math.sqrt(expected * (1 - expected) / n)
+    assert abs(observed - expected) <= Z_LIMIT * sigma, (observed, expected)
+
+
+@pytest.mark.parametrize("t", [0.0, 0.3, 0.7, 1.0])
+def test_quota_slot_is_always_of_claimed_grade(t):
+    rng = random.Random(20261007)
+    for _ in range(2000):
+        [pick] = draw_with_quota(cell_distances(), CLAIMED, k=1, quota=1, t=t, rng=rng)
+        assert CLAIMED[pick.index]
+        assert pick.slot is Slot.QUOTA
+
+
+def test_without_quota_single_task_misses_claimed_grade_often():
+    # Проблема, которую закрывает квота: при t = 0.3 и трёх шаблонах на грейд единственное
+    # задание типа оказывается чужого грейда с вероятностью W/(3 + W), W = 6·exp(−1/T).
+    t, n = 0.3, 20000
+    weight = 6 * math.exp(-1 / (t / (1 - t)))
+    expected = weight / (3 + weight)
+    assert expected == pytest.approx(0.16, abs=0.01)
+    assert_share(foreign_share(t, k=1, quota=0, slot=0, n=n, seed=1), expected, n)
+
+
+@pytest.mark.parametrize("t", [0.3, 0.6])
+def test_explore_slot_foreign_share_matches_formula(t):
+    # Квотный слот забрал один из трёх шаблонов middle. Разведочный слот — softmax по
+    # оставшимся: двум middle с весом 1 и шести соседним с весом exp(−1/T).
+    n = 20000
+    weight = 6 * math.exp(-1 / (t / (1 - t)))
+    expected = weight / (2 + weight)
+    observed = foreign_share(t, k=2, quota=1, slot=1, n=n, seed=2)
+    assert_share(observed, expected, n)
+
+
+def test_explore_slot_never_repeats_quota_pick_and_slots_are_labelled():
+    rng = random.Random(5)
+    for _ in range(500):
+        picks = draw_with_quota(cell_distances(), CLAIMED, k=4, quota=2, t=0.5, rng=rng)
+        assert [p.slot for p in picks] == [Slot.QUOTA, Slot.QUOTA, Slot.EXPLORE, Slot.EXPLORE]
+        assert len({p.index for p in picks}) == 4
+        assert all(CLAIMED[p.index] for p in picks[:2])
+
+
+def test_quota_inside_claimed_grade_follows_similarity():
+    # Внутри заявленного грейда — тот же softmax: при t = 0 берётся самый близкий шаблон.
+    d = [distance(0, sim, alpha=1.0, beta=1.0) for sim in (0.2, 0.9, 0.5)]
+    for seed in range(50):
+        [pick] = draw_with_quota(d, [True] * 3, k=1, quota=1, t=0.0, rng=random.Random(seed))
+        assert pick.index == 1
+
+
+def test_quota_larger_than_claimed_pool_is_an_error():
+    with pytest.raises(QuotaError) as caught:
+        draw_with_quota([0.0, 1.0], [True, False], k=3, quota=2, t=0.3, rng=random.Random(0))
+    assert (caught.value.available, caught.value.quota) == (1, 2)
+
+
+def test_quota_is_capped_by_k_and_explore_by_pool():
+    picks = draw_with_quota(
+        [0.0, 0.0, 1.0], [True, True, False], k=1, quota=2, t=0.3, rng=random.Random(0)
+    )
+    assert [p.slot for p in picks] == [Slot.QUOTA]
+    picks = draw_with_quota([0.0, 1.0], [True, False], k=5, quota=1, t=0.3, rng=random.Random(0))
+    assert [p.slot for p in picks] == [Slot.QUOTA, Slot.EXPLORE]

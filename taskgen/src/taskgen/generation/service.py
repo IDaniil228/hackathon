@@ -3,7 +3,8 @@
 Сессия создаётся сразу со всеми заданиями в статусе pending. Первое задание генерируется до
 ответа клиенту, остальные — в фоне (worker.py) и появляются в сессии по мере готовности.
 Шаблон, который не дал экземпляра, заменяется следующим по вероятности шаблоном того же
-грейда из отбора. Если замены нет или сервис генерации недоступен, сессия получает статус
+грейда и типа из отбора: так замена не меняет ни состав теста по типам, ни квоту
+заявленного грейда. Если замены нет или сервис генерации недоступен, сессия получает статус
 failed с причиной и больше не генерируется: неполный набор исказил бы оценку грейда.
 """
 
@@ -20,7 +21,12 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from taskgen.bank.selector import SelectionError, SelectionResult, select_templates
+from taskgen.bank.selector import (
+    BankShortageError,
+    SelectionError,
+    SelectionResult,
+    select_templates,
+)
 from taskgen.config import GenerationSettings, Settings
 from taskgen.contracts import (
     Embedder,
@@ -148,7 +154,6 @@ async def create_session(gen: Generator, spec: SessionSpec) -> uuid.UUID:
     """Отбирает шаблоны и записывает сессию с заданиями в статусе pending."""
     seed = spec.seed if spec.seed is not None else secrets.randbits(SEED_BITS)
     rng = random.Random(seed)
-    override = spec.selection_override or {}
     async with gen.sessionmaker() as db:
         try:
             result = await select_templates(
@@ -159,15 +164,14 @@ async def create_session(gen: Generator, spec: SessionSpec) -> uuid.UUID:
                 rng=rng,
                 settings=gen.settings.selection,
                 embedder=gen.embedder,
-                k=override.get("tasks_per_test"),
-                temperature=override.get("temperature"),
-                alpha=override.get("alpha"),
-                beta=override.get("beta"),
+                overrides=spec.selection_override,
                 profile_skills=spec.profile.skills if spec.profile else (),
                 resume=spec.profile.resume if spec.profile else "",
             )
         except SelectionError as error:
             raise InvalidRequestError(f"Отбор невозможен: {error}") from error
+        except BankShortageError as error:
+            raise ConflictError(f"Тест не собран: {error}") from error
         await _check_skills(db, spec.area, spec.skills)
     if not result.selected:
         raise ConflictError(f"В области {spec.area} нет шаблонов для теста")
@@ -265,7 +269,7 @@ async def pending_tasks(gen: Generator, session_id: uuid.UUID) -> list[PendingTa
 
 
 async def run_task(gen: Generator, task_id: uuid.UUID) -> None:
-    """Генерирует задание, при отказе шаблона берёт замену того же грейда.
+    """Генерирует задание, при отказе шаблона берёт замену того же грейда и типа.
 
     SessionAbortedError — задание не создано и не заменено; задание уже помечено failed.
     """
@@ -294,8 +298,8 @@ async def run_task(gen: Generator, task_id: uuid.UUID) -> None:
                 continue
             reason = (
                 f"Задание {task.position}: {error}. Заменить шаблон нечем: другие шаблоны "
-                f"грейда {template.grade_code} из отбора уже в сессии, уже пробовались или "
-                "исчерпан лимит замен"
+                f"типа {template.kind} грейда {template.grade_code} из отбора уже в сессии, "
+                "уже пробовались или исчерпан лимит замен"
             )
             await _fail_task(gen, task_id, reason)
             raise SessionAbortedError(reason, error) from error
@@ -308,7 +312,8 @@ async def run_task(gen: Generator, task_id: uuid.UUID) -> None:
 
 
 async def _replace(gen: Generator, task: Task, template: Template, reason: str) -> bool:
-    """Ставит в задание следующий по вероятности шаблон того же грейда, которого нет в сессии.
+    """Ставит в задание следующий по вероятности шаблон того же грейда и типа, которого нет
+    в сессии.
 
     Сессия блокируется на время выбора: два задания, упавшие одновременно, иначе взяли бы
     одну и ту же замену.
@@ -328,7 +333,11 @@ async def _replace(gen: Generator, task: Task, template: Template, reason: str) 
             used.add(str(template_id))
             used.update(item["template_id"] for item in replaced)
         for entry in (session.selection or {}).get(RANKING_KEY, []):
-            if entry["grade"] != template.grade_code or entry["template_id"] in used:
+            if (
+                entry["grade"] != template.grade_code
+                or entry["kind"] != template.kind
+                or entry["template_id"] in used
+            ):
                 continue
             history = {"template_id": str(template.id), "name": template.name, "reason": reason}
             await db.execute(

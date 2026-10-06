@@ -11,7 +11,7 @@ import itertools
 import json
 import random
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +21,7 @@ from sqlalchemy import select
 
 from taskgen.bank.importer import import_documents, read_directory
 from taskgen.bank.parser import find_phrases, parse_template
-from taskgen.config import SandboxSettings
+from taskgen.config import SandboxSettings, SelectionSettings
 from taskgen.contracts import (
     ParamSpec,
     RunLimits,
@@ -180,22 +180,62 @@ def test_cells_are_comparable_in_difficulty():
     assert spread and all(s <= MAX_CELL_SPREAD for s in spread.values()), spread
 
 
+def coverage_gaps(
+    specs: list[TemplateSpec], areas: set[str], grades: set[str], selection: SelectionSettings
+) -> list[str]:
+    """Чего не хватает банку, чтобы собрать тест с составом selection на любую ячейку.
+
+    Квотные слоты типа берут шаблоны только заявленного грейда, поэтому в каждой ячейке их
+    нужно не меньше квоты. Отбор идёт без возвращения, поэтому в области шаблонов типа нужно
+    не меньше, чем заданий этого типа в тесте: иначе тест тихо выйдет короче.
+    """
+    counts: Counter[tuple[str, str, TaskKind]] = Counter(
+        (spec.area, spec.grade, spec.kind) for spec in specs
+    )
+    gaps = []
+    for kind in TaskKind:
+        tasks = selection.tasks_of(kind)
+        if tasks == 0:
+            continue
+        quota = min(selection.min_claimed_per_kind, tasks)
+        for area in sorted(areas):
+            in_area = sum(counts[area, grade, kind] for grade in grades)
+            if in_area < tasks:
+                gaps.append(
+                    f"{area}: шаблонов {kind.value} {in_area}, а тест берёт {tasks}; "
+                    "добавьте шаблоны или уменьшите число заданий типа"
+                )
+            for grade in sorted(grades):
+                if counts[area, grade, kind] < quota:
+                    gaps.append(
+                        f"{area}/{grade}: шаблонов {kind.value} {counts[area, grade, kind]}, "
+                        f"а квота min_claimed_per_kind требует {quota}"
+                    )
+    return gaps
+
+
+def test_coverage_check_names_what_is_missing():
+    # Проверка покрытия сама должна краснеть: банк без эссе middle и с одним кодом на область.
+    specs = [
+        _spec(PATHS[0]).model_copy(update={"area": "a", "grade": g, "kind": TaskKind.CODE})
+        for g in ("junior", "middle")
+    ] + [
+        _spec(PATHS[0]).model_copy(update={"area": "a", "grade": "junior", "kind": TaskKind.ESSAY})
+    ]
+    selection = SelectionSettings(code_tasks=3, essay_tasks=1, quiz_tasks=0)
+    gaps = coverage_gaps(specs, {"a"}, {"junior", "middle"}, selection)
+    assert gaps == [
+        "a: шаблонов code 2, а тест берёт 3; добавьте шаблоны или уменьшите число заданий типа",
+        "a/middle: шаблонов essay 0, а квота min_claimed_per_kind требует 1",
+    ]
+
+
 @pytest.mark.integration
 async def test_bank_covers_every_cell_and_imports(db_session):
     areas = set(await db_session.scalars(select(Area.code)))
     grades = set(await db_session.scalars(select(Grade.code)))
-    kinds: dict[tuple[str, str], list[TaskKind]] = defaultdict(list)
-    for path in PATHS:
-        spec = _spec(path)
-        kinds[spec.area, spec.grade].append(spec.kind)
-
-    gaps = {
-        (area, grade): kinds[area, grade]
-        for area in areas
-        for grade in grades
-        if len(kinds[area, grade]) < 3 or set(kinds[area, grade]) != set(TaskKind)
-    }
-    assert not gaps, gaps
+    gaps = coverage_gaps([_spec(path) for path in PATHS], areas, grades, SelectionSettings())
+    assert not gaps, "\n".join(gaps)
     # Импорт проверяет навыки по справочнику и их связь с областью; транзакция откатывается.
     outcomes = await import_documents(db_session, read_directory(SEED_DIR))
     assert len(outcomes) == len(PATHS)
