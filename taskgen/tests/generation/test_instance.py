@@ -347,6 +347,20 @@ async def test_essay_check_method_comes_from_generation_settings():
     assert embedder.calls and instance.statement
 
 
+@pytest.mark.parametrize(("threshold", "embedded"), [(None, False), (0.5, True)])
+async def test_essay_quote_threshold_comes_from_generation_settings(threshold, embedded):
+    llm = FakeLLM(essay_reply)
+    embedder = BagOfWordsEmbedder()
+
+    instance = await generate_instance(
+        essay_spec(), 1, deps(llm, None, embedder=embedder, essay_quote_threshold=threshold)
+    )
+
+    # В режиме llm эмбеддер нужен только проверке смысла цитат.
+    assert bool(embedder.calls) is embedded
+    assert instance.statement
+
+
 async def test_essay_embeddings_without_embedder_are_checked_by_llm():
     llm = FakeLLM(essay_reply)
 

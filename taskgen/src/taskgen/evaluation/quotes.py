@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass, field
+from typing import Any
 
 from taskgen.bank.selection import cosine_similarity
 from taskgen.contracts import Embedder
@@ -52,6 +53,17 @@ class EmbeddingCache:
             while len(self._vectors) > self.max_items:
                 self._vectors.popitem(last=False)
         return [found[text] for text in texts]
+
+
+def state_embedding_cache(state: Any) -> EmbeddingCache:
+    """Кэш из app.state.embedding_cache, общий для генерации и оценки.
+
+    Генератор и оценщик собираются на каждый запрос, и свой кэш пустел бы после каждого.
+    """
+    cache = getattr(state, "embedding_cache", None)
+    if cache is None:
+        cache = state.embedding_cache = EmbeddingCache()
+    return cache
 
 
 class RelevanceUnavailableError(Exception):

@@ -1,10 +1,13 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 
+from taskgen.config import ScoringSettings, Settings
 from taskgen.contracts import JudgeRequest, RubricItem, TaskKind
 from taskgen.evaluation.judge import JudgeError, LLMJudge
 from taskgen.evaluation.quotes import QuoteRelevance, quote_in_answer
+from taskgen.evaluation.service import Evaluator
 from tests.evaluation.fakes import FakeLLM, TableEmbedder, http_error, unit
 
 ANSWER = """def two_sum(nums, target):
@@ -321,6 +324,33 @@ async def test_relevance_check_does_not_embed_when_no_item_is_confirmed():
     reply = _sample(leak=("no", []), scheme=("no", []))
     judge, table = _relevance_judge(reply)
     await judge.judge(_essay_request())
+    assert table.calls == []
+
+
+def _service_state(threshold: float | None, embedder: TableEmbedder) -> SimpleNamespace:
+    reply = _sample(leak=("yes", [CLAIM]), scheme=("no", []))
+    settings = Settings(scoring=ScoringSettings(judge_quote_threshold=threshold))
+    return SimpleNamespace(
+        settings=settings, sessionmaker=None, llm=FakeLLM(lambda _m, _s: reply), embedder=embedder
+    )
+
+
+async def test_judge_quote_threshold_comes_from_scoring_settings():
+    table = TableEmbedder({LEAK_ITEM.text: unit(1.0), CLAIM: unit(0.2)})
+    judge = Evaluator.from_state(_service_state(0.5, table)).judge
+
+    result = await judge.judge(_essay_request())
+
+    assert {v.item_id: v.verdict for v in result.verdicts}["leak"] == "no"
+
+
+async def test_judge_quote_check_is_off_by_default():
+    table = TableEmbedder({LEAK_ITEM.text: unit(1.0), CLAIM: unit(0.2)})
+    state = _service_state(ScoringSettings().judge_quote_threshold, table)
+
+    result = await Evaluator.from_state(state).judge.judge(_essay_request())
+
+    assert {v.item_id: v.verdict for v in result.verdicts}["leak"] == "yes"
     assert table.calls == []
 
 

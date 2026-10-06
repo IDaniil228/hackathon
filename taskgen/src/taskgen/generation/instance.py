@@ -372,6 +372,7 @@ async def _essay(
                 fact_threshold=deps.options.essay_fact_threshold,
                 forbidden_threshold=deps.options.essay_forbidden_threshold,
                 grey_zone=deps.options.essay_grey_zone,
+                quote_threshold=deps.options.essay_quote_threshold,
             ),
             embedder=deps.embedder,
             embedding_cache=deps.embedding_cache,
