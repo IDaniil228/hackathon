@@ -342,6 +342,34 @@ async def test_unknown_area_or_grade_is_an_error(db_session, area, field, value)
         )
 
 
+async def test_ranking_keeps_every_candidate_by_probability_for_replacement(db_session, area):
+    items = [
+        await put(db_session, area, f"{area}-near", "middle", vector=NEAR),
+        await put(db_session, area, f"{area}-mid", "middle", vector=MID),
+        await put(db_session, area, f"{area}-far", "middle", vector=FAR),
+        await put(db_session, area, f"{area}-j", "junior", vector=NEAR),
+    ]
+    embedder = await with_embeddings(db_session, items)
+    result = await select_templates(
+        db_session,
+        area=area,
+        grade="middle",
+        skills=["python"],
+        rng=random.Random(1),
+        settings=SelectionSettings(),
+        embedder=embedder,
+        k=1,
+    )
+    ranking = result.explanation()["ranking"]
+    # Замена упавшего шаблона ищется среди всех кандидатов, а не только выбранных.
+    assert len(ranking) == 4
+    probabilities = [entry["probability"] for entry in ranking]
+    assert probabilities == sorted(probabilities, reverse=True)
+    middle = [entry["name"] for entry in ranking if entry["grade"] == "middle"]
+    assert middle == [f"{area}-near", f"{area}-mid", f"{area}-far"]
+    assert {entry["kind"] for entry in ranking} == {"code"}
+
+
 async def test_empty_area_gives_empty_selection(db_session, area):
     result = await select_templates(
         db_session,

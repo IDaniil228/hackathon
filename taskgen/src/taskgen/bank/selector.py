@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
@@ -57,12 +57,21 @@ class SelectedTemplate:
 
 
 @dataclass(frozen=True)
+class RankedTemplate:
+    template: Template
+    probability: float
+
+
+@dataclass(frozen=True)
 class SelectionResult:
     selected: list[SelectedTemplate]
     selection_mode: SelectionMode
     fallback_reason: str | None
     parameters: SelectionSettings
     candidates: int
+    # Все кандидаты по убыванию вероятности выпасть первым: отсюда генерация берёт замену
+    # шаблону, который не дал экземпляра.
+    ranking: list[RankedTemplate] = field(default_factory=list)
 
     def explanation(self) -> dict[str, Any]:
         """Сериализуемое описание выдачи для объяснимости результата теста."""
@@ -84,6 +93,16 @@ class SelectionResult:
                     "step_probability": item.step_probability,
                 }
                 for item in self.selected
+            ],
+            "ranking": [
+                {
+                    "template_id": str(item.template.id),
+                    "name": item.template.name,
+                    "grade": item.template.grade_code,
+                    "kind": item.template.kind,
+                    "probability": item.probability,
+                }
+                for item in self.ranking
             ],
         }
 
@@ -158,7 +177,12 @@ async def select_templates(
         )
         for pick in picks
     ]
-    return SelectionResult(selected, mode, reason, parameters, len(templates))
+    # Порядок templates — по имени, а sorted устойчив: равные вероятности идут по имени.
+    ranking = sorted(
+        (RankedTemplate(t, p) for t, p in zip(templates, initial, strict=True)),
+        key=lambda item: -item.probability,
+    )
+    return SelectionResult(selected, mode, reason, parameters, len(templates), ranking)
 
 
 def _resolve_parameters(
