@@ -57,6 +57,16 @@ class ScoringSettings(BaseModel):
     analyzer_timeout_seconds: float = Field(default=30.0, gt=0.0)
 
 
+class GenerationSettings(BaseModel):
+    # Сколько seed перебрать, пока эталон не пройдёт все кейсы экземпляра.
+    instance_attempts: int = Field(default=5, ge=1)
+    # Сколько раз попросить LLM переписать условие с утечкой или без имени функции.
+    legend_attempts: int = Field(default=3, ge=1)
+    # Легенда — творческий текст: при нулевой температуре экземпляры звучат одинаково.
+    legend_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    public_examples: int = Field(default=2, ge=0)
+
+
 class SandboxSettings(BaseModel):
     piston_url: str = "http://localhost:2000"
     run_timeout_ms: int = 3000
@@ -76,6 +86,7 @@ class Settings(BaseSettings):
     llm: LLMSettings = LLMSettings()
     selection: SelectionSettings = SelectionSettings()
     scoring: ScoringSettings = ScoringSettings()
+    generation: GenerationSettings = GenerationSettings()
     sandbox: SandboxSettings = SandboxSettings()
 
 

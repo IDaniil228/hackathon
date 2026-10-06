@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field
 
+from taskgen.config import GenerationSettings
 from taskgen.contracts import (
     ChatMessage,
     HiddenPayload,
@@ -33,7 +34,6 @@ from taskgen.evaluation.jsonout import StructuredOutputError, complete_structure
 from taskgen.generation.harness import GeneratorError, generator_request, parse_generator_output
 from taskgen.generation.leaks import hidden_leaks, mentions_entrypoint, public_count
 from taskgen.generation.params import draw_params, fill_placeholders
-from taskgen.generation.settings import GenerationSettings
 
 # --- Ошибки; текст сообщения уходит клиенту ------------------------------------------------
 

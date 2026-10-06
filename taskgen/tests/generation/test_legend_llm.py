@@ -5,11 +5,10 @@ import os
 import httpx
 import pytest
 
-from taskgen.config import LLMSettings, SandboxSettings
+from taskgen.config import GenerationSettings, LLMSettings, SandboxSettings
 from taskgen.contracts import RunLimits
 from taskgen.evaluation.limits import LimitedLLM
 from taskgen.generation.instance import InstanceDeps, generate_instance
-from taskgen.generation.settings import GenerationSettings
 from taskgen.llm import OpenAICompatibleClient
 from tests.generation.fakes import LocalSandbox
 from tests.generation.templates import ENTRYPOINT, code_spec

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from taskgen.bank.parser import TemplateError, parse_template
 from taskgen.bank.selector import SelectionError, SelectionResult, select_templates
-from taskgen.config import Settings
+from taskgen.config import GenerationSettings, Settings
 from taskgen.contracts import Embedder, LLMClient, RunLimits, SandboxRunner
 from taskgen.db import AreaSkill, Skill, Task, TestSession
 from taskgen.evaluation.limits import LimitedLLM
@@ -34,7 +34,6 @@ from taskgen.generation.instance import (
     TemplateDefectError,
     generate_instance,
 )
-from taskgen.generation.settings import GenerationSettings
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +118,7 @@ class Generator:
             embedder = None
         return cls(
             settings=settings,
-            options=getattr(settings, "generation", None) or GenerationSettings(),
+            options=settings.generation,
             sessionmaker=state.sessionmaker,
             llm=llm,
             embedder=embedder,

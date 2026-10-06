@@ -7,6 +7,7 @@ import random
 
 import pytest
 
+from taskgen.config import GenerationSettings
 from taskgen.contracts import HiddenPayload, RunLimits, TestReport
 from taskgen.generation.instance import (
     InstanceDeps,
@@ -17,7 +18,6 @@ from taskgen.generation.instance import (
     generate_instance,
 )
 from taskgen.generation.params import draw_params
-from taskgen.generation.settings import GenerationSettings
 from tests.evaluation.fakes import FakeLLM, http_error
 from tests.generation.fakes import LocalSandbox, call_entrypoint
 from tests.generation.templates import ENTRYPOINT, code_spec, essay_spec
