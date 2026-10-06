@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
 from collections import defaultdict
 from collections.abc import Callable, Iterable
@@ -593,29 +594,73 @@ def write(out: Path) -> list[Path]:
 
 
 def bundle_sources() -> list[Path]:
-    """Разделы по порядку ссылок оглавления docs/taskgen/README.md."""
+    """Разделы по порядку ссылок оглавления docs/taskgen/README.md, только из docs/taskgen."""
     links = re.findall(r"\]\(([^)#]+\.md)\)", INDEX.read_text(encoding="utf-8"))
     sources = [(DOCS / link).resolve() for link in links]
+    sources = [path for path in sources if path.is_relative_to(DOCS) and path != INDEX]
     if not sources or any(not path.is_file() for path in sources):
         raise SystemExit(f"в {INDEX} нет ссылок на разделы или раздела нет: {links}")
     return list(dict.fromkeys(sources))
+
+
+_MERMAID = re.compile(r"^```mermaid\n(.*?)^```\n", re.MULTILINE | re.DOTALL)
+_ADMONITION = re.compile(r"^> \[!(NOTE|IMPORTANT|WARNING|TIP|CAUTION)\]$", re.MULTILINE)
+_ADMONITION_TITLE = {
+    "NOTE": "Примечание",
+    "TIP": "Совет",
+    "IMPORTANT": "Важно",
+    "WARNING": "Внимание",
+    "CAUTION": "Осторожно",
+}
+
+
+def _for_pandoc(text: str, stem: str, work: Path, mmdc: str | None) -> str:
+    """GitHub-разметка, которую pandoc не понимает: диаграммы mermaid и плашки > [!NOTE]."""
+    text = _ADMONITION.sub(lambda m: f"> **{_ADMONITION_TITLE[m.group(1)]}**\n>", text)
+    if mmdc is None:
+        return text
+    count = 0
+
+    def render(match: re.Match[str]) -> str:
+        nonlocal count
+        count += 1
+        source, image = work / f"{stem}-{count}.mmd", work / f"{stem}-{count}.png"
+        source.write_text(match.group(1), encoding="utf-8")
+        subprocess.run(
+            [mmdc, "--quiet", "-i", str(source), "-o", str(image), "-b", "white", "-s", "2"],
+            check=True,
+        )
+        return f"![]({image.name})\n"
+
+    return _MERMAID.sub(render, text)
 
 
 def bundle(output: Path) -> None:
     pandoc = shutil.which("pandoc")
     if pandoc is None:
         raise SystemExit("нет pandoc; например: nix shell nixpkgs#pandoc -c " + " ".join(sys.argv))
-    command = [
-        pandoc,
-        "--from=gfm",
-        "--toc",
-        "--metadata=title:Сервис taskgen: сопроводительная документация",
-        "--metadata=lang:ru",
-        f"--resource-path={DOCS}",
-        f"--output={output}",
-        *map(str, bundle_sources()),
-    ]
-    subprocess.run(command, check=True)
+    mmdc = shutil.which("mmdc")
+    if mmdc is None:
+        print("нет mmdc: диаграммы mermaid попадут в файл исходным текстом", file=sys.stderr)
+    with tempfile.TemporaryDirectory(prefix="taskgen-docs-") as directory:
+        work = Path(directory)
+        inputs = []
+        for path in bundle_sources():
+            stem = path.relative_to(DOCS).with_suffix("").as_posix().replace("/", "-")
+            text = _for_pandoc(path.read_text(encoding="utf-8"), stem, work, mmdc)
+            inputs.append(work / f"{stem}.md")
+            inputs[-1].write_text(text, encoding="utf-8")
+        command = [
+            pandoc,
+            "--from=gfm",
+            "--toc",
+            "--metadata=title:Сервис taskgen: сопроводительная документация",
+            "--metadata=lang:ru",
+            f"--resource-path={work}",
+            f"--output={output.resolve()}",
+            *map(str, inputs),
+        ]
+        subprocess.run(command, check=True)
     print(output)
 
 
