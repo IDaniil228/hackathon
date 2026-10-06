@@ -361,6 +361,64 @@ async def test_llm_phrase_verdict_needs_a_real_quote():
     assert invented.forbidden_found == [] and invented.ok, invented.reasons
 
 
+# --- Проверка смысла цитат проверяльщика -----------------------------------------------------
+
+# Предложение ситуации, которое есть в тексте, но к факту B отношения не имеет.
+RELEVANCE_TABLE = {S_BOOST: unit(0.9, 0), S_DATES: unit(0.9, 1), S_PLAIN: unit(0.1, 1)}
+
+
+async def test_checker_quote_off_topic_for_fact_does_not_confirm_it():
+    situation = f"{S_BOOST} {S_PLAIN}"
+    llm = honest_checker({"boosting": [S_BOOST], "dates": [S_PLAIN]})
+    embedder = TableEmbedder(vectors(**RELEVANCE_TABLE))
+
+    result = await run(
+        llm, small_spec(forbidden=[]), situation, embedder, options("llm", quote_threshold=0.5)
+    )
+
+    assert result.missing_facts == ["dates"] and not result.ok
+    assert result.evidence == {"boosting": S_BOOST}
+
+
+async def test_checker_quote_on_topic_confirms_fact():
+    situation = f"{S_BOOST} {S_DATES}"
+    llm = honest_checker({"boosting": [S_BOOST], "dates": [S_DATES]})
+    embedder = TableEmbedder(vectors(**RELEVANCE_TABLE))
+
+    result = await run(
+        llm, small_spec(forbidden=[]), situation, embedder, options("llm", quote_threshold=0.5)
+    )
+
+    assert result.ok, result.reasons
+    assert result.notes == []
+
+
+async def test_checker_relevance_is_skipped_with_note_without_embedder():
+    situation = f"{S_BOOST} {S_PLAIN}"
+    llm = honest_checker({"boosting": [S_BOOST], "dates": [S_PLAIN]})
+
+    result = await run(
+        llm, small_spec(forbidden=[]), situation, None, options("llm", quote_threshold=0.5)
+    )
+
+    assert result.ok, result.reasons
+    assert any("смысла цитат" in note for note in result.notes)
+
+
+async def test_checker_relevance_does_not_clear_forbidden_phrase():
+    # Найденная фраза отклоняет ситуацию; проверка смысла её не снимает, иначе она
+    # ослабила бы проверку, а не усилила.
+    situation = f"{S_BOOST} {S_DATES} {S_HINT}"
+    llm = honest_checker({"boosting": [S_BOOST], "dates": [S_DATES]}, {PHRASE: [S_HINT]})
+    table = vectors(**RELEVANCE_TABLE, **{S_HINT: unit(0.0, 2)})
+
+    result = await run(
+        llm, small_spec(), situation, TableEmbedder(table), options("llm", quote_threshold=0.5)
+    )
+
+    assert result.forbidden_found == [PHRASE] and not result.ok
+
+
 # --- Генерация во всех режимах ---------------------------------------------------------------
 
 
