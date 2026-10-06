@@ -6,8 +6,7 @@ import pytest
 from taskgen.config import LLMSettings
 from taskgen.contracts import JudgeRequest, RubricItem, TaskKind
 from taskgen.evaluation.judge import LLMJudge
-from taskgen.evaluation.limits import LimitedLLM
-from taskgen.llm import OpenAICompatibleClient
+from taskgen.llm import LimitedLLM, OpenAICompatibleClient
 
 pytestmark = pytest.mark.integration
 

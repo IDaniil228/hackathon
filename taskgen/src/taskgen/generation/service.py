@@ -23,7 +23,6 @@ from taskgen.bank.selector import SelectionError, SelectionResult, select_templa
 from taskgen.config import GenerationSettings, Settings
 from taskgen.contracts import Embedder, LLMClient, RunLimits, SandboxRunner
 from taskgen.db import AreaSkill, Skill, Task, TestSession
-from taskgen.evaluation.limits import LimitedLLM
 from taskgen.generation.instance import (
     GenerationError,
     InstanceDeps,
@@ -34,6 +33,7 @@ from taskgen.generation.instance import (
     TemplateDefectError,
     generate_instance,
 )
+from taskgen.llm import limited_llm
 
 logger = logging.getLogger(__name__)
 
@@ -101,16 +101,8 @@ class Generator:
 
     @classmethod
     def from_state(cls, state: Any) -> Generator:
-        """Собирает зависимости из app.state так же, как Evaluator.from_state.
-
-        Ограничитель LLM общий с оценкой: оба модуля ходят в одну модель, и лимит
-        одновременных запросов к ней один.
-        """
+        """Собирает зависимости из app.state так же, как Evaluator.from_state."""
         settings: Settings = state.settings
-        llm = getattr(state, "evaluation_llm", None)
-        if llm is None or llm.inner is not state.llm:
-            llm = LimitedLLM(state.llm, limit=settings.llm.concurrency)
-            state.evaluation_llm = llm
         # Без отдельного эмбеддера эмбеддинги считает LLM-клиент, как в API банка. Клиент без
         # embed не эмбеддер: отбор тогда сразу идёт по доле общих навыков.
         embedder = getattr(state, "embedder", None) or state.llm
@@ -120,7 +112,7 @@ class Generator:
             settings=settings,
             options=settings.generation,
             sessionmaker=state.sessionmaker,
-            llm=llm,
+            llm=limited_llm(state),
             embedder=embedder,
             sandbox=getattr(state, "sandbox", None),
         )

@@ -47,7 +47,6 @@ from taskgen.evaluation.grading import (
 )
 from taskgen.evaluation.judge import JudgeError, LLMJudge
 from taskgen.evaluation.languages import canonical_language
-from taskgen.evaluation.limits import LimitedLLM
 from taskgen.evaluation.metrics import MetricScore, compute_quality, judge_facts, load_rubric
 from taskgen.evaluation.scoring import (
     Components,
@@ -56,6 +55,7 @@ from taskgen.evaluation.scoring import (
     resolve_weights,
 )
 from taskgen.evaluation.summary import SessionFacts, fallback_text, summary_data, write_summary
+from taskgen.llm import limited_llm
 
 logger = logging.getLogger(__name__)
 
@@ -313,12 +313,7 @@ class Evaluator:
         Детектор ИИ работает только при ai_detector_enabled, даже если он задан в state.
         """
         settings: Settings = state.settings
-        # Ограничитель живёт в state, чтобы одновременные запросы к API делили один лимит.
-        # Новый клиент в state.llm получает новый ограничитель.
-        llm = getattr(state, "evaluation_llm", None)
-        if llm is None or llm.inner is not state.llm:
-            llm = LimitedLLM(state.llm, limit=settings.llm.concurrency)
-            state.evaluation_llm = llm
+        llm = limited_llm(state)
         judge = getattr(state, "judge", None) or LLMJudge(
             llm,
             model=settings.llm.judge_model,

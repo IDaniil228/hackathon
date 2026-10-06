@@ -6,12 +6,52 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import httpx
 
-from taskgen.config import LLMSettings
-from taskgen.contracts import ChatMessage
+from taskgen.config import LLMSettings, Settings
+from taskgen.contracts import ChatMessage, LLMClient
+
+
+class LimitedLLM:
+    """LLMClient, который пропускает к inner не больше limit вызовов одновременно.
+
+    Локальный сервер вроде Ollama обслуживает запросы по очереди, а таймаут клиента считается
+    с момента отправки. Без ограничения последние запросы очереди падают по таймауту.
+    """
+
+    def __init__(self, inner: LLMClient, *, limit: int) -> None:
+        self.inner = inner
+        self._semaphore = asyncio.Semaphore(limit)
+
+    async def complete(
+        self,
+        messages: list[ChatMessage],
+        *,
+        model: str | None = None,
+        temperature: float = 0.7,
+        json_schema: dict[str, Any] | None = None,
+    ) -> str:
+        async with self._semaphore:
+            return await self.inner.complete(
+                messages, model=model, temperature=temperature, json_schema=json_schema
+            )
+
+
+def limited_llm(state: Any) -> LimitedLLM:
+    """Ограничитель из app.state.limited_llm, общий для генерации и оценки.
+
+    Оба модуля ходят в одну модель, поэтому лимит одновременных запросов к ней один. Новый
+    клиент в state.llm получает новый ограничитель.
+    """
+    llm = getattr(state, "limited_llm", None)
+    if llm is None or llm.inner is not state.llm:
+        settings: Settings = state.settings
+        llm = LimitedLLM(state.llm, limit=settings.llm.concurrency)
+        state.limited_llm = llm
+    return llm
 
 
 class OpenAICompatibleClient:
