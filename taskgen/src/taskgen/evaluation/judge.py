@@ -26,6 +26,7 @@ from taskgen.contracts import (
     RubricVerdict,
 )
 from taskgen.evaluation.jsonout import StructuredOutputError, complete_structured
+from taskgen.evaluation.quotes import quote_in_answer
 
 _VALUE = {"no": 0.0, "partial": 0.5, "yes": 1.0}
 _VERDICT_OF = {value: verdict for verdict, value in _VALUE.items()}
@@ -65,16 +66,6 @@ class _Sample(BaseModel):
 
 class JudgeError(Exception):
     """Ни один сэмпл судьи не дал ответа по схеме."""
-
-
-def _normalize(text: str) -> str:
-    return " ".join(text.split())
-
-
-def quote_in_answer(quote: str, answer: str) -> bool:
-    """Цитата есть в ответе с точностью до пробельных символов: модели переносят строки."""
-    normalized = _normalize(quote)
-    return bool(normalized) and normalized in _normalize(answer)
 
 
 def _schema(rubric: list[RubricItem]) -> dict:

@@ -40,8 +40,8 @@ import yaml
 from taskgen.bank.parser import find_phrases, normalize_phrase, parse_template
 from taskgen.config import Settings
 from taskgen.contracts import ChatMessage, TemplateSpec
+from taskgen.evaluation.quotes import EmbeddingCache
 from taskgen.generation.essay import (
-    EmbeddingCache,
     EssayCheckOptions,
     EssayScenario,
     check_essay_scenario,

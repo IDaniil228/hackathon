@@ -40,8 +40,8 @@ from taskgen.evaluation.jsonout import (
     StructuredOutputError,
     complete_structured,
 )
+from taskgen.evaluation.quotes import EmbeddingCache
 from taskgen.generation.essay import (
-    EmbeddingCache,
     EssayCheckOptions,
     EssayScenarioError,
     generate_essay,

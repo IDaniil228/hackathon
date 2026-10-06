@@ -9,7 +9,8 @@ import pytest
 
 from taskgen.config import GenerationSettings
 from taskgen.contracts import HiddenPayload, RunLimits, TestReport
-from taskgen.generation.essay import EmbeddingCache, essay_questions
+from taskgen.evaluation.quotes import EmbeddingCache
+from taskgen.generation.essay import essay_questions
 from taskgen.generation.instance import (
     InstanceDeps,
     LLMUnavailableError,

@@ -20,7 +20,6 @@ from __future__ import annotations
 import logging
 import re
 import secrets
-from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -38,7 +37,7 @@ from taskgen.contracts import (
     TemplateSpec,
 )
 from taskgen.evaluation.jsonout import EmptyReplyError, StructuredOutputError, complete_structured
-from taskgen.evaluation.judge import quote_in_answer
+from taskgen.evaluation.quotes import EmbeddingCache, quote_in_answer
 from taskgen.generation.params import fill_placeholders
 
 logger = logging.getLogger(__name__)
@@ -201,36 +200,6 @@ def _line_sentences(line: str) -> list[str]:
         else:
             sentences.append(carry)
     return sentences
-
-
-class EmbeddingCache:
-    """Векторы фактов и запрещённых фраз шаблона: они одинаковы во всех экземплярах.
-
-    Ключ — модель эмбеддера и текст, поэтому смена модели не отдаёт чужие векторы.
-    Старые записи вытесняются, когда их больше max_items.
-    """
-
-    def __init__(self, max_items: int = 4096) -> None:
-        self.max_items = max_items
-        self._vectors: OrderedDict[tuple[str, str], list[float]] = OrderedDict()
-
-    async def vectors(self, embedder: Embedder, texts: list[str]) -> list[list[float]]:
-        model = embedder.model_name
-        found: dict[str, list[float]] = {}
-        for text in texts:
-            vector = self._vectors.get((model, text))
-            if vector is not None:
-                self._vectors.move_to_end((model, text))
-                found[text] = vector
-        missing = [text for text in dict.fromkeys(texts) if text not in found]
-        if missing:
-            fresh = await embedder.embed(missing)
-            for text, vector in zip(missing, fresh, strict=True):
-                found[text] = vector
-                self._vectors[(model, text)] = vector
-            while len(self._vectors) > self.max_items:
-                self._vectors.popitem(last=False)
-        return [found[text] for text in texts]
 
 
 @dataclass(frozen=True)

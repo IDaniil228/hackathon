@@ -37,8 +37,8 @@ from taskgen.contracts import (
     TaskStatus,
 )
 from taskgen.db import AreaSkill, Skill, Task, Template, TestSession
+from taskgen.evaluation.quotes import EmbeddingCache
 from taskgen.generation import pool
-from taskgen.generation.essay import EmbeddingCache
 from taskgen.generation.instance import (
     SEED_BITS,
     GenerationError,

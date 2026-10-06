@@ -3,7 +3,8 @@ import json
 import pytest
 
 from taskgen.contracts import JudgeRequest, RubricItem, TaskKind
-from taskgen.evaluation.judge import JudgeError, LLMJudge, quote_in_answer
+from taskgen.evaluation.judge import JudgeError, LLMJudge
+from taskgen.evaluation.quotes import quote_in_answer
 from tests.evaluation.fakes import FakeLLM, http_error
 
 ANSWER = """def two_sum(nums, target):

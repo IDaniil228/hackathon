@@ -13,8 +13,8 @@ from typing import Any
 import pytest
 
 from taskgen.contracts import ChatMessage, ScenarioFact, TemplateSpec
+from taskgen.evaluation.quotes import EmbeddingCache
 from taskgen.generation.essay import (
-    EmbeddingCache,
     EssayCheckOptions,
     EssayScenario,
     check_essay_scenario,
