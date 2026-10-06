@@ -38,6 +38,7 @@ from taskgen.contracts import (
 )
 from taskgen.db import AreaSkill, Skill, Task, Template, TestSession
 from taskgen.generation import pool
+from taskgen.generation.essay import EmbeddingCache
 from taskgen.generation.instance import (
     SEED_BITS,
     GenerationError,
@@ -112,6 +113,7 @@ class Generator:
     llm: LLMClient
     embedder: Embedder | None
     sandbox: SandboxRunner | None
+    embedding_cache: EmbeddingCache
 
     @classmethod
     def from_state(cls, state: Any) -> Generator:
@@ -122,6 +124,11 @@ class Generator:
         embedder = getattr(state, "embedder", None) or state.llm
         if not (hasattr(embedder, "embed") and hasattr(embedder, "model_name")):
             embedder = None
+        # Генератор собирается на каждый запрос, поэтому кэш векторов шаблонов эссе живёт
+        # в app.state, иначе он пустел бы после каждого запроса.
+        cache = getattr(state, "essay_embedding_cache", None)
+        if cache is None:
+            cache = state.essay_embedding_cache = EmbeddingCache()
         return cls(
             settings=settings,
             options=settings.generation,
@@ -129,6 +136,7 @@ class Generator:
             llm=limited_llm(state),
             embedder=embedder,
             sandbox=getattr(state, "sandbox", None),
+            embedding_cache=cache,
         )
 
     def instance_deps(self) -> InstanceDeps:
@@ -142,6 +150,8 @@ class Generator:
             checker_reasoning_effort=self.settings.llm.checker_reasoning_effort,
             solver_model=self.settings.llm.solver_model,
             solver_reasoning_effort=self.settings.llm.solver_reasoning_effort,
+            embedder=self.embedder,
+            embedding_cache=self.embedding_cache,
             options=self.options,
             limits=RunLimits(
                 timeout_ms=sandbox.run_timeout_ms, memory_bytes=sandbox.run_memory_limit_bytes

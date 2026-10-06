@@ -13,7 +13,7 @@ from functools import lru_cache
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from taskgen.contracts import ReasoningEffort, TaskKind
+from taskgen.contracts import EssayCheckMethod, ReasoningEffort, TaskKind
 
 _REASONING = (
     "Поле reasoning_effort запроса к модели {role}; null — поле не передаётся, и модель "
@@ -271,6 +271,35 @@ class GenerationSettings(BaseModel):
         ge=0,
         description="Сколько первых кейсов задания с кодом показать кандидату примерами; "
         "если кейсов больше одного, хотя бы один остаётся скрытым",
+    )
+    essay_check_method: EssayCheckMethod = Field(
+        default="llm",
+        description="Чем проверять ситуацию эссе на факты и пересказ запрещённых фраз: llm, "
+        "embeddings или both, где LLM решает только серую зону вокруг порогов. Без эмбеддера "
+        "режимы с эмбеддингами проверяет LLM. LLM по умолчанию: на бенчмарке "
+        "scripts/essay_check_bench.py эмбеддинги принимают отрицание факта за сам факт и не "
+        "отличают запрещённую фразу от темы ситуации",
+    )
+    essay_fact_threshold: float = Field(
+        default=0.6,
+        ge=-1.0,
+        le=1.0,
+        description="Порог косинусного сходства факта с предложением ситуации для bge-m3, "
+        "подобран бенчмарком по F1; другой модели эмбеддингов нужен свой порог",
+    )
+    essay_forbidden_threshold: float = Field(
+        default=0.425,
+        ge=-1.0,
+        le=1.0,
+        description="Порог косинусного сходства запрещённой фразы с предложением ситуации "
+        "для bge-m3, подобран тем же бенчмарком",
+    )
+    essay_grey_zone: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=1.0,
+        description="Полуширина серой зоны вокруг порогов в режиме both: такие факты и фразы "
+        "решает LLM",
     )
 
 

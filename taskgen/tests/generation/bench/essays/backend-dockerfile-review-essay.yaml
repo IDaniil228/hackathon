@@ -1,0 +1,45 @@
+template: backend/junior/backend-dockerfile-review-essay.md
+skip_deletion: {}
+situations:
+  - id: good-1
+    params:
+      domain: "сервис записи к врачу"
+    title: "Первый выкат сервиса записи к врачу"
+    units:
+      - text: "Команда из трёх разработчиков делает сервис записи к врачу для сети частных клиник."
+        facts: []
+      - text: "Бэкенд написан на Django и отдаёт API мобильному приложению."
+        facts: [django]
+      - text: "На следующей неделе команда впервые выкатывает сервис в продакшен из образа, собранного по этому Dockerfile, и перед выкатом просит коллегу его проверить."
+        facts: [production]
+      - text: "В корне репозитория рядом с Dockerfile лежат каталог .git, файл .env с настройками и локальная база db.sqlite3."
+        facts: [repo-files]
+      - text: "Файла .dockerignore в репозитории нет."
+        facts: [no-dockerignore]
+  - id: good-2
+    params:
+      domain: "бэкенд небольшого интернет-магазина цветов"
+    title: "Магазин цветов готовится к запуску"
+    units:
+      - text: "Небольшая студия поддерживает бэкенд интернет-магазина цветов."
+        facts: []
+      - text: "Сервер магазина сделан на фреймворке Django."
+        facts: [django]
+      - text: "Владелец хочет запустить магазин для настоящих покупателей, поэтому образ из этого Dockerfile пойдёт прямо в продакшен, а перед этим команда попросила коллегу посмотреть Dockerfile."
+        facts: [production]
+      - text: "Рядом с Dockerfile в корневом каталоге проекта находятся папка .git, файл .env и файл базы db.sqlite3, с которым разработчики работают локально."
+        facts: [repo-files]
+      - text: "Отдельного .dockerignore в проекте никто не заводил, его там нет."
+        facts: [no-dockerignore]
+paraphrases:
+  - phrases: [root]
+    text: "Процесс в контейнере будет работать от имени суперпользователя с полными правами."
+  - phrases: [секрет]
+    text: "В .env лежат пароль от базы и ключи платёжного шлюза, которые нельзя никому показывать."
+negations:
+  - situation: good-1
+    fact: no-dockerignore
+    text: "В репозитории есть файл .dockerignore."
+  - situation: good-1
+    fact: production
+    text: "Команда пока не собирается выкатывать образ из этого Dockerfile в продакшен и не просит его проверять."

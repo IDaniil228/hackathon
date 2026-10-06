@@ -1,0 +1,3887 @@
+{
+ "fact_threshold": 0.6,
+ "forbidden_threshold": 0.425,
+ "grey_zone": 0.05,
+ "tune": [
+  "algo-sorting-stability-essay",
+  "algo-streaming-top-k-essay",
+  "backend-dockerfile-review-essay",
+  "ml-imbalanced-threshold-essay",
+  "ml-production-degradation-essay"
+ ],
+ "test": [
+  "algo-shortest-path-choice-essay",
+  "backend-django-docker-production-essay",
+  "backend-django-orm-performance-essay",
+  "ml-validation-leakage-essay"
+ ],
+ "sample": [
+  "backend-dockerfile-review-essay/good-1/good",
+  "algo-streaming-top-k-essay/good-1/good",
+  "ml-imbalanced-threshold-essay/good-1/good",
+  "ml-validation-leakage-essay/good-2/delete-4",
+  "algo-shortest-path-choice-essay/good-2/delete-1",
+  "algo-shortest-path-choice-essay/good-2/delete-5",
+  "ml-production-degradation-essay/good-2/delete-2",
+  "algo-sorting-stability-essay/good-1/delete-1",
+  "backend-dockerfile-review-essay/good-1/delete-3",
+  "ml-validation-leakage-essay/good-1/delete-4",
+  "algo-shortest-path-choice-essay/good-2/delete-2",
+  "ml-production-degradation-essay/good-1/delete-2",
+  "algo-streaming-top-k-essay/good-2/delete-5",
+  "algo-shortest-path-choice-essay/good-1/delete-6",
+  "algo-shortest-path-choice-essay/good-2/delete-7",
+  "ml-imbalanced-threshold-essay/good-1/delete-4",
+  "ml-imbalanced-threshold-essay/good-1/delete-2",
+  "algo-shortest-path-choice-essay/good-2/delete-4",
+  "backend-django-docker-production-essay/good-1/delete-3",
+  "algo-sorting-stability-essay/good-2/paraphrase-0",
+  "ml-imbalanced-threshold-essay/good-2/paraphrase-1",
+  "algo-shortest-path-choice-essay/good-2/paraphrase-1",
+  "algo-sorting-stability-essay/good-2/paraphrase-1",
+  "backend-django-docker-production-essay/good-1/paraphrase-1",
+  "backend-dockerfile-review-essay/good-1/paraphrase-0",
+  "ml-production-degradation-essay/good-1/paraphrase-1",
+  "algo-shortest-path-choice-essay/good-1/negate-single-source",
+  "ml-imbalanced-threshold-essay/good-1/negate-threshold",
+  "ml-validation-leakage-essay/good-1/negate-tuning-on-report",
+  "ml-validation-leakage-essay/real-qwen3.5-4b"
+ ],
+ "rows": [
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/good",
+   "mode": "embeddings",
+   "seconds": 0.969716863008216,
+   "llm_calls": 0,
+   "missing_facts": [
+    "size"
+   ],
+   "forbidden_found": [
+    "в ширину",
+    "релакс",
+    "ослаблен"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/delete-1",
+   "mode": "embeddings",
+   "seconds": 0.4446173460164573,
+   "llm_calls": 0,
+   "missing_facts": [
+    "size"
+   ],
+   "forbidden_found": [
+    "в ширину",
+    "релакс",
+    "ослаблен"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.43972503501572646,
+   "llm_calls": 0,
+   "missing_facts": [
+    "size",
+    "single-source"
+   ],
+   "forbidden_found": [
+    "в ширину",
+    "релакс",
+    "ослаблен"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/delete-4",
+   "mode": "embeddings",
+   "seconds": 0.4550119949853979,
+   "llm_calls": 0,
+   "missing_facts": [
+    "size",
+    "equal-costs"
+   ],
+   "forbidden_found": [
+    "в ширину",
+    "релакс",
+    "ослаблен"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/delete-5",
+   "mode": "embeddings",
+   "seconds": 0.45807300999877043,
+   "llm_calls": 0,
+   "missing_facts": [
+    "size"
+   ],
+   "forbidden_found": [
+    "в ширину",
+    "релакс",
+    "ослаблен"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/delete-6",
+   "mode": "embeddings",
+   "seconds": 0.4417344499961473,
+   "llm_calls": 0,
+   "missing_facts": [
+    "size",
+    "non-negative-costs"
+   ],
+   "forbidden_found": [
+    "в ширину",
+    "релакс",
+    "ослаблен"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/delete-7",
+   "mode": "embeddings",
+   "seconds": 0.46586064499570057,
+   "llm_calls": 0,
+   "missing_facts": [
+    "size",
+    "negative-costs"
+   ],
+   "forbidden_found": [
+    "в ширину",
+    "релакс",
+    "ослаблен"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/good",
+   "mode": "embeddings",
+   "seconds": 0.485715282993624,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-1",
+   "mode": "embeddings",
+   "seconds": 0.42763912698137574,
+   "llm_calls": 0,
+   "missing_facts": [
+    "size"
+   ],
+   "forbidden_found": [],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.45319311501225457,
+   "llm_calls": 0,
+   "missing_facts": [
+    "single-source"
+   ],
+   "forbidden_found": [],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-4",
+   "mode": "embeddings",
+   "seconds": 0.43084020700189285,
+   "llm_calls": 0,
+   "missing_facts": [
+    "equal-costs"
+   ],
+   "forbidden_found": [],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-5",
+   "mode": "embeddings",
+   "seconds": 0.43644681200385094,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-6",
+   "mode": "embeddings",
+   "seconds": 0.4388780049921479,
+   "llm_calls": 0,
+   "missing_facts": [
+    "non-negative-costs"
+   ],
+   "forbidden_found": [],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-7",
+   "mode": "embeddings",
+   "seconds": 0.4593781250005122,
+   "llm_calls": 0,
+   "missing_facts": [
+    "negative-costs"
+   ],
+   "forbidden_found": [],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.5138626819825731,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "в ширину",
+    "релакс",
+    "ослаблен"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.5191363460035063,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "в ширину"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.5242758970125578,
+   "llm_calls": 0,
+   "missing_facts": [
+    "size"
+   ],
+   "forbidden_found": [
+    "в ширину",
+    "релакс",
+    "ослаблен"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.5248063420003746,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/negate-zero-one-costs",
+   "mode": "embeddings",
+   "seconds": 0.4831069399951957,
+   "llm_calls": 0,
+   "missing_facts": [
+    "size"
+   ],
+   "forbidden_found": [
+    "в ширину",
+    "релакс",
+    "ослаблен"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/negate-single-source",
+   "mode": "embeddings",
+   "seconds": 0.48151243198662996,
+   "llm_calls": 0,
+   "missing_facts": [
+    "size",
+    "single-source"
+   ],
+   "forbidden_found": [
+    "в ширину",
+    "релакс",
+    "ослаблен"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-1/good",
+   "mode": "embeddings",
+   "seconds": 0.8381095709919464,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "составн",
+    "Timsort",
+    "подсчет",
+    "поразрядн",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-1/delete-1",
+   "mode": "embeddings",
+   "seconds": 0.3543094590131659,
+   "llm_calls": 0,
+   "missing_facts": [
+    "two-fields",
+    "small-range"
+   ],
+   "forbidden_found": [
+    "составн",
+    "Timsort",
+    "подсчет",
+    "поразрядн",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-1/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.35164420399814844,
+   "llm_calls": 0,
+   "missing_facts": [
+    "current-order"
+   ],
+   "forbidden_found": [
+    "составн",
+    "Timsort",
+    "подсчет",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-1/delete-4",
+   "mode": "embeddings",
+   "seconds": 0.34860952899907716,
+   "llm_calls": 0,
+   "missing_facts": [
+    "goal"
+   ],
+   "forbidden_found": [
+    "составн",
+    "Timsort",
+    "подсчет",
+    "поразрядн",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-2/good",
+   "mode": "embeddings",
+   "seconds": 0.36198960000183433,
+   "llm_calls": 0,
+   "missing_facts": [
+    "goal",
+    "small-range"
+   ],
+   "forbidden_found": [
+    "Timsort",
+    "подсчет",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-2/delete-1",
+   "mode": "embeddings",
+   "seconds": 0.3159612110175658,
+   "llm_calls": 0,
+   "missing_facts": [
+    "two-fields",
+    "goal",
+    "small-range"
+   ],
+   "forbidden_found": [
+    "Timsort",
+    "подсчет",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-2/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.3418392520106863,
+   "llm_calls": 0,
+   "missing_facts": [
+    "current-order",
+    "goal",
+    "small-range"
+   ],
+   "forbidden_found": [
+    "Timsort",
+    "подсчет",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-2/delete-4",
+   "mode": "embeddings",
+   "seconds": 0.33259471200290136,
+   "llm_calls": 0,
+   "missing_facts": [
+    "goal",
+    "small-range"
+   ],
+   "forbidden_found": [
+    "Timsort",
+    "подсчет",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-1/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.43726823400356807,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "составн",
+    "Timsort",
+    "подсчет",
+    "поразрядн",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-2/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.412716343998909,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "Timsort",
+    "подсчет",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-1/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.4511033070157282,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "составн",
+    "Timsort",
+    "подсчет",
+    "поразрядн",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-2/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.39731056900927797,
+   "llm_calls": 0,
+   "missing_facts": [
+    "goal",
+    "small-range"
+   ],
+   "forbidden_found": [
+    "Timsort",
+    "подсчет",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-1/negate-current-order",
+   "mode": "embeddings",
+   "seconds": 0.3971680699905846,
+   "llm_calls": 0,
+   "missing_facts": [
+    "current-order"
+   ],
+   "forbidden_found": [
+    "составн",
+    "Timsort",
+    "подсчет",
+    "поразрядн",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-1/negate-goal",
+   "mode": "embeddings",
+   "seconds": 0.4135856819921173,
+   "llm_calls": 0,
+   "missing_facts": [
+    "goal"
+   ],
+   "forbidden_found": [
+    "составн",
+    "Timsort",
+    "подсчет",
+    "поразрядн",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-1/good",
+   "mode": "embeddings",
+   "seconds": 0.9441788069962058,
+   "llm_calls": 0,
+   "missing_facts": [
+    "distinct"
+   ],
+   "forbidden_found": [
+    "Count-Min",
+    "скетч",
+    "sketch",
+    "второй проход"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-1/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.394669702014653,
+   "llm_calls": 0,
+   "missing_facts": [
+    "distinct"
+   ],
+   "forbidden_found": [
+    "Count-Min",
+    "скетч",
+    "sketch",
+    "второй проход"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-1/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.39546466700267047,
+   "llm_calls": 0,
+   "missing_facts": [
+    "distinct"
+   ],
+   "forbidden_found": [
+    "Count-Min",
+    "скетч",
+    "sketch",
+    "второй проход"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-1/delete-4",
+   "mode": "embeddings",
+   "seconds": 0.41352841499610804,
+   "llm_calls": 0,
+   "missing_facts": [
+    "distinct",
+    "servers"
+   ],
+   "forbidden_found": [
+    "Count-Min",
+    "скетч",
+    "sketch"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-1/delete-5",
+   "mode": "embeddings",
+   "seconds": 0.36809955097851343,
+   "llm_calls": 0,
+   "missing_facts": [
+    "distinct"
+   ],
+   "forbidden_found": [
+    "Count-Min",
+    "скетч",
+    "sketch",
+    "второй проход"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-1/delete-6",
+   "mode": "embeddings",
+   "seconds": 0.3786140269949101,
+   "llm_calls": 0,
+   "missing_facts": [
+    "distinct",
+    "query"
+   ],
+   "forbidden_found": [
+    "Count-Min",
+    "скетч",
+    "sketch",
+    "второй проход"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-2/good",
+   "mode": "embeddings",
+   "seconds": 0.5730306289915461,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "Space-Saving",
+    "Count-Min",
+    "скетч",
+    "sketch"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-2/delete-1",
+   "mode": "embeddings",
+   "seconds": 0.35258166497806087,
+   "llm_calls": 0,
+   "missing_facts": [
+    "volume"
+   ],
+   "forbidden_found": [
+    "Space-Saving",
+    "Count-Min",
+    "скетч",
+    "sketch"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-2/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.37037363697891124,
+   "llm_calls": 0,
+   "missing_facts": [
+    "distinct"
+   ],
+   "forbidden_found": [
+    "Space-Saving",
+    "скетч",
+    "sketch"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-2/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.3814059339929372,
+   "llm_calls": 0,
+   "missing_facts": [
+    "servers"
+   ],
+   "forbidden_found": [
+    "Space-Saving",
+    "Count-Min",
+    "скетч",
+    "sketch"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-2/delete-4",
+   "mode": "embeddings",
+   "seconds": 0.3681800249905791,
+   "llm_calls": 0,
+   "missing_facts": [
+    "memory"
+   ],
+   "forbidden_found": [
+    "Space-Saving",
+    "Count-Min",
+    "скетч",
+    "sketch"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-2/delete-5",
+   "mode": "embeddings",
+   "seconds": 0.36739405698608607,
+   "llm_calls": 0,
+   "missing_facts": [
+    "query"
+   ],
+   "forbidden_found": [
+    "Space-Saving",
+    "Count-Min",
+    "скетч",
+    "sketch"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-1/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.45188445202074945,
+   "llm_calls": 0,
+   "missing_facts": [
+    "distinct"
+   ],
+   "forbidden_found": [
+    "Space-Saving",
+    "Count-Min",
+    "скетч",
+    "sketch",
+    "второй проход"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-2/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.4275936760241166,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "Space-Saving",
+    "Count-Min",
+    "скетч",
+    "sketch"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-1/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.44487053400371224,
+   "llm_calls": 0,
+   "missing_facts": [
+    "distinct"
+   ],
+   "forbidden_found": [
+    "Space-Saving",
+    "Count-Min",
+    "скетч",
+    "sketch",
+    "второй проход"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-2/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.4290188550075982,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "Space-Saving",
+    "Count-Min",
+    "скетч",
+    "sketch"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-1/negate-servers",
+   "mode": "embeddings",
+   "seconds": 0.42073761799838394,
+   "llm_calls": 0,
+   "missing_facts": [
+    "distinct"
+   ],
+   "forbidden_found": [
+    "Count-Min",
+    "скетч",
+    "sketch"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-1/negate-query",
+   "mode": "embeddings",
+   "seconds": 0.417670561990235,
+   "llm_calls": 0,
+   "missing_facts": [
+    "distinct"
+   ],
+   "forbidden_found": [
+    "Count-Min",
+    "скетч",
+    "sketch",
+    "второй проход"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-1/good",
+   "mode": "embeddings",
+   "seconds": 1.0635155469935853,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "расширить",
+    "сузить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "liveness",
+    "WhiteNoise",
+    "check --deploy",
+    "collectstatic"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-1/delete-1",
+   "mode": "embeddings",
+   "seconds": 0.35225402799551375,
+   "llm_calls": 0,
+   "missing_facts": [
+    "current"
+   ],
+   "forbidden_found": [
+    "расширить",
+    "сузить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "liveness",
+    "WhiteNoise",
+    "check --deploy",
+    "collectstatic"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-1/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.35230919302557595,
+   "llm_calls": 0,
+   "missing_facts": [
+    "target"
+   ],
+   "forbidden_found": [
+    "расширить",
+    "сузить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "liveness",
+    "WhiteNoise",
+    "check --deploy",
+    "collectstatic"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-1/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.3477056779956911,
+   "llm_calls": 0,
+   "missing_facts": [
+    "migration"
+   ],
+   "forbidden_found": [
+    "расширить",
+    "сузить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "liveness",
+    "WhiteNoise",
+    "check --deploy",
+    "collectstatic"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-2/good",
+   "mode": "embeddings",
+   "seconds": 0.56785681299516,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "расширить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "PgBouncer",
+    "check --deploy"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-2/delete-1",
+   "mode": "embeddings",
+   "seconds": 0.3301681769953575,
+   "llm_calls": 0,
+   "missing_facts": [
+    "current"
+   ],
+   "forbidden_found": [
+    "расширить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "PgBouncer",
+    "check --deploy"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-2/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.34365787499700673,
+   "llm_calls": 0,
+   "missing_facts": [
+    "target"
+   ],
+   "forbidden_found": [
+    "расширить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "PgBouncer",
+    "check --deploy"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-2/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.34638040998834185,
+   "llm_calls": 0,
+   "missing_facts": [
+    "migration"
+   ],
+   "forbidden_found": [
+    "расширить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "PgBouncer",
+    "check --deploy"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-1/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.4232992600009311,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "расширить",
+    "сузить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "liveness",
+    "WhiteNoise",
+    "check --deploy",
+    "collectstatic"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-2/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.41431019399897195,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "расширить",
+    "сузить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "PgBouncer",
+    "check --deploy"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-1/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.41690485598519444,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "расширить",
+    "сузить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "liveness",
+    "WhiteNoise",
+    "check --deploy",
+    "collectstatic"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-2/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.4230657699808944,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "расширить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "PgBouncer",
+    "check --deploy"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-1/negate-current",
+   "mode": "embeddings",
+   "seconds": 0.3764911860052962,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "расширить",
+    "сузить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "liveness",
+    "WhiteNoise",
+    "check --deploy",
+    "collectstatic"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-1/negate-target",
+   "mode": "embeddings",
+   "seconds": 0.36985873998492025,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "расширить",
+    "сузить",
+    "expand",
+    "init-контейнер",
+    "readiness",
+    "liveness",
+    "WhiteNoise",
+    "check --deploy",
+    "collectstatic"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-1/good",
+   "mode": "embeddings",
+   "seconds": 1.0897773480101023,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "prefetch",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-1/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.435317297000438,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "prefetch",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-1/delete-5",
+   "mode": "embeddings",
+   "seconds": 0.44242935100919567,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-related",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "prefetch",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-1/delete-7",
+   "mode": "embeddings",
+   "seconds": 0.45216775801964104,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "view-filter",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "prefetch",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-1/delete-8",
+   "mode": "embeddings",
+   "seconds": 0.4663814179948531,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "prefetch",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-1/delete-9",
+   "mode": "embeddings",
+   "seconds": 0.4868884120078292,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-count",
+    "table-size"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "prefetch",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-2/good",
+   "mode": "embeddings",
+   "seconds": 0.5069245249906089,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-related",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "assertNumQueries",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-2/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.4435057819937356,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-related",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "assertNumQueries",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-2/delete-5",
+   "mode": "embeddings",
+   "seconds": 0.4445584139903076,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-related",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "assertNumQueries",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-2/delete-7",
+   "mode": "embeddings",
+   "seconds": 0.44932797498768196,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "view-filter",
+    "serializer-related",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "assertNumQueries",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-2/delete-8",
+   "mode": "embeddings",
+   "seconds": 0.47594721999485046,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-related",
+    "serializer-count",
+    "page-time"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "assertNumQueries",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-2/delete-9",
+   "mode": "embeddings",
+   "seconds": 0.4931972879858222,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-related",
+    "serializer-count",
+    "table-size"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "annotate",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-1/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.5587917120137718,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "prefetch",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-2/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.566766992007615,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-related",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "assertNumQueries",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-1/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.542221982992487,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "prefetch",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-2/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.544823599018855,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-related",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "assertNumQueries",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-1/negate-page-time",
+   "mode": "embeddings",
+   "seconds": 0.515109935979126,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "prefetch",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-orm-performance-essay/good-1/negate-table-size",
+   "mode": "embeddings",
+   "seconds": 0.5198261160112452,
+   "llm_calls": 0,
+   "missing_facts": [
+    "models",
+    "serializer-count"
+   ],
+   "forbidden_found": [
+    "select_related",
+    "prefetch",
+    "annotate",
+    "индекс",
+    "index",
+    "debug-toolbar",
+    "EXPLAIN",
+    "кэш"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/good",
+   "mode": "embeddings",
+   "seconds": 0.7793427429860458,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "кэш",
+    "root",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/delete-1",
+   "mode": "embeddings",
+   "seconds": 0.32685983201372437,
+   "llm_calls": 0,
+   "missing_facts": [
+    "django"
+   ],
+   "forbidden_found": [
+    "root",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.31481308600632474,
+   "llm_calls": 0,
+   "missing_facts": [
+    "production"
+   ],
+   "forbidden_found": [
+    "кэш",
+    "root",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.3256477579998318,
+   "llm_calls": 0,
+   "missing_facts": [
+    "repo-files"
+   ],
+   "forbidden_found": [
+    "кэш",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/delete-4",
+   "mode": "embeddings",
+   "seconds": 0.33320218001608737,
+   "llm_calls": 0,
+   "missing_facts": [
+    "no-dockerignore"
+   ],
+   "forbidden_found": [
+    "кэш",
+    "root",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-2/good",
+   "mode": "embeddings",
+   "seconds": 0.35421690600924194,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "кэш",
+    "root",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-2/delete-1",
+   "mode": "embeddings",
+   "seconds": 0.3304177690006327,
+   "llm_calls": 0,
+   "missing_facts": [
+    "django"
+   ],
+   "forbidden_found": [
+    "кэш",
+    "root",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-2/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.3192299580259714,
+   "llm_calls": 0,
+   "missing_facts": [
+    "production"
+   ],
+   "forbidden_found": [
+    "кэш",
+    "root",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-2/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.31484958602231927,
+   "llm_calls": 0,
+   "missing_facts": [
+    "repo-files"
+   ],
+   "forbidden_found": [
+    "кэш",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-2/delete-4",
+   "mode": "embeddings",
+   "seconds": 0.32524349400773644,
+   "llm_calls": 0,
+   "missing_facts": [
+    "no-dockerignore"
+   ],
+   "forbidden_found": [
+    "кэш",
+    "root",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.3810110140184406,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "кэш",
+    "root",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-2/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.4034744320088066,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "кэш",
+    "root",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.40190563298529014,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "кэш",
+    "секрет",
+    "root",
+    "непривилегирован",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-2/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.39662318100454286,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "кэш",
+    "секрет",
+    "root",
+    "непривилегирован",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/negate-no-dockerignore",
+   "mode": "embeddings",
+   "seconds": 0.3601610010082368,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "кэш",
+    "root",
+    "непривилегирован",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/negate-production",
+   "mode": "embeddings",
+   "seconds": 0.3677229779714253,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "кэш",
+    "root",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/good",
+   "mode": "embeddings",
+   "seconds": 0.9996777939959429,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "PR AUC",
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/delete-0",
+   "mode": "embeddings",
+   "seconds": 0.36177863500779495,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "PR AUC",
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.35670848601148464,
+   "llm_calls": 0,
+   "missing_facts": [
+    "threshold"
+   ],
+   "forbidden_found": [
+    "PR AUC",
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.35715908999554813,
+   "llm_calls": 0,
+   "missing_facts": [
+    "report"
+   ],
+   "forbidden_found": [
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/delete-4",
+   "mode": "embeddings",
+   "seconds": 0.3611135260143783,
+   "llm_calls": 0,
+   "missing_facts": [
+    "business"
+   ],
+   "forbidden_found": [
+    "PR AUC",
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/delete-5",
+   "mode": "embeddings",
+   "seconds": 0.3494800720072817,
+   "llm_calls": 0,
+   "missing_facts": [
+    "costs"
+   ],
+   "forbidden_found": [
+    "PR AUC",
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-2/good",
+   "mode": "embeddings",
+   "seconds": 0.5923112949822098,
+   "llm_calls": 0,
+   "missing_facts": [
+    "costs"
+   ],
+   "forbidden_found": [
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-2/delete-0",
+   "mode": "embeddings",
+   "seconds": 0.3668728310149163,
+   "llm_calls": 0,
+   "missing_facts": [
+    "costs"
+   ],
+   "forbidden_found": [
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-2/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.3572738280054182,
+   "llm_calls": 0,
+   "missing_facts": [
+    "threshold",
+    "costs"
+   ],
+   "forbidden_found": [
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-2/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.3554254090122413,
+   "llm_calls": 0,
+   "missing_facts": [
+    "report",
+    "costs"
+   ],
+   "forbidden_found": [
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-2/delete-4",
+   "mode": "embeddings",
+   "seconds": 0.3730488139844965,
+   "llm_calls": 0,
+   "missing_facts": [
+    "business",
+    "costs"
+   ],
+   "forbidden_found": [
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-2/delete-5",
+   "mode": "embeddings",
+   "seconds": 0.3655972869892139,
+   "llm_calls": 0,
+   "missing_facts": [
+    "costs"
+   ],
+   "forbidden_found": [
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.4272636550012976,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "PR AUC",
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-2/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.43493303598370403,
+   "llm_calls": 0,
+   "missing_facts": [
+    "costs"
+   ],
+   "forbidden_found": [
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.42448108800454065,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "PR AUC",
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-2/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.4356347259890754,
+   "llm_calls": 0,
+   "missing_facts": [
+    "costs"
+   ],
+   "forbidden_found": [
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/negate-threshold",
+   "mode": "embeddings",
+   "seconds": 0.3814040239958558,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "PR AUC",
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/negate-business",
+   "mode": "embeddings",
+   "seconds": 0.41054430400254205,
+   "llm_calls": 0,
+   "missing_facts": [
+    "business"
+   ],
+   "forbidden_found": [
+    "PR AUC",
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-1/good",
+   "mode": "embeddings",
+   "seconds": 0.8720407520013396,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "теневом режим",
+    "A/B-тест",
+    "обратной связ"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-1/delete-0",
+   "mode": "embeddings",
+   "seconds": 0.339750516024651,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "теневом режим",
+    "A/B-тест",
+    "обратной связ"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-1/delete-1",
+   "mode": "embeddings",
+   "seconds": 0.3283379899803549,
+   "llm_calls": 0,
+   "missing_facts": [
+    "offline-better"
+   ],
+   "forbidden_found": [
+    "теневом режим",
+    "A/B-тест",
+    "обратной связ"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-1/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.32375911000417545,
+   "llm_calls": 0,
+   "missing_facts": [
+    "two-pipelines"
+   ],
+   "forbidden_found": [
+    "теневом режим",
+    "A/B-тест",
+    "обратной связ"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-1/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.3240793879958801,
+   "llm_calls": 0,
+   "missing_facts": [
+    "symptom"
+   ],
+   "forbidden_found": [
+    "теневом режим",
+    "A/B-тест",
+    "обратной связ"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-2/good",
+   "mode": "embeddings",
+   "seconds": 0.5911936780030373,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "feature store",
+    "теневом режим",
+    "shadow",
+    "A/B-тест",
+    "обратной связ",
+    "утечк"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-2/delete-0",
+   "mode": "embeddings",
+   "seconds": 0.33054621098563075,
+   "llm_calls": 0,
+   "missing_facts": [
+    "task"
+   ],
+   "forbidden_found": [
+    "feature store",
+    "теневом режим",
+    "shadow",
+    "A/B-тест",
+    "обратной связ",
+    "утечк"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-2/delete-1",
+   "mode": "embeddings",
+   "seconds": 0.3359837360039819,
+   "llm_calls": 0,
+   "missing_facts": [
+    "offline-better"
+   ],
+   "forbidden_found": [
+    "feature store",
+    "теневом режим",
+    "shadow",
+    "A/B-тест",
+    "обратной связ",
+    "утечк"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-2/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.3233608169830404,
+   "llm_calls": 0,
+   "missing_facts": [
+    "two-pipelines"
+   ],
+   "forbidden_found": [
+    "feature store",
+    "теневом режим",
+    "shadow",
+    "A/B-тест",
+    "обратной связ",
+    "утечк"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-2/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.33053627400659025,
+   "llm_calls": 0,
+   "missing_facts": [
+    "symptom"
+   ],
+   "forbidden_found": [
+    "feature store",
+    "теневом режим",
+    "shadow",
+    "A/B-тест",
+    "обратной связ",
+    "утечк"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-1/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.39513098599854857,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "теневом режим",
+    "A/B-тест",
+    "обратной связ"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-2/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.4162622229778208,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "feature store",
+    "теневом режим",
+    "shadow",
+    "A/B-тест",
+    "обратной связ",
+    "утечк"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-1/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.4030208640033379,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "feature store",
+    "теневом режим",
+    "A/B-тест",
+    "обратной связ"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-2/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.4140696930116974,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "feature store",
+    "теневом режим",
+    "shadow",
+    "A/B-тест",
+    "обратной связ",
+    "утечк"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-1/negate-two-pipelines",
+   "mode": "embeddings",
+   "seconds": 0.3638772459817119,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "теневом режим",
+    "A/B-тест",
+    "обратной связ"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-1/negate-offline-better",
+   "mode": "embeddings",
+   "seconds": 0.3713609450205695,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "теневом режим",
+    "A/B-тест",
+    "обратной связ"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/good",
+   "mode": "embeddings",
+   "seconds": 1.2187958050053567,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/delete-0",
+   "mode": "embeddings",
+   "seconds": 0.49017792599624954,
+   "llm_calls": 0,
+   "missing_facts": [
+    "task"
+   ],
+   "forbidden_found": [
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/delete-1",
+   "mode": "embeddings",
+   "seconds": 0.5027958049904555,
+   "llm_calls": 0,
+   "missing_facts": [
+    "dated-records"
+   ],
+   "forbidden_found": [
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.4632977659930475,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.456009888992412,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/delete-4",
+   "mode": "embeddings",
+   "seconds": 0.47243931400589645,
+   "llm_calls": 0,
+   "missing_facts": [
+    "random-split"
+   ],
+   "forbidden_found": [
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/delete-5",
+   "mode": "embeddings",
+   "seconds": 0.4668816630146466,
+   "llm_calls": 0,
+   "missing_facts": [
+    "boosting"
+   ],
+   "forbidden_found": [
+    "переобуч",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/delete-6",
+   "mode": "embeddings",
+   "seconds": 0.4664919339993503,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/delete-7",
+   "mode": "embeddings",
+   "seconds": 0.48268005400313996,
+   "llm_calls": 0,
+   "missing_facts": [
+    "train-score"
+   ],
+   "forbidden_found": [
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/delete-8",
+   "mode": "embeddings",
+   "seconds": 0.4805547099967953,
+   "llm_calls": 0,
+   "missing_facts": [
+    "worse-after-launch"
+   ],
+   "forbidden_found": [
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/good",
+   "mode": "embeddings",
+   "seconds": 0.69048832799308,
+   "llm_calls": 0,
+   "missing_facts": [
+    "tuning-on-report"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "k-fold",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "ранней остановк",
+    "регуляризац",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/delete-0",
+   "mode": "embeddings",
+   "seconds": 0.45715714400284924,
+   "llm_calls": 0,
+   "missing_facts": [
+    "task",
+    "tuning-on-report"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "k-fold",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "ранней остановк",
+    "регуляризац",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/delete-1",
+   "mode": "embeddings",
+   "seconds": 0.45872053402126767,
+   "llm_calls": 0,
+   "missing_facts": [
+    "tuning-on-report",
+    "dated-records"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "k-fold",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "ранней остановк",
+    "регуляризац",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/delete-2",
+   "mode": "embeddings",
+   "seconds": 0.45621631399262697,
+   "llm_calls": 0,
+   "missing_facts": [
+    "impute-all",
+    "tuning-on-report"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "k-fold",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "ранней остановк",
+    "регуляризац",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/delete-3",
+   "mode": "embeddings",
+   "seconds": 0.460534388985252,
+   "llm_calls": 0,
+   "missing_facts": [
+    "scale-all",
+    "tuning-on-report"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "k-fold",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "ранней остановк",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/delete-4",
+   "mode": "embeddings",
+   "seconds": 0.46683632998610847,
+   "llm_calls": 0,
+   "missing_facts": [
+    "random-split",
+    "tuning-on-report"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "k-fold",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "ранней остановк",
+    "регуляризац",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/delete-5",
+   "mode": "embeddings",
+   "seconds": 0.46305430098436773,
+   "llm_calls": 0,
+   "missing_facts": [
+    "boosting",
+    "tuning-on-report"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "ранней остановк",
+    "регуляризац",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/delete-6",
+   "mode": "embeddings",
+   "seconds": 0.46847675601020455,
+   "llm_calls": 0,
+   "missing_facts": [
+    "tuning-on-report"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "k-fold",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "ранней остановк",
+    "регуляризац",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/delete-7",
+   "mode": "embeddings",
+   "seconds": 0.47203897198778577,
+   "llm_calls": 0,
+   "missing_facts": [
+    "train-score",
+    "tuning-on-report"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "k-fold",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "ранней остановк",
+    "регуляризац",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/delete-8",
+   "mode": "embeddings",
+   "seconds": 0.4560133109916933,
+   "llm_calls": 0,
+   "missing_facts": [
+    "worse-after-launch",
+    "tuning-on-report"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "k-fold",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "ранней остановк",
+    "регуляризац",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.5330818119982723,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "утечк",
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/paraphrase-0",
+   "mode": "embeddings",
+   "seconds": 0.5528602479898836,
+   "llm_calls": 0,
+   "missing_facts": [
+    "tuning-on-report"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "переобуч",
+    "k-fold",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "ранней остановк",
+    "регуляризац",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.5562222250155173,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/paraphrase-1",
+   "mode": "embeddings",
+   "seconds": 0.5405278010002803,
+   "llm_calls": 0,
+   "missing_facts": [
+    "tuning-on-report"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "k-fold",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "ранней остановк",
+    "регуляризац",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/negate-scale-all",
+   "mode": "embeddings",
+   "seconds": 0.5066312169947196,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/negate-tuning-on-report",
+   "mode": "embeddings",
+   "seconds": 0.5132548869878519,
+   "llm_calls": 0,
+   "missing_facts": [],
+   "forbidden_found": [
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/real-qwen3.5-4b",
+   "mode": "embeddings",
+   "seconds": 0.6346647290047258,
+   "llm_calls": 0,
+   "missing_facts": [
+    "impute-all",
+    "scale-all",
+    "random-split",
+    "tuning-on-report",
+    "dated-records"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "переобуч",
+    "кросс-валидац",
+    "TimeSeriesSplit",
+    "разбиение по времени"
+   ],
+   "method": "embeddings",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/good",
+   "mode": "llm",
+   "seconds": 135.29581146402052,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-1/good",
+   "mode": "llm",
+   "seconds": 137.47543518801103,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/good",
+   "mode": "llm",
+   "seconds": 176.85046920599416,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/delete-4",
+   "mode": "llm",
+   "seconds": 226.053265325987,
+   "llm_calls": 1,
+   "missing_facts": [
+    "random-split"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-1",
+   "mode": "llm",
+   "seconds": 238.01085671799956,
+   "llm_calls": 1,
+   "missing_facts": [
+    "size"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-5",
+   "mode": "llm",
+   "seconds": 157.64828069400392,
+   "llm_calls": 1,
+   "missing_facts": [
+    "zero-one-costs"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-2/delete-2",
+   "mode": "llm",
+   "seconds": 148.30425311197178,
+   "llm_calls": 1,
+   "missing_facts": [
+    "two-pipelines"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-1/delete-1",
+   "mode": "llm",
+   "seconds": 74.55194841200137,
+   "llm_calls": 1,
+   "missing_facts": [
+    "two-fields"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/delete-3",
+   "mode": "llm",
+   "seconds": 134.21836609899765,
+   "llm_calls": 1,
+   "missing_facts": [
+    "repo-files"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/delete-4",
+   "mode": "llm",
+   "seconds": 235.38480962600443,
+   "llm_calls": 1,
+   "missing_facts": [
+    "random-split"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-2",
+   "mode": "llm",
+   "seconds": 177.24964418300078,
+   "llm_calls": 1,
+   "missing_facts": [
+    "single-source"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-1/delete-2",
+   "mode": "llm",
+   "seconds": 139.9843443480204,
+   "llm_calls": 1,
+   "missing_facts": [
+    "two-pipelines"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-2/delete-5",
+   "mode": "llm",
+   "seconds": 127.84056517199497,
+   "llm_calls": 1,
+   "missing_facts": [
+    "query"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/delete-6",
+   "mode": "llm",
+   "seconds": 146.63214801897993,
+   "llm_calls": 1,
+   "missing_facts": [
+    "non-negative-costs"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-7",
+   "mode": "llm",
+   "seconds": 154.00133431100403,
+   "llm_calls": 1,
+   "missing_facts": [
+    "negative-costs"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/delete-4",
+   "mode": "llm",
+   "seconds": 172.14513196097687,
+   "llm_calls": 1,
+   "missing_facts": [
+    "business"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/delete-2",
+   "mode": "llm",
+   "seconds": 173.2479205020063,
+   "llm_calls": 1,
+   "missing_facts": [
+    "threshold"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-4",
+   "mode": "llm",
+   "seconds": 156.92941182199866,
+   "llm_calls": 1,
+   "missing_facts": [
+    "equal-costs"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-1/delete-3",
+   "mode": "llm",
+   "seconds": 164.66886931899353,
+   "llm_calls": 1,
+   "missing_facts": [
+    "migration"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-2/paraphrase-0",
+   "mode": "llm",
+   "seconds": 122.39195413899142,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-2/paraphrase-1",
+   "mode": "llm",
+   "seconds": 177.6249301439966,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "SMOTE"
+   ],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/paraphrase-1",
+   "mode": "llm",
+   "seconds": 169.05481814898667,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "Беллман"
+   ],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-2/paraphrase-1",
+   "mode": "llm",
+   "seconds": 129.62669159998768,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-1/paraphrase-1",
+   "mode": "llm",
+   "seconds": 189.65203870501136,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "readiness"
+   ],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/paraphrase-0",
+   "mode": "llm",
+   "seconds": 144.570430939988,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "root"
+   ],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-1/paraphrase-1",
+   "mode": "llm",
+   "seconds": 158.4889879609982,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "feature store"
+   ],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/negate-single-source",
+   "mode": "llm",
+   "seconds": 156.26944786298554,
+   "llm_calls": 1,
+   "missing_facts": [
+    "single-source"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/negate-threshold",
+   "mode": "llm",
+   "seconds": 95.17611564899562,
+   "llm_calls": 1,
+   "missing_facts": [
+    "threshold"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/negate-tuning-on-report",
+   "mode": "llm",
+   "seconds": 226.50547438199283,
+   "llm_calls": 1,
+   "missing_facts": [
+    "tuning-on-report"
+   ],
+   "forbidden_found": [],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/real-qwen3.5-4b",
+   "mode": "llm",
+   "seconds": 248.06443903798936,
+   "llm_calls": 1,
+   "missing_facts": [
+    "impute-all",
+    "scale-all",
+    "random-split",
+    "tuning-on-report",
+    "dated-records"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "переобуч"
+   ],
+   "method": "llm",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/good",
+   "mode": "both",
+   "seconds": 8.760055020014988,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "кэш",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-1/good",
+   "mode": "both",
+   "seconds": 24.632714456005488,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "скетч",
+    "sketch"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/good",
+   "mode": "both",
+   "seconds": 10.416136930987705,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "PR AUC",
+    "precision",
+    "надежност"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-2/delete-4",
+   "mode": "both",
+   "seconds": 104.69176758098183,
+   "llm_calls": 1,
+   "missing_facts": [
+    "random-split"
+   ],
+   "forbidden_found": [
+    "оптимистич"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-1",
+   "mode": "both",
+   "seconds": 407.1368862570089,
+   "llm_calls": 1,
+   "missing_facts": [
+    "size"
+   ],
+   "forbidden_found": [],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-5",
+   "mode": "both",
+   "seconds": 77.89573010901222,
+   "llm_calls": 1,
+   "missing_facts": [
+    "zero-one-costs"
+   ],
+   "forbidden_found": [],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-2/delete-2",
+   "mode": "both",
+   "seconds": 8.647138234024169,
+   "llm_calls": 1,
+   "missing_facts": [
+    "two-pipelines"
+   ],
+   "forbidden_found": [],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-1/delete-1",
+   "mode": "both",
+   "seconds": 43.5091595610138,
+   "llm_calls": 1,
+   "missing_facts": [
+    "two-fields",
+    "small-range"
+   ],
+   "forbidden_found": [
+    "Timsort",
+    "подсчет",
+    "поразрядн",
+    "дерево решений",
+    "n log n"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/delete-3",
+   "mode": "both",
+   "seconds": 8.11957987799542,
+   "llm_calls": 1,
+   "missing_facts": [
+    "repo-files"
+   ],
+   "forbidden_found": [
+    "кэш",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/delete-4",
+   "mode": "both",
+   "seconds": 103.25706919000368,
+   "llm_calls": 1,
+   "missing_facts": [
+    "random-split"
+   ],
+   "forbidden_found": [
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-2",
+   "mode": "both",
+   "seconds": 11.008671480987687,
+   "llm_calls": 1,
+   "missing_facts": [
+    "single-source"
+   ],
+   "forbidden_found": [],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-1/delete-2",
+   "mode": "both",
+   "seconds": 7.84805101598613,
+   "llm_calls": 1,
+   "missing_facts": [
+    "two-pipelines"
+   ],
+   "forbidden_found": [
+    "теневом режим",
+    "A/B-тест"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-streaming-top-k-essay/good-2/delete-5",
+   "mode": "both",
+   "seconds": 53.46809442201629,
+   "llm_calls": 1,
+   "missing_facts": [
+    "query"
+   ],
+   "forbidden_found": [
+    "Space-Saving",
+    "скетч",
+    "sketch"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/delete-6",
+   "mode": "both",
+   "seconds": 24.616306831972906,
+   "llm_calls": 1,
+   "missing_facts": [
+    "non-negative-costs"
+   ],
+   "forbidden_found": [],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-7",
+   "mode": "both",
+   "seconds": 24.689929095999105,
+   "llm_calls": 1,
+   "missing_facts": [
+    "negative-costs"
+   ],
+   "forbidden_found": [],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/delete-4",
+   "mode": "both",
+   "seconds": 9.417226050019963,
+   "llm_calls": 1,
+   "missing_facts": [
+    "business"
+   ],
+   "forbidden_found": [
+    "PR AUC",
+    "precision",
+    "надежност"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/delete-2",
+   "mode": "both",
+   "seconds": 8.683249933994375,
+   "llm_calls": 1,
+   "missing_facts": [
+    "threshold"
+   ],
+   "forbidden_found": [
+    "PR AUC",
+    "precision",
+    "надежност"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/delete-4",
+   "mode": "both",
+   "seconds": 57.64761121699121,
+   "llm_calls": 1,
+   "missing_facts": [
+    "equal-costs"
+   ],
+   "forbidden_found": [],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-1/delete-3",
+   "mode": "both",
+   "seconds": 9.34475704599754,
+   "llm_calls": 1,
+   "missing_facts": [
+    "migration"
+   ],
+   "forbidden_found": [
+    "расширить",
+    "сузить",
+    "init-контейнер",
+    "readiness",
+    "check --deploy"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-2/paraphrase-0",
+   "mode": "both",
+   "seconds": 30.124132375989575,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "Timsort",
+    "подсчет"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-2/paraphrase-1",
+   "mode": "both",
+   "seconds": 50.984509909001645,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "precision",
+    "recall",
+    "надежност"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-2/paraphrase-1",
+   "mode": "both",
+   "seconds": 50.44460820098175,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-sorting-stability-essay/good-2/paraphrase-1",
+   "mode": "both",
+   "seconds": 96.0403608919878,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "Timsort",
+    "подсчет"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-django-docker-production-essay/good-1/paraphrase-1",
+   "mode": "both",
+   "seconds": 9.44603350199759,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "расширить",
+    "сузить",
+    "init-контейнер",
+    "readiness",
+    "check --deploy"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "backend-dockerfile-review-essay/good-1/paraphrase-0",
+   "mode": "both",
+   "seconds": 10.724038422020385,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "кэш",
+    "docker history",
+    "воспроизводим"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-production-degradation-essay/good-1/paraphrase-1",
+   "mode": "both",
+   "seconds": 8.851934533013264,
+   "llm_calls": 1,
+   "missing_facts": [],
+   "forbidden_found": [
+    "теневом режим",
+    "A/B-тест"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "algo-shortest-path-choice-essay/good-1/negate-single-source",
+   "mode": "both",
+   "seconds": 74.52278751597623,
+   "llm_calls": 1,
+   "missing_facts": [
+    "single-source"
+   ],
+   "forbidden_found": [],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-imbalanced-threshold-essay/good-1/negate-threshold",
+   "mode": "both",
+   "seconds": 49.337626510998234,
+   "llm_calls": 1,
+   "missing_facts": [
+    "threshold"
+   ],
+   "forbidden_found": [
+    "PR AUC",
+    "precision",
+    "надежност"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/good-1/negate-tuning-on-report",
+   "mode": "both",
+   "seconds": 95.44805741502205,
+   "llm_calls": 1,
+   "missing_facts": [
+    "tuning-on-report"
+   ],
+   "forbidden_found": [
+    "разбиение по времени",
+    "оптимистич"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  },
+  {
+   "case_id": "ml-validation-leakage-essay/real-qwen3.5-4b",
+   "mode": "both",
+   "seconds": 95.42494197399355,
+   "llm_calls": 1,
+   "missing_facts": [
+    "impute-all",
+    "scale-all",
+    "random-split",
+    "tuning-on-report",
+    "dated-records"
+   ],
+   "forbidden_found": [
+    "утечк",
+    "переобуч",
+    "разбиение по времени"
+   ],
+   "method": "both",
+   "notes": [],
+   "config": "0.6|0.425|0.05|bge-m3|hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS|none"
+  }
+ ],
+ "report": "Пороги: факты 0.6, запрещённое 0.425, серая зона ±0.05; эмбеддер bge-m3, проверяльщик hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS, reasoning_effort none\ntune (82 вариантов): algo-sorting-stability-essay, algo-streaming-top-k-essay, backend-dockerfile-review-essay, ml-imbalanced-threshold-essay, ml-production-degradation-essay\ntest (79 вариантов): algo-shortest-path-choice-essay, backend-django-docker-production-essay, backend-django-orm-performance-essay, ml-validation-leakage-essay\n\n### Эмбеддинги на всём наборе\n\n| Режим | N | Факты P/R/F1 | Запрещённое P/R/F1 | Ошибки на отрицании | Перефразировка найдена | Хорошие отклонены | Вердикт верен | Среднее, с | p95, с | Вызовов LLM |\n|---|---|---|---|---|---|---|---|---|---|---|\n| embeddings, tune | 82 | 0.61/0.77/0.68 | 0.06/0.71/0.11 | 7/10 (70 %) | 20/28 (71 %) | 10/10 (100 %) | 72/82 (88 %) | 0.41 | 0.78 | 0 |\n| embeddings, test | 79 | 0.43/0.78/0.55 | 0.05/0.78/0.09 | 7/8 (88 %) | 19/24 (79 %) | 7/8 (88 %) | 70/79 (89 %) | 0.50 | 0.97 | 0 |\n| embeddings, все | 161 | 0.50/0.77/0.61 | 0.05/0.75/0.10 | 14/18 (78 %) | 39/52 (75 %) | 17/18 (94 %) | 142/161 (88 %) | 0.46 | 0.78 | 0 |\n\n### Сравнение режимов: вся подвыборка\n\n| Режим | N | Факты P/R/F1 | Запрещённое P/R/F1 | Ошибки на отрицании | Перефразировка найдена | Хорошие отклонены | Вердикт верен | Среднее, с | p95, с | Вызовов LLM |\n|---|---|---|---|---|---|---|---|---|---|---|\n| embeddings | 30 | 0.66/0.86/0.75 | 0.05/0.60/0.10 | 2/3 (67 %) | 4/7 (57 %) | 3/3 (100 %) | 25/30 (83 %) | 0.47 | 0.94 | 0 |\n| llm | 30 | 0.92/1.00/0.96 | 1.00/0.70/0.82 | 0/3 (0 %) | 5/7 (71 %) | 0/3 (0 %) | 28/30 (93 %) | 163.13 | 238.01 | 30 |\n| both | 30 | 0.88/1.00/0.94 | 0.07/0.40/0.11 | 0/3 (0 %) | 2/7 (29 %) | 3/3 (100 %) | 26/30 (87 %) | 52.50 | 104.69 | 30 |\n\n### Сравнение режимов: подвыборка ∩ test\n\n| Режим | N | Факты P/R/F1 | Запрещённое P/R/F1 | Ошибки на отрицании | Перефразировка найдена | Хорошие отклонены | Вердикт верен | Среднее, с | p95, с | Вызовов LLM |\n|---|---|---|---|---|---|---|---|---|---|---|\n| embeddings | 14 | 0.71/0.86/0.77 | 0.07/0.60/0.12 | 1/2 (50 %) | 1/2 (50 %) | 0/0 | 12/14 (86 %) | 0.46 | 0.63 | 0 |\n| llm | 14 | 0.88/1.00/0.93 | 1.00/0.80/0.89 | 0/2 (0 %) | 2/2 (100 %) | 0/0 | 14/14 (100 %) | 189.01 | 248.06 | 14 |\n| both | 14 | 0.88/1.00/0.93 | 0.17/0.60/0.26 | 0/2 (0 %) | 1/2 (50 %) | 0/0 | 13/14 (93 %) | 81.83 | 407.14 | 14 |"
+}

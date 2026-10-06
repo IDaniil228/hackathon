@@ -1,0 +1,9 @@
+# Настоящие генерации с разметкой, сделанной чтением, а не построением.
+- id: real-qwen3.5-4b
+  template: ml/junior/ml-validation-leakage-essay.md
+  sample: ../samples/ml-validation-leakage-essay-qwen3.5-4b.json
+  # Те же пропущенные факты, что в HONEST_BAD_VERDICTS из test_essay.py: случайное разбиение
+  # там есть только как указание кандидату, подбора на отчётной части и дат нет вовсе.
+  missing_facts: [random-split, tuning-on-report, dated-records]
+  # "утечк" и "переобуч" названы прямо; "завышает оценку качества" пересказывает "оптимистич".
+  forbidden_found: [утечк, переобуч, оптимистич]

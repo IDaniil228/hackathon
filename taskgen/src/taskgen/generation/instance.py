@@ -22,6 +22,7 @@ from taskgen.bank.parser import unclosed_fence
 from taskgen.config import GenerationSettings
 from taskgen.contracts import (
     ChatMessage,
+    Embedder,
     HiddenPayload,
     LLMClient,
     ReasoningEffort,
@@ -39,7 +40,12 @@ from taskgen.evaluation.jsonout import (
     StructuredOutputError,
     complete_structured,
 )
-from taskgen.generation.essay import EssayScenarioError, generate_essay
+from taskgen.generation.essay import (
+    EmbeddingCache,
+    EssayCheckOptions,
+    EssayScenarioError,
+    generate_essay,
+)
 from taskgen.generation.harness import GeneratorError, generator_request, parse_generator_output
 from taskgen.generation.leaks import (
     defines_entrypoint,
@@ -252,6 +258,9 @@ class InstanceDeps:
     # None — решает модель проверяльщика, а без неё — модель генерации.
     solver_model: str | None = None
     solver_reasoning_effort: ReasoningEffort | None = None
+    # Эмбеддер и кэш векторов шаблонов для проверки ситуации эссе; способ проверки — в options.
+    embedder: Embedder | None = None
+    embedding_cache: EmbeddingCache | None = None
 
     def solver(self) -> SolverConfig | None:
         """Настройки слепого решателя; None — решатель выключен."""
@@ -358,6 +367,14 @@ async def _essay(
             checker_reasoning_effort=deps.checker_reasoning_effort,
             system_suffix=system_suffix,
             request_suffix=request_suffix,
+            check_options=EssayCheckOptions(
+                method=deps.options.essay_check_method,
+                fact_threshold=deps.options.essay_fact_threshold,
+                forbidden_threshold=deps.options.essay_forbidden_threshold,
+                grey_zone=deps.options.essay_grey_zone,
+            ),
+            embedder=deps.embedder,
+            embedding_cache=deps.embedding_cache,
         )
     except httpx.HTTPError as error:
         raise LLMUnavailableError("Модель генерации недоступна, повторите позже") from error

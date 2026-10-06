@@ -83,6 +83,10 @@ OpenAI-совместимый провайдер: Ollama, vLLM или облач
 | `generation.solver_enabled` | `TASKGEN_GENERATION__SOLVER_ENABLED` | boolean | `false` | Проверять экземпляр слепым решателем до выдачи: задачку он решает по кейсу и вариантам, задание с кодом — по условию и примерам, а решение идёт на все кейсы. Без решателя не проверены полнота условия и отсутствие второго верного ответа в кейсе. Включать стоит с сильной моделью решателя, например облачной: на слабой машине это ещё один вызов модели на задание и ложные отказы |
 | `generation.solver_attempts` | `TASKGEN_GENERATION__SOLVER_ATTEMPTS` | integer, ≥ 1 | `1` | Сколько раз решатель пробует решить один черновик, прежде чем признать его нерешаемым и отправить на переписывание |
 | `generation.public_examples` | `TASKGEN_GENERATION__PUBLIC_EXAMPLES` | integer, ≥ 0 | `2` | Сколько первых кейсов задания с кодом показать кандидату примерами; если кейсов больше одного, хотя бы один остаётся скрытым |
+| `generation.essay_check_method` | `TASKGEN_GENERATION__ESSAY_CHECK_METHOD` | одно из `"llm"`, `"embeddings"`, `"both"` | `"llm"` | Чем проверять ситуацию эссе на факты и пересказ запрещённых фраз: llm, embeddings или both, где LLM решает только серую зону вокруг порогов. Без эмбеддера режимы с эмбеддингами проверяет LLM. LLM по умолчанию: на бенчмарке scripts/essay_check_bench.py эмбеддинги принимают отрицание факта за сам факт и не отличают запрещённую фразу от темы ситуации |
+| `generation.essay_fact_threshold` | `TASKGEN_GENERATION__ESSAY_FACT_THRESHOLD` | number, ≥ -1.0, ≤ 1.0 | `0.6` | Порог косинусного сходства факта с предложением ситуации для bge-m3, подобран бенчмарком по F1; другой модели эмбеддингов нужен свой порог |
+| `generation.essay_forbidden_threshold` | `TASKGEN_GENERATION__ESSAY_FORBIDDEN_THRESHOLD` | number, ≥ -1.0, ≤ 1.0 | `0.425` | Порог косинусного сходства запрещённой фразы с предложением ситуации для bge-m3, подобран тем же бенчмарком |
+| `generation.essay_grey_zone` | `TASKGEN_GENERATION__ESSAY_GREY_ZONE` | number, ≥ 0.0, ≤ 1.0 | `0.05` | Полуширина серой зоны вокруг порогов в режиме both: такие факты и фразы решает LLM |
 
 ## sandbox
 
