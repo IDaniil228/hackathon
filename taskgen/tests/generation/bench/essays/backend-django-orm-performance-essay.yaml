@@ -1,0 +1,160 @@
+template: backend/middle/backend-django-orm-performance-essay.md
+skip_deletion:
+  drf: "сериализатор и view в коде сами показывают Django REST Framework"
+situations:
+  - id: good-1
+    params:
+      domain: "лента статей с автором, тегами и числом комментариев"
+    title: "Медленная лента статей"
+    units:
+      - text: "Редакция блога жалуется, что лента статей открывается медленно."
+        facts: []
+      - text: "Ленту отдаёт эндпоинт на Django REST Framework."
+        facts: [drf]
+      - text: "Модели выглядят так:"
+        facts: []
+      - text: |-
+          ```python
+          class Author(models.Model):
+              name = models.CharField(max_length=100)
+
+
+          class Tag(models.Model):
+              title = models.CharField(max_length=50)
+
+
+          class Article(models.Model):
+              author = models.ForeignKey(Author, on_delete=models.CASCADE)
+              tags = models.ManyToManyField(Tag)
+              title = models.CharField(max_length=200)
+              published = models.BooleanField()
+              created_at = models.DateTimeField(auto_now_add=True)
+
+
+          class Comment(models.Model):
+              article = models.ForeignKey(Article, on_delete=models.CASCADE)
+              text = models.TextField()
+          ```
+        facts: [models]
+      - text: "Сериализатор статьи:"
+        facts: []
+      - text: |-
+          ```python
+          class ArticleSerializer(serializers.ModelSerializer):
+              author_name = serializers.CharField(source="author.name")
+              tag_titles = serializers.SerializerMethodField()
+              comments_total = serializers.SerializerMethodField()
+
+              class Meta:
+                  model = Article
+                  fields = ["id", "title", "author_name", "tag_titles", "comments_total"]
+
+              def get_tag_titles(self, obj):
+                  return [tag.title for tag in obj.tags.all()]
+
+              def get_comments_total(self, obj):
+                  return obj.comment_set.count()
+          ```
+        facts: [serializer-related, serializer-count]
+      - text: "View ленты:"
+        facts: []
+      - text: |-
+          ```python
+          class ArticleFeed(generics.ListAPIView):
+              serializer_class = ArticleSerializer
+
+              def get_queryset(self):
+                  return Article.objects.filter(published=True).order_by("-created_at")
+          ```
+        facts: [view-filter]
+      - text: "На странице ленты 50 статей, и ответ эндпоинта приходит примерно за 3 секунды."
+        facts: [page-time]
+      - text: "В таблице статей уже несколько миллионов строк."
+        facts: [table-size]
+  - id: good-2
+    params:
+      domain: "список задач трекера с исполнителем, проектом и метками"
+    title: "Долгий список задач"
+    units:
+      - text: "Пользователи трекера задач жалуются, что список задач грузится долго."
+        facts: []
+      - text: "Список отдаёт API на Django REST Framework."
+        facts: [drf]
+      - text: "Модели:"
+        facts: []
+      - text: |-
+          ```python
+          class Member(models.Model):
+              name = models.CharField(max_length=100)
+
+
+          class Project(models.Model):
+              title = models.CharField(max_length=100)
+              archived = models.BooleanField()
+
+
+          class Label(models.Model):
+              name = models.CharField(max_length=30)
+
+
+          class Task(models.Model):
+              assignee = models.ForeignKey(Member, on_delete=models.CASCADE)
+              project = models.ForeignKey(Project, on_delete=models.CASCADE)
+              labels = models.ManyToManyField(Label)
+              title = models.CharField(max_length=200)
+              created_at = models.DateTimeField(auto_now_add=True)
+
+
+          class Subtask(models.Model):
+              task = models.ForeignKey(Task, on_delete=models.CASCADE)
+              done = models.BooleanField()
+          ```
+        facts: [models]
+      - text: "Сериализатор:"
+        facts: []
+      - text: |-
+          ```python
+          class TaskSerializer(serializers.ModelSerializer):
+              assignee_name = serializers.CharField(source="assignee.name")
+              project_title = serializers.CharField(source="project.title")
+              label_names = serializers.SerializerMethodField()
+              subtasks = serializers.SerializerMethodField()
+
+              class Meta:
+                  model = Task
+                  fields = ["id", "title", "assignee_name", "project_title", "label_names", "subtasks"]
+
+              def get_label_names(self, obj):
+                  return [label.name for label in obj.labels.all()]
+
+              def get_subtasks(self, obj):
+                  return obj.subtask_set.count()
+          ```
+        facts: [serializer-related, serializer-count]
+      - text: "View:"
+        facts: []
+      - text: |-
+          ```python
+          class TaskList(generics.ListAPIView):
+              serializer_class = TaskSerializer
+
+              def get_queryset(self):
+                  return Task.objects.filter(project__archived=False).order_by("-created_at")
+          ```
+        facts: [view-filter]
+      - text: "На одной странице выводится 50 задач, а запрос выполняется около трёх секунд."
+        facts: [page-time]
+      - text: "Задач в базе несколько миллионов."
+        facts: [table-size]
+paraphrases:
+  - phrases: [select_related]
+    text: "Опытный коллега предложил подтягивать связанные объекты вместе с основными записями одним SQL-запросом через JOIN."
+  - phrases: [индекс, index]
+    text: "Ещё коллега посоветовал завести для столбца с датой отдельную структуру в базе, вроде B-дерева, которая ускоряет поиск и сортировку."
+negations:
+  - situation: good-1
+    fact: page-time
+    text: "На странице ленты 50 статей, и ответ эндпоинта приходит мгновенно, за десятки миллисекунд."
+  - situation: good-1
+    fact: table-size
+    text: "В таблице статей не наберётся и тысячи строк."
