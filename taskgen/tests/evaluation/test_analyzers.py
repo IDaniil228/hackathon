@@ -189,6 +189,14 @@ async def test_language_alias_picks_the_analyzers():
     assert tools == {"ruff", "radon", "annotations"}
 
 
+async def test_runtime_on_a_language_driver_gets_its_analyzers_and_rubric():
+    # Ответ на задание ML приходит с языком окружения python-ml: это Python, и без
+    # анализаторов балл качества заданий ML терялся молча.
+    tools = {report.tool for report in await analyzer().analyze(PY_SIMPLE, "python-ml")}
+    assert tools == {"ruff", "radon", "annotations"}
+    assert load_rubric("python-ml") == load_rubric("python")
+
+
 class _Answering:
     def __init__(self, result=None, error=None) -> None:
         self.result, self.error = result, error
