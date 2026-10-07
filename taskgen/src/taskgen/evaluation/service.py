@@ -40,6 +40,7 @@ from taskgen.contracts import (
 from taskgen.db import Answer, CandidateSummary, Grade, Task, Template, TestSession
 from taskgen.evaluation.analyzers import default_analyzers, run_analyzers
 from taskgen.evaluation.detector import LLMAIDetector
+from taskgen.evaluation.evidence import EvidenceOptions
 from taskgen.evaluation.grading import (
     GradeLevel,
     LevelResult,
@@ -365,6 +366,11 @@ class Evaluator:
             temperature=settings.scoring.judge_temperature,
             reasoning_effort=settings.llm.judge_reasoning_effort,
             relevance=relevance,
+            evidence=EvidenceOptions(
+                mode=settings.scoring.judge_evidence,
+                repairs=settings.scoring.judge_repairs,
+                max_spans=settings.scoring.judge_max_spans,
+            ),
         )
         detector = None
         if settings.ai_detector_enabled:

@@ -13,7 +13,7 @@ from functools import lru_cache
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from taskgen.contracts import EssayCheckMethod, ReasoningEffort, TaskKind
+from taskgen.contracts import EssayCheckMethod, EvidenceMode, ReasoningEffort, TaskKind
 
 _REASONING = (
     "Поле reasoning_effort запроса к модели {role}; null — поле не передаётся, и модель "
@@ -188,6 +188,26 @@ class ScoringSettings(BaseModel):
         le=2.0,
         description="Температура судьи. Ненулевая нужна, чтобы сэмплы различались и разброс "
         "что-то значил",
+    )
+    judge_evidence: EvidenceMode = Field(
+        default="quotes",
+        description="Чем судья подтверждает вердикты yes и partial: quotes — дословные "
+        "цитаты ответа, spans — номера участков ответа, которые ему показаны с номерами: "
+        "строк кода или предложений текста. Замер — docs/taskgen/validation.md",
+    )
+    judge_repairs: int = Field(
+        default=2,
+        ge=0,
+        description="Сколько раз переспросить судью с перечнем ошибок, если его ответ не по "
+        "схеме или ссылается на текст, которого нет: цитату не дословно или номер участка, "
+        "которого нет. Каждый повтор — ещё один вызов модели на сэмпл. 0 выключает повторы",
+    )
+    judge_max_spans: int | None = Field(
+        default=None,
+        ge=1,
+        description="Сколько участков ответа самое большее подтверждают один вердикт в режиме "
+        "spans; вердикт с большим числом участков не засчитывается. Ссылка на весь ответ не "
+        "доказывает ничего и обходит проверку смысла цитат. null — без предела",
     )
     judge_quote_threshold: float | None = Field(
         default=None,

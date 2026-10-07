@@ -131,6 +131,9 @@ ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
 # Способ проверки ситуации эссе; что делает каждый, описано в generation/essay.py.
 EssayCheckMethod = Literal["llm", "embeddings", "both"]
 
+# Чем модель подтверждает вердикт; что делает каждый способ, описано в evaluation/evidence.py.
+EvidenceMode = Literal["quotes", "spans"]
+
 
 class LLMClient(Protocol):
     async def complete(
@@ -272,6 +275,7 @@ class Analyzer(Protocol):
 class RubricVerdict(BaseModel):
     item_id: str
     verdict: Literal["yes", "partial", "no"]
+    # Текст доказательства: цитаты судьи или текст участков, на которые он сослался.
     quotes: list[str] = []
 
 
@@ -280,8 +284,14 @@ class JudgeResult(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
     # Разброс между сэмплами судьи; высокий разброс — повод для ручной проверки.
     spread: float = 0.0
-    # Замечания проверки: какие вердикты сняты проверкой смысла цитат и почему она пропущена.
+    # Замечания проверки: повторы судьи, вердикты, снятые проверкой смысла цитат, и почему
+    # она пропущена.
     notes: list[str] = []
+    # По всем сэмплам: вердикты yes и partial, сколько из них снято из-за неверного
+    # доказательства и сколько раз судью переспросили.
+    claimed: int = 0
+    unsupported: int = 0
+    repairs: int = 0
 
 
 class JudgeRequest(BaseModel):
