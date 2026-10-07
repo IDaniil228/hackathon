@@ -1,21 +1,31 @@
-"""Клиент OpenAI-совместимого API: /v1/chat/completions и /v1/embeddings.
+"""Клиент OpenAI-совместимого API (/v1/chat/completions и /v1/embeddings) и маршрут по ролям.
 
-Такой протокол отдают Ollama, vLLM и шлюзы к облачным моделям, поэтому провайдер меняется
-настройками base_url, api_key и именем модели, без кода.
+Такой протокол отдают Ollama, vLLM и облачные API, поэтому провайдер меняется настройками
+llm.providers, а модель роли — настройками самой роли, без кода. Каждый вызов уже называет
+модель своей роли, и ProviderRouter отправляет его провайдеру этой роли.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Collection, Mapping
 from typing import Any
 
 import httpx
 
-from taskgen.config import LLMSettings, Settings
+from taskgen.config import LLMSettings, ProviderSettings, Settings, provider_key_variable
 from taskgen.contracts import ChatMessage, Embedder, LLMClient, ReasoningEffort
 
 logger = logging.getLogger(__name__)
+
+
+class MissingAPIKeyError(httpx.HTTPError):
+    """Провайдеру нужен ключ, а он не задан. Запрос в сеть не уходит.
+
+    Наследник httpx.HTTPError: генерация и оценка считают его недоступностью модели, как
+    любую сетевую ошибку.
+    """
 
 
 class LimitedLLM:
@@ -48,18 +58,111 @@ class LimitedLLM:
             )
 
 
-def limited_llm(state: Any) -> LimitedLLM:
-    """Ограничитель из app.state.limited_llm, общий для генерации и оценки.
+class ProviderRouter:
+    """LLMClient и Embedder над провайдерами ролей.
 
-    Оба модуля ходят в одну модель, поэтому лимит одновременных запросов к ней один. Новый
-    клиент в state.llm получает новый ограничитель.
+    Вызов чата уходит провайдеру роли, которая назвала модель вызова; без модели — провайдеру
+    генератора. У каждого провайдера свой лимит одновременных вызовов: облако и локальная
+    модель — разные ресурсы. Эмбеддинги идут провайдеру роли embedding без лимита, как и до
+    разделения провайдеров.
     """
-    llm = getattr(state, "limited_llm", None)
-    if llm is None or llm.inner is not state.llm:
+
+    def __init__(
+        self, settings: LLMSettings, clients: Mapping[str, Any], *, owned: bool = False
+    ) -> None:
+        self._settings = settings
+        self._clients = dict(clients)
+        self._limited = {
+            name: LimitedLLM(client, limit=settings.providers[name].concurrency)
+            for name, client in self._clients.items()
+        }
+        self._model_providers = settings.model_providers()
+        self._owned = owned
+        self.model_name = settings.embedding.model
+
+    @classmethod
+    def from_settings(
+        cls, settings: LLMSettings, *, roles: Collection[str] | None = None
+    ) -> ProviderRouter:
+        """Свой клиент на каждого провайдера, которого называет хотя бы одна из ролей roles.
+
+        roles=None — все роли. Импорту шаблонов нужна только роль embedding, и ему незачем
+        предупреждать о ключе облачного судьи.
+        """
+        chosen = {
+            name: role for name, role in settings.roles().items() if roles is None or name in roles
+        }
+        used = sorted({role.provider for role in chosen.values()})
+        for name, role in chosen.items():
+            logger.info("Роль %s: модель %s у провайдера %s", name, role.model, role.provider)
+        for name in used:
+            provider = settings.providers[name]
+            if provider.requires_key and provider.api_key is None:
+                logger.warning(
+                    "У провайдера %s не задан ключ: вызовы его ролей будут завершаться ошибкой. "
+                    "Задайте %s или переназначьте роли на другого провайдера",
+                    name,
+                    provider_key_variable(name),
+                )
+        clients = {
+            name: OpenAICompatibleClient(settings.providers[name], name=name) for name in used
+        }
+        return cls(settings, clients, owned=True)
+
+    def providers(self) -> set[str]:
+        return set(self._clients)
+
+    async def complete(
+        self,
+        messages: list[ChatMessage],
+        *,
+        model: str | None = None,
+        temperature: float = 0.7,
+        json_schema: dict[str, Any] | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
+    ) -> str:
+        model = model or self._settings.generator.model
+        provider = self._model_providers.get(model)
+        if provider is None:
+            raise ValueError(
+                f"модель {model} не назначена ни одной роли в настройках llm, и неизвестно, "
+                "какому провайдеру её отправить"
+            )
+        return await self._limited[provider].complete(
+            messages,
+            model=model,
+            temperature=temperature,
+            json_schema=json_schema,
+            reasoning_effort=reasoning_effort,
+        )
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        client = self._clients[self._settings.embedding.provider]
+        return await client.embed(texts, model=self.model_name)
+
+    async def aclose(self) -> None:
+        if self._owned:
+            for client in self._clients.values():
+                await client.aclose()
+
+
+def limited_llm(state: Any) -> ProviderRouter:
+    """Клиент LLM с лимитами провайдеров, общий для генерации и оценки.
+
+    Свой клиент приложения уже им является. Подменённый клиент из state.llm обслуживает все
+    роли, а лимиты по-прежнему действуют на каждого провайдера отдельно. Новый клиент в
+    state.llm получает новый маршрут.
+    """
+    if isinstance(state.llm, ProviderRouter):
+        return state.llm
+    router = getattr(state, "limited_llm", None)
+    if router is None or getattr(state, "limited_llm_inner", None) is not state.llm:
         settings: Settings = state.settings
-        llm = LimitedLLM(state.llm, limit=settings.llm.concurrency)
-        state.limited_llm = llm
-    return llm
+        providers = {role.provider for role in settings.llm.roles().values()}
+        router = ProviderRouter(settings.llm, dict.fromkeys(providers, state.llm))
+        state.limited_llm = router
+        state.limited_llm_inner = state.llm
+    return router
 
 
 def state_embedder(state: Any) -> Embedder | None:
@@ -75,14 +178,26 @@ def state_embedder(state: Any) -> Embedder | None:
 
 
 class OpenAICompatibleClient:
-    def __init__(self, settings: LLMSettings, http: httpx.AsyncClient | None = None) -> None:
-        self._settings = settings
-        self._http = http or httpx.AsyncClient(
-            base_url=settings.base_url.rstrip("/"),
-            headers={"Authorization": f"Bearer {settings.api_key}"},
-            timeout=settings.timeout_seconds,
+    """Клиент одного провайдера; модель называет каждый вызов."""
+
+    def __init__(
+        self,
+        provider: ProviderSettings,
+        *,
+        name: str,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self._provider = provider
+        self._name = name
+        headers = {}
+        if provider.api_key is not None:
+            headers["Authorization"] = f"Bearer {provider.api_key.get_secret_value()}"
+        self._http = httpx.AsyncClient(
+            base_url=provider.base_url.rstrip("/"),
+            headers=headers,
+            timeout=provider.timeout_seconds,
+            transport=transport,
         )
-        self.model_name = settings.embedding_model
 
     async def complete(
         self,
@@ -93,8 +208,10 @@ class OpenAICompatibleClient:
         json_schema: dict[str, Any] | None = None,
         reasoning_effort: ReasoningEffort | None = None,
     ) -> str:
+        if model is None:
+            raise ValueError(f"вызов провайдера {self._name} без модели")
         body: dict[str, Any] = {
-            "model": model or self._settings.generator_model,
+            "model": model,
             "messages": [m.model_dump() for m in messages],
             "temperature": temperature,
         }
@@ -106,28 +223,39 @@ class OpenAICompatibleClient:
         # Ollama через этот API не понимает think: false, а reasoning_effort понимает.
         if reasoning_effort is not None:
             body["reasoning_effort"] = reasoning_effort
-        response = await self._http.post("/chat/completions", json=body)
-        response.raise_for_status()
-        data = response.json()
+        data = await self._post("/chat/completions", body)
         choice = data["choices"][0]
         if choice.get("finish_reason") == "length":
             # Обрыв по длине выглядит дальше как ответ не по схеме; причина видна только здесь.
             logger.warning(
                 "Ответ модели %s оборван по длине, токены %s; у Ollama это окно контекста "
                 "сервера, docs/taskgen/deployment.md",
-                body["model"],
+                model,
                 data.get("usage"),
             )
         # Модель с рассуждениями может истратить весь ответ на них и вернуть content: null.
         return choice["message"].get("content") or ""
 
-    async def embed(self, texts: list[str]) -> list[list[float]]:
-        response = await self._http.post(
-            "/embeddings", json={"model": self._settings.embedding_model, "input": texts}
-        )
+    async def embed(self, texts: list[str], *, model: str) -> list[list[float]]:
+        data = await self._post("/embeddings", {"model": model, "input": texts})
+        return [item["embedding"] for item in sorted(data["data"], key=lambda i: i["index"])]
+
+    async def _post(self, path: str, body: dict[str, Any]) -> Any:
+        variable = provider_key_variable(self._name)
+        if self._provider.requires_key and self._provider.api_key is None:
+            message = f"У провайдера {self._name} не задан ключ: задайте {variable}"
+            logger.error(message)
+            raise MissingAPIKeyError(message)
+        response = await self._http.post(path, json=body)
+        if response.status_code in (401, 403):
+            logger.error(
+                "Провайдер %s отклонил ключ, HTTP %s; ключ задаётся %s",
+                self._name,
+                response.status_code,
+                variable,
+            )
         response.raise_for_status()
-        data = sorted(response.json()["data"], key=lambda item: item["index"])
-        return [item["embedding"] for item in data]
+        return response.json()
 
     async def aclose(self) -> None:
         await self._http.aclose()
