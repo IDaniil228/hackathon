@@ -22,6 +22,8 @@ WEIGHT_OF = {
     "quality": "weight_quality",
     "performance": "weight_performance",
 }
+# Компоненты, которые меряют уже работающий код: их вклад идёт с множителем tests.
+SCALED_BY_TESTS = frozenset({"quality", "performance"})
 
 
 class Components(BaseModel):
@@ -77,6 +79,10 @@ def weighted_pass_rate(
 def code_task_score(components: Components, weights: Mapping[str, float]) -> float:
     """Взвешенная сумма с жёстким гейтом: ни одного пройденного теста — балл 0.
 
+    Вклад качества и скорости умножается на компонент tests: аккуратный и быстрый код,
+    который почти не проходит тесты, не получает за них балл. Знаменатель множитель не
+    меняет, поэтому при всех пройденных тестах сумма та же, что без него.
+
     Вес неизмеренного компонента делится между измеренными. Иначе кандидат терял бы балл
     за то, что у сервиса нет анализатора для его языка или эталонного замера времени.
     """
@@ -90,7 +96,10 @@ def code_task_score(components: Components, weights: Mapping[str, float]) -> flo
     total_weight = sum(weights[WEIGHT_OF[name]] for name in measured)
     if total_weight <= 0:
         raise ValueError("Все веса измеренных компонентов балла равны нулю")
-    weighted = sum(weights[WEIGHT_OF[name]] * value for name, value in measured.items())
+    weighted = sum(
+        weights[WEIGHT_OF[name]] * value * (components.tests if name in SCALED_BY_TESTS else 1.0)
+        for name, value in measured.items()
+    )
     return weighted / total_weight
 
 

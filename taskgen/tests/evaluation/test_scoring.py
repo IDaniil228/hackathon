@@ -64,7 +64,20 @@ def test_zero_pass_rate_gates_score_to_zero_whatever_else():
 
 def test_small_nonzero_pass_rate_is_not_gated():
     components = Components(tests=0.1, rubric=1.0, quality=1.0, performance=1.0)
-    assert code_task_score(components, WEIGHTS) == pytest.approx(0.06 + 0.4)
+    # Качество и скорость идут с множителем доли тестов: 0.1 · (0.1 + 0.05).
+    assert code_task_score(components, WEIGHTS) == pytest.approx(0.06 + 0.25 + 0.015)
+
+
+def test_quality_and_speed_are_scaled_by_tests_share():
+    # Один кейс из 27 с идеальными качеством и скоростью: раньше они давали 0.15 балла.
+    tests = 1 / 27
+    components = Components(tests=tests, rubric=0.0, quality=1.0, performance=1.0)
+    assert code_task_score(components, WEIGHTS) == pytest.approx(0.75 * tests)
+
+
+def test_quality_scaling_keeps_full_score_reachable():
+    components = Components(tests=1.0, rubric=0.0, quality=1.0, performance=None)
+    assert code_task_score(components, WEIGHTS) == pytest.approx(0.7 / 0.95)
 
 
 def test_missing_component_redistributes_its_weight():
