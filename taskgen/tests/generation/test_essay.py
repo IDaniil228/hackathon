@@ -28,7 +28,7 @@ from taskgen.generation.essay import (
     generate_essay,
     scenario_messages,
 )
-from tests.evaluation.fakes import FakeLLM
+from tests.evaluation.fakes import QUOTES, FakeLLM
 
 SEED = Path(__file__).resolve().parents[2] / "seed" / "templates"
 LEAKAGE = SEED / "ml" / "junior" / "ml-validation-leakage-essay.md"
@@ -97,7 +97,9 @@ def checker(verdicts: dict[str, list[str]], spec: TemplateSpec) -> FakeLLM:
 
 
 async def check(llm: FakeLLM, spec: TemplateSpec, scenario: EssayScenario):
-    return await check_essay_scenario(llm, spec, scenario, PARAMS, model="checker")
+    return await check_essay_scenario(
+        llm, spec, scenario, PARAMS, model="checker", evidence_options=QUOTES
+    )
 
 
 # --- Проверка на настоящей испорченной генерации -------------------------------------------
@@ -324,7 +326,14 @@ async def test_failed_check_is_retried_with_reasons():
     llm = writer_and_checker([without_tuning, GOOD_SITUATION], spec)
 
     draft = await generate_essay(
-        llm, spec, PARAMS, model="writer", checker_model="checker", temperature=0.7, attempts=3
+        llm,
+        spec,
+        PARAMS,
+        model="writer",
+        checker_model="checker",
+        temperature=0.7,
+        attempts=3,
+        evidence_options=QUOTES,
     )
 
     assert draft.situation == GOOD_SITUATION
@@ -341,7 +350,14 @@ async def test_attempts_exhausted_raise_with_last_check():
 
     with pytest.raises(EssayScenarioError) as caught:
         await generate_essay(
-            llm, spec, PARAMS, model="writer", checker_model="checker", temperature=0.7, attempts=2
+            llm,
+            spec,
+            PARAMS,
+            model="writer",
+            checker_model="checker",
+            temperature=0.7,
+            attempts=2,
+            evidence_options=QUOTES,
         )
 
     assert caught.value.check.forbidden_found == ["утечк"]

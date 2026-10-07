@@ -36,6 +36,7 @@ async def judge():
         samples=settings.scoring.judge_samples,
         temperature=settings.scoring.judge_temperature,
         reasoning_effort=settings.llm.judge.reasoning_effort,
+        evidence=settings.evidence,
     )
     await router.aclose()
 

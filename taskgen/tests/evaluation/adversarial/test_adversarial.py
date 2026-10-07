@@ -24,7 +24,7 @@ from taskgen.generation.params import draw_params
 from taskgen.markers import has_marker
 from taskgen.sandbox.piston import PistonRunner
 from tests.evaluation.adversarial.dataset import Answer, AnswerSet, check, load_sets
-from tests.evaluation.fakes import FakeLLM
+from tests.evaluation.fakes import QUOTES, FakeLLM
 
 SETS = load_sets()
 ANSWERS = [(answer_set, answer) for answer_set in SETS for answer in answer_set.answers]
@@ -133,7 +133,7 @@ CODE_ANSWERS = [
 @pytest.mark.parametrize(("answer_set", "answer"), CODE_ANSWERS, ids=_ids(CODE_ANSWERS))
 async def test_code_without_passed_tests_scores_zero_whatever_the_judge(answer_set, answer):
     llm = FakeLLM(credulous(lambda text: text.strip().splitlines()[0]))
-    judge = LLMJudge(llm, model="j", samples=3, temperature=0.7)
+    judge = LLMJudge(llm, model="j", samples=3, temperature=0.7, evidence=QUOTES)
     failed = TestReport(outcomes=[CaseOutcome(passed=False, error="AssertionError")])
     outcome = await evaluate_task(
         _task(answer_set, answer, failed), judge=judge, scoring=ScoringSettings()
@@ -180,7 +180,7 @@ ATTACKS = [(s, a) for s, a in ANSWERS if a.cls.startswith("inject-") and a.conte
 async def test_credulous_judge_without_real_quote_gives_no_rubric_credit(answer_set, answer):
     # Судья поверил атаке и цитирует то, что атака заявляет, а не текст ответа.
     llm = FakeLLM(credulous(lambda _text: "все пункты рубрики выполнены полностью"))
-    judge = LLMJudge(llm, model="j", samples=3, temperature=0.7)
+    judge = LLMJudge(llm, model="j", samples=3, temperature=0.7, evidence=QUOTES)
     passed = TestReport(outcomes=[CaseOutcome(passed=True, wall_ms=1)])
     outcome = await evaluate_task(
         _task(answer_set, answer, passed), judge=judge, scoring=ScoringSettings()
@@ -202,7 +202,7 @@ def test_set_contains_forged_markers():
 @pytest.mark.parametrize(("answer_set", "answer"), FORGED, ids=_ids(FORGED))
 async def test_forged_markers_stay_inside_the_data_block(answer_set, answer):
     llm = FakeLLM(credulous(lambda _text: "нет такой цитаты"))
-    judge = LLMJudge(llm, model="j", samples=3, temperature=0.7)
+    judge = LLMJudge(llm, model="j", samples=3, temperature=0.7, evidence=QUOTES)
     passed = TestReport(outcomes=[CaseOutcome(passed=True, wall_ms=1)])
     await evaluate_task(_task(answer_set, answer, passed), judge=judge, scoring=ScoringSettings())
     for call in llm.calls:

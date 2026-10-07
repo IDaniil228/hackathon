@@ -29,7 +29,16 @@ LOCAL_MODEL = "ollama/hf.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF:q4_K_M"
 CLOUD_MODEL = "deepseek/deepseek-flash"
 
 
-class ProviderSettings(BaseModel):
+class Section(BaseModel):
+    """Раздел настроек: неизвестное поле — ошибка при старте, а не молча забытая переменная.
+
+    Корень Settings лишние поля пропускает: файл .env делят с compose и другими программами.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ProviderSettings(Section):
     """OpenAI-совместимый провайдер: Ollama, vLLM, облачный API или шлюз к нему."""
 
     base_url: str = Field(
@@ -101,7 +110,7 @@ def split_model(model: str) -> tuple[str, str]:
     return provider, name
 
 
-class ModelRole(BaseModel):
+class ModelRole(Section):
     """Модель роли вместе с провайдером, у которого она запрашивается."""
 
     model: str = Field(
@@ -136,7 +145,7 @@ class ChatRole(ModelRole):
     )
 
 
-class LLMSettings(BaseModel):
+class LLMSettings(Section):
     """Провайдеры моделей и роли, которые их используют.
 
     Роль называет модель строкой провайдер/модель, и вызов уходит провайдеру из префикса.
@@ -232,7 +241,7 @@ class LLMSettings(BaseModel):
         return self
 
 
-class SelectionSettings(BaseModel):
+class SelectionSettings(Section):
     """Отбор шаблонов: p ∝ exp(−d / T), d = alpha·|Δгрейд| + beta·(1 − сходство).
 
     |Δгрейд| — разность позиций грейдов в списке, упорядоченном по level, а не разность level.
@@ -287,7 +296,7 @@ class SelectionSettings(BaseModel):
         return self
 
 
-class EvidenceSettings(BaseModel):
+class EvidenceSettings(Section):
     """Чем модель подтверждает вердикт: один способ для судьи ответа и для LLM-проверяльщика
     ситуации эссе, кейса задачки и темы легенды. Механика — taskgen/evaluation/evidence.py."""
 
@@ -322,7 +331,7 @@ class EvidenceSettings(BaseModel):
     )
 
 
-class ScoringSettings(BaseModel):
+class ScoringSettings(Section):
     """Балл за задание с кодом — взвешенная сумма компонентов из диапазона 0..1."""
 
     weight_tests: float = Field(default=0.6, description="Вес доли пройденных скрытых тестов")
@@ -403,7 +412,7 @@ class ScoringSettings(BaseModel):
     )
 
 
-class GenerationSettings(BaseModel):
+class GenerationSettings(Section):
     """Генерация экземпляров заданий и пул готовых экземпляров."""
 
     autostart: bool = Field(
@@ -529,7 +538,7 @@ class GenerationSettings(BaseModel):
     )
 
 
-class SandboxSettings(BaseModel):
+class SandboxSettings(Section):
     """Песочница Piston, где исполняются генераторы тестов, эталоны и решения."""
 
     piston_url: str = Field(default="http://localhost:2000", description="Адрес Piston API")
@@ -552,7 +561,7 @@ class SandboxSettings(BaseModel):
     )
 
 
-class ImportCheckSettings(BaseModel):
+class ImportCheckSettings(Section):
     """Проверка шаблона с кодом в песочнице при импорте.
 
     Лимиты времени и памяти одного запуска — те же sandbox.run_timeout_ms и

@@ -90,11 +90,6 @@ def split_spans(text: str, *, code: bool) -> list[str]:
     return spans
 
 
-# Дословные цитаты без повторов: доказательство по умолчанию для прямых вызовов из кода.
-# Сервис передаёт Settings.evidence.
-VERBATIM_QUOTES = EvidenceSettings(mode="quotes", repairs=0)
-
-
 @dataclass(frozen=True)
 class Grounding:
     """Текст одного вызова модели и правила, по которым модель на него ссылается."""

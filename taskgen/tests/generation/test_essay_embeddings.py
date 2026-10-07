@@ -20,7 +20,7 @@ from taskgen.generation.essay import (
     check_essay_scenario,
     generate_essay,
 )
-from tests.evaluation.fakes import FakeLLM, TableEmbedder, unit
+from tests.evaluation.fakes import QUOTES, FakeLLM, TableEmbedder, unit
 from tests.generation.test_essay import leakage_spec
 
 FACT_A = "аналитик обучил градиентный бустинг"
@@ -87,6 +87,7 @@ async def run(
         options=opts,
         embedder=embedder,
         cache=cache if cache is not None else EmbeddingCache(),
+        evidence_options=QUOTES,
     )
 
 
@@ -448,6 +449,7 @@ async def test_generate_essay_works_in_every_mode(method: str):
         check_options=options(method),
         embedder=TableEmbedder(table),
         embedding_cache=EmbeddingCache(),
+        evidence_options=QUOTES,
     )
 
     assert draft.check.ok and draft.check.method == method

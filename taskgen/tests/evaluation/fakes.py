@@ -8,9 +8,13 @@ from typing import Any
 
 import httpx
 
+from taskgen.config import EvidenceSettings
 from taskgen.contracts import ChatMessage, TestReport, TestRunRequest
 
 Responder = Callable[[list[ChatMessage], dict[str, Any] | None], str]
+
+# Подделки судьи и проверяльщика отвечают дословными цитатами и не исправляют ответ.
+QUOTES = EvidenceSettings(mode="quotes", repairs=0)
 
 
 class FakeLLM:

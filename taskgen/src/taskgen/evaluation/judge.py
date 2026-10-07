@@ -29,7 +29,7 @@ from taskgen.contracts import (
     RubricVerdict,
     TaskKind,
 )
-from taskgen.evaluation.evidence import VERBATIM_QUOTES, Grounding
+from taskgen.evaluation.evidence import Grounding
 from taskgen.evaluation.jsonout import StructuredOutputError, complete_structured
 from taskgen.evaluation.quotes import QuoteRelevance, RelevanceUnavailableError
 from taskgen.markers import find_nonce, markers, new_nonce
@@ -195,7 +195,7 @@ class LLMJudge:
         temperature: float,
         reasoning_effort: ReasoningEffort | None = None,
         relevance: QuoteRelevance | None = None,
-        evidence: EvidenceSettings = VERBATIM_QUOTES,
+        evidence: EvidenceSettings,
     ) -> None:
         self._llm = llm
         self._model = model

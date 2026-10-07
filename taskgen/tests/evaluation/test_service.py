@@ -8,7 +8,7 @@ from taskgen.config import ScoringSettings
 from taskgen.contracts import AnalysisReport, CaseOutcome, HiddenPayload, TaskKind, TestReport
 from taskgen.evaluation.judge import LLMJudge
 from taskgen.evaluation.service import AnswerInput, TaskInput, evaluate_task
-from tests.evaluation.fakes import FakeLLM
+from tests.evaluation.fakes import QUOTES, FakeLLM
 
 CODE = "def add(a: int, b: int) -> int:\n    return a + b\n"
 RUBRIC = [{"id": "uses_plus", "text": "Складывает числа оператором +"}]
@@ -69,7 +69,7 @@ def _task(**overrides) -> TaskInput:
 
 def _judge(verdict: str = "yes") -> tuple[LLMJudge, FakeLLM]:
     llm = FakeLLM(judge_responder(verdict))
-    return LLMJudge(llm, model="j", samples=3, temperature=0.7), llm
+    return LLMJudge(llm, model="j", samples=3, temperature=0.7, evidence=QUOTES), llm
 
 
 async def test_perfect_code_answer_scores_one():

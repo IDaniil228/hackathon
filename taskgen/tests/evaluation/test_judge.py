@@ -8,7 +8,7 @@ from taskgen.contracts import JudgeRequest, RubricItem, TaskKind
 from taskgen.evaluation.judge import JudgeError, LLMJudge
 from taskgen.evaluation.quotes import QuoteRelevance, quote_in_answer
 from taskgen.evaluation.service import Evaluator
-from tests.evaluation.fakes import FakeLLM, TableEmbedder, http_error, unit
+from tests.evaluation.fakes import QUOTES, FakeLLM, TableEmbedder, http_error, unit
 
 ANSWER = """def two_sum(nums, target):
     left, right = 0, len(nums) - 1
@@ -52,7 +52,8 @@ OTHER_QUOTE = "while left < right:"
 
 def _judge(replies, samples: int = 3) -> tuple[LLMJudge, FakeLLM]:
     llm = FakeLLM(replies)
-    return LLMJudge(llm, model="judge-model", samples=samples, temperature=0.7), llm
+    judge = LLMJudge(llm, model="judge-model", samples=samples, temperature=0.7, evidence=QUOTES)
+    return judge, llm
 
 
 async def test_all_yes_with_real_quotes_scores_one():
@@ -273,6 +274,7 @@ def _relevance_judge(
         samples=3,
         temperature=0.7,
         relevance=QuoteRelevance(threshold=threshold, embedder=table),
+        evidence=QUOTES,
     )
     return judge, table
 
@@ -304,6 +306,7 @@ async def test_relevance_check_is_skipped_with_note_without_embedder():
         samples=3,
         temperature=0.7,
         relevance=QuoteRelevance(threshold=0.5, embedder=None),
+        evidence=QUOTES,
     )
     result = await judge.judge(_essay_request())
     assert {v.item_id: v.verdict for v in result.verdicts}["leak"] == "yes"
@@ -358,7 +361,9 @@ async def test_judge_quote_check_is_off_by_default():
 async def test_judge_passes_reasoning_effort():
     reply = _sample(two_pointers=("no", []), no_extra_memory=("no", []))
     llm = FakeLLM([reply] * 2)
-    judge = LLMJudge(llm, model="m", samples=2, temperature=0.7, reasoning_effort="none")
+    judge = LLMJudge(
+        llm, model="m", samples=2, temperature=0.7, reasoning_effort="none", evidence=QUOTES
+    )
     await judge.judge(_request())
     assert [call["reasoning_effort"] for call in llm.calls] == ["none", "none"]
 

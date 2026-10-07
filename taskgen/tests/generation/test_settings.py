@@ -4,11 +4,31 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+from pydantic import ValidationError
+
 from taskgen.config import EvidenceSettings, Settings
 from taskgen.evaluation.service import Evaluator
 from taskgen.generation.service import Generator
 from tests.evaluation.fakes import FakeLLM
 from tests.generation.fakes import BagOfWordsEmbedder
+
+
+@pytest.mark.parametrize(
+    "variable",
+    [
+        # Поля удалены, когда способ доказательства стал общим блоком evidence.
+        "TASKGEN_GENERATION__ESSAY_CHECK_EVIDENCE",
+        "TASKGEN_SCORING__JUDGE_EVIDENCE",
+        "TASKGEN_LLM__JUDGE__TEMPERATUR",
+        "TASKGEN_LLM__PROVIDERS__DEEPSEEK__API_KYE",
+    ],
+)
+def test_unknown_nested_setting_fails_at_start(monkeypatch, variable):
+    # Устаревшая или опечатанная переменная иначе молча не действует.
+    monkeypatch.setenv(variable, "quotes")
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        Settings()
 
 
 def test_generation_settings_come_from_service_settings(monkeypatch):

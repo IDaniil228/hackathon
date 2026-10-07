@@ -26,7 +26,6 @@ from pydantic import BaseModel, Field
 
 from taskgen.config import EvidenceSettings
 from taskgen.contracts import LLMClient, QuizVariant, ReasoningEffort, SolverRecord, TemplateSpec
-from taskgen.evaluation.evidence import VERBATIM_QUOTES
 from taskgen.generation.essay import (
     EssayScenarioError,
     filled_facts,
@@ -121,7 +120,7 @@ async def write_case(
     solver: SolverConfig | None = None,
     system_suffix: str = "",
     request_suffix: str = "",
-    evidence_options: EvidenceSettings = VERBATIM_QUOTES,
+    evidence_options: EvidenceSettings,
     theme: str | None = None,
 ) -> QuizDraft:
     """Проверенный кейс за не больше чем attempts попыток.

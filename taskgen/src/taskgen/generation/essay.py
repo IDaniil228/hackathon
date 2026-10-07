@@ -38,7 +38,6 @@ from taskgen.contracts import (
     TemplateSpec,
 )
 from taskgen.evaluation.evidence import (
-    VERBATIM_QUOTES,
     Grounding,
     split_sentences,
 )
@@ -452,7 +451,7 @@ async def check_essay_scenario(
     options: EssayCheckOptions | None = None,
     embedder: Embedder | None = None,
     cache: EmbeddingCache | None = None,
-    evidence_options: EvidenceSettings = VERBATIM_QUOTES,
+    evidence_options: EvidenceSettings,
     theme: str | None = None,
 ) -> EssayCheck:
     """Проверка ситуации до выдачи кандидату; options=None — проверка только LLM.
@@ -611,7 +610,7 @@ async def generate_essay(
     check_options: EssayCheckOptions | None = None,
     embedder: Embedder | None = None,
     embedding_cache: EmbeddingCache | None = None,
-    evidence_options: EvidenceSettings = VERBATIM_QUOTES,
+    evidence_options: EvidenceSettings,
     theme: str | None = None,
 ) -> EssayDraft:
     """Проверенное условие эссе за не больше чем attempts попыток написать ситуацию.

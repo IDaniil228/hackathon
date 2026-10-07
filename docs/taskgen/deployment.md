@@ -2,6 +2,8 @@
 
 Все команды выполняются из каталога `taskgen/` репозитория. Состав контейнеров и порты задаёт [docker-compose.yml](../../taskgen/docker-compose.yml), настройки сервиса и их переменные окружения — [generated/settings.md](generated/settings.md), версии компонентов — [generated/libraries.md](generated/libraries.md)
 
+Неизвестная переменная внутри раздела настроек, например устаревшая `TASKGEN_GENERATION__ESSAY_CHECK_EVIDENCE` или опечатка в `TASKGEN_LLM__JUDGE__MODEL`, останавливает старт с ошибкой, которая называет поле. Переменные без раздела сервис не проверяет: файл `.env` читает ещё и compose, и в нём бывают чужие переменные
+
 ## Что нужно
 
 - Linux с cgroup v2 и Docker с Compose v2. Песочница Piston изолирует запуски через namespaces и cgroup, поэтому её контейнер работает в режиме `privileged`

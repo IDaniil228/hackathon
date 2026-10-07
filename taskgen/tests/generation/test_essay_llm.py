@@ -29,7 +29,14 @@ async def llm():
 async def test_real_checker_finds_lost_tuning_fact(llm):
     client, model = llm
 
-    result = await check_essay_scenario(client, leakage_spec(), bad_scenario(), PARAMS, model=model)
+    result = await check_essay_scenario(
+        client,
+        leakage_spec(),
+        bad_scenario(),
+        PARAMS,
+        model=model,
+        evidence_options=Settings().evidence,
+    )
 
     print(f"\nмодель {model}: {result}")
     assert not result.ok

@@ -27,14 +27,15 @@ GOOD = (
 
 @pytest.fixture
 async def judge():
-    settings = Settings().llm
-    router = await live_router(settings, ("judge",))
+    settings = Settings()
+    router = await live_router(settings.llm, ("judge",))
     yield LLMJudge(
         router,
-        model=settings.judge.model,
+        model=settings.llm.judge.model,
         samples=3,
         temperature=0.7,
-        reasoning_effort=settings.judge.reasoning_effort,
+        reasoning_effort=settings.llm.judge.reasoning_effort,
+        evidence=settings.evidence,
     )
     await router.aclose()
 
