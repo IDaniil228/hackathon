@@ -488,17 +488,18 @@ async def submit_answer(ev: Evaluator, task_id: uuid.UUID, submission: Submissio
     async with ev.sessionmaker() as db:
         row = (
             await db.execute(
-                select(Task, TestSession.status)
+                select(Task, TestSession)
                 .join(TestSession, Task.session_id == TestSession.id)
                 .where(Task.id == task_id)
             )
         ).one_or_none()
     if row is None:
         raise NotFoundError("Задание не найдено")
-    task, status = row
-    if status == SCORED:
+    task, session = row
+    if session.status == SCORED:
         raise ConflictError("Сессия уже оценена, ответы больше не принимаются")
-    # Ответ на готовое задание принимается и пока остальные задания сессии генерируются.
+    if (reason := session.tasks_closed()) is not None:
+        raise ConflictError(f"{reason}; ответ не принимается")
     if task.status != TaskStatus.READY:
         raise ConflictError("Задание ещё не готово или не создано, ответ на него не принимается")
     hidden = _hidden(task)

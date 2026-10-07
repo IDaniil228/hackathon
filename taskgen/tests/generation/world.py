@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import uuid
 
 from fastapi.testclient import TestClient
@@ -147,6 +148,16 @@ class World:
     def wait(self) -> None:
         """Дождаться, пока фоновая генерация сессий и пула закончится."""
         self._run(self.state.generation_worker.wait_idle)
+
+    def wait_task_ready(self, session_id, timeout: float = 30.0) -> Task:
+        """Дождаться, пока фоновая генерация запишет хотя бы одно готовое задание сессии."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            ready = [task for task in self.tasks(session_id) if task.status == "ready"]
+            if ready:
+                return ready[0]
+            time.sleep(0.05)
+        raise AssertionError(f"за {timeout} с ни одно задание сессии {session_id} не готово")
 
     def view(self, session_id, headers=ADMIN) -> dict:
         response = self.client.get(f"/sessions/{session_id}", headers=headers)

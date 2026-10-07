@@ -167,6 +167,8 @@ class TestSession(Base):
     status: Mapped[str] = mapped_column(String(16), default=SessionStatus.GENERATING)
     # Почему сессия failed; текст уходит клиенту.
     failure: Mapped[str | None] = mapped_column(Text)
+    # Кандидат начинает, когда готово первое задание, а не все; правило — в tasks_closed.
+    early_start: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     # Снимок профиля кандидата (CandidateProfile) — персональные данные. Нужен только
     # генерации и удаляется, когда сгенерировано последнее задание; хэш остаётся, чтобы
     # отметить в profile_changed, что основной бэкенд прислал другой профиль.
@@ -181,6 +183,19 @@ class TestSession(Base):
     result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = _now()
     scored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    def tasks_closed(self) -> str | None:
+        """Почему кандидату не выдаются условия заданий и не принимаются ответы.
+
+        None — условия выдаются. Без раннего старта сессия открыта, только когда готовы все
+        задания: иначе сбой позднего задания отнял бы у кандидата уже сделанные ответы. У
+        сессии failed оценки не будет, поэтому она закрыта в обоих режимах.
+        """
+        if self.status == SessionStatus.GENERATING and not self.early_start:
+            return "Сессия ещё генерируется: задания выдаются, когда готовы все"
+        if self.status == SessionStatus.FAILED:
+            return "Генерация сессии не удалась, задания не выдаются; создайте новую сессию"
+        return None
 
 
 class Task(Base):

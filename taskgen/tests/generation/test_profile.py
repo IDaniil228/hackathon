@@ -81,7 +81,7 @@ def test_personal_tasks_see_profile(world):
 def test_snapshot_is_deleted_when_session_fails(world):
     world.add_templates(world.broken())
     response = world.create(profile=PROFILE)
-    assert response.status_code == 500
+    assert response.status_code == 201, response.text
     world.wait()
     [session] = world.sessions()
     assert session.status == "failed"

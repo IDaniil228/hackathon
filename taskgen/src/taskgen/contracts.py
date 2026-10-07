@@ -17,8 +17,10 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 class SessionStatus(StrEnum):
     """Статус test_sessions.status. Первые три ставит генерация, scored — оценка."""
 
-    # Задания ещё создаются; первое уже выдано кандидату.
+    # Задания ещё создаются, и кандидат их не видит. Исключение — сессия с ранним стартом:
+    # ей готовые задания выдаются сразу. Правило — TestSession.tasks_closed в db.py.
     GENERATING = "generating"
+    # Все задания готовы; кандидат проходит тест.
     READY = "ready"
     # Набор заданий не собран; причина — в test_sessions.failure.
     FAILED = "failed"
