@@ -1,0 +1,65 @@
+1. Для поиска причины медленной работы эндпоинта следует использовать комплексный подход с применением различных инструментов профилирования. Во-первых, можно применить встроенные инструменты Django для анализа производительности запросов к базе данных через библиотеку `django_debug_toolbar`. Также стоит воспользоваться библиотеками для мониторинга ресурсов компьютера, например, `psutil` и `memory_profiler`, чтобы оценить использование памяти приложением в Python. Дополнительно можно использовать такие сервисы как New Relic или Grafana для визуализации метрик производительности. Важно также провести профилирование Django REST Framework с помощью встроенных инструментов типа `drf-spectacular` и `django-debug-toolbar`.
+
+2. В данном коде есть несколько потенциальных проблем, которые могут замедлять работу эндпоинта:
+   - Неэффективное использование фильтров объектов Django может приводить к выполнению полных сканирований таблицы при отсутствии подходящих индексов для полей фильтрации (например, по дате создания).
+   - Создание множества независимых запросов через `.count()` для каждой записи основной модели неэффективно. Вместо этого стоит использовать JOIN или подзапросы внутри SQL запроса через `django.db.raw` для сокращения количества операций с базой данных и улучшения производительности.
+   
+Исправленный код может выглядеть следующим образом:
+```python
+from django.db import models, connection
+from rest_framework import serializers
+import datetime
+
+class MainModel(models.Model):
+    created_at = models.DateTimeField(auto_now=True)
+    other_model = models.ForeignKey('OtherModel', on_delete=models.CASCADE)
+    related_models = models.ManyToManyField('RelatedModel')
+    # Другие поля...
+
+class OtherModel(models.Model):
+    # Поля для модели ManyToManyField...
+
+class RelatedModel(models.Model):
+    # Поля для модели ManyToManyField...
+
+class MainModelSerializer(serializers.ModelSerializer):
+    created_at = serializers.DateTimeField()
+    other_model = serializers.StringRelatedField()
+    related_models_count = serializers.IntegerField(source='related_models.all().count')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Возможно потребуется добавить дополнительные поля или кастомные методы сериализации
+
+class ViewSet:
+    queryset = MainModel.objects.filter(created_at__lte=datetime.date.today().replace(day=1))  # Фильтруем по году
+    serializer_class = MainModelSerializer
+
+    def get_queryset(self):
+        qs = self.queryset.order_by('-created_at')[:50]
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT main.*, other.field, (COUNT(*) OVER ()) AS related_models_count
+                FROM main_model main
+                JOIN other_model other ON main.other_model_id = other.pk
+                LEFT JOIN related_model rm ON main.related_models_id = rm.pk
+                GROUP BY 1, 2, 3
+                ORDER BY created_at DESC
+                LIMIT 50;
+            """)
+            results = cursor.fetchall()
+        return results
+```
+В исправленном коде мы применяем более эффективные методы фильтрации и подсчета связанных записей, используя SQL подзапросы для улучшения производительности.
+
+3. На стороне базы данных следует выполнить следующие шаги:
+   - Создать индекс на поле `created_at` таблицы `mainmodel`, чтобы ускорить фильтрацию по дате создания.
+   - Добавить индексы на поля `other_model_id` и `related_models_id` для ускорения запросов ManyToManyField.
+   - Рассмотреть возможность сегментации данных или использования секционирования таблиц, если это соответствует структуре проекта.
+
+4. Чтобы проверить эффективность внесенных изменений и предотвратить возможные регрессии в будущем:
+   - Проведите нагрузочные тесты с использованием инструментов вроде Apache JMeter или Locust для оценки производительности эндпоинта после оптимизации. Убедитесь, что время ответа остается ниже 3 секунд при увеличении количества запросов.
+   - Используйте мониторинговые сервисы наподобие New Relic или Grafana для постоянного отслеживания метрик производительности и использования ресурсов системы. Установите пороговые значения для различных показателей (например, количество выполненных операций ввода-вывода в секунду) и настройте оповещения на случай превышения этих значений.
+   - Интегрируйте автоматические тесты производительности в CI/CD пайплайны, чтобы гарантировать соответствие требований до выпуска обновлений приложения.
+   
+Эти шаги помогут убедиться в правильности выбранных оптимизаций и поддержании высокой производительности вашего эндпоинта.
