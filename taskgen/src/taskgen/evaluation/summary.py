@@ -457,52 +457,62 @@ async def write_summary(
     checker_model: str | None,
     checker_reasoning_effort: ReasoningEffort | None = None,
     evidence: EvidenceSettings,
+    attempts: int,
 ) -> str:
     """Текст от LLM, если он прошёл барьер summary_problems и проверяльщика check_summary,
     иначе текст по шаблону.
 
-    Ошибки сети и провайдера писателя не скрываются. Проверяльщик, недоступный по сети или
-    без ключа, даёт текст по шаблону: непроверенный текст рекрутер не видит.
+    Отклонённый текст писатель переписывает с причинами отказа, всего не больше attempts
+    попыток. Ошибки сети и провайдера писателя не скрываются. Проверяльщик, недоступный по
+    сети или без ключа, сразу даёт текст по шаблону: непроверенный текст рекрутер не видит.
     """
-    messages = [
-        ChatMessage(role="system", content=_SYSTEM),
-        ChatMessage(
-            role="user",
-            content="Факты в JSON:\n" + json.dumps(data, ensure_ascii=False, indent=1),
-        ),
-    ]
-    try:
-        reply = await complete_structured(
-            llm,
-            messages,
-            _Sentences,
-            _SCHEMA,
-            model=model,
-            temperature=0.2,
-            reasoning_effort=reasoning_effort,
+    request = "Факты в JSON:\n" + json.dumps(data, ensure_ascii=False, indent=1)
+    reasons: list[str] = []
+    for _ in range(attempts):
+        retry = (
+            "\n\nПредыдущий вариант отклонён: " + "; ".join(reasons) + ". Перепиши справку."
+            if reasons
+            else ""
         )
-    except StructuredOutputError as error:
-        logger.warning("Summary по шаблону: модель не вернула JSON (%s)", error)
-        return fallback_text(data)
-    sentences = [sentence.strip() for sentence in reply.sentences if sentence.strip()]
-    text = " ".join(sentences)
-    problems = summary_problems(text, data) if text else ["пустой текст"]
-    if problems:
-        logger.warning("Summary по шаблону: текст модели не прошёл барьер: %s", problems)
-        return fallback_text(data)
-    try:
-        check = await check_summary(
-            llm,
-            sentences,
-            data,
-            model=checker_model,
-            reasoning_effort=checker_reasoning_effort,
-            evidence=evidence,
-        )
-    except httpx.HTTPError:
-        logger.warning("Summary по шаблону: проверяльщик недоступен", exc_info=True)
-        return fallback_text(data)
-    if not check.ok:
-        logger.warning("Summary по шаблону: проверяльщик отклонил текст: %s", check.reasons)
-        return fallback_text(data)
-    return text
+        messages = [
+            ChatMessage(role="system", content=_SYSTEM),
+            ChatMessage(role="user", content=request + retry),
+        ]
+        try:
+            reply = await complete_structured(
+                llm,
+                messages,
+                _Sentences,
+                _SCHEMA,
+                model=model,
+                temperature=0.2,
+                reasoning_effort=reasoning_effort,
+            )
+        except StructuredOutputError as error:
+            reasons = [f"ответ не по схеме: {error}"]
+            logger.warning("Summary: модель не вернула JSON (%s)", error)
+            continue
+        sentences = [sentence.strip() for sentence in reply.sentences if sentence.strip()]
+        text = " ".join(sentences)
+        reasons = summary_problems(text, data) if text else ["пустой текст"]
+        if reasons:
+            logger.warning("Summary: текст модели не прошёл барьер: %s", reasons)
+            continue
+        try:
+            check = await check_summary(
+                llm,
+                sentences,
+                data,
+                model=checker_model,
+                reasoning_effort=checker_reasoning_effort,
+                evidence=evidence,
+            )
+        except httpx.HTTPError:
+            logger.warning("Summary по шаблону: проверяльщик недоступен", exc_info=True)
+            return fallback_text(data)
+        if check.ok:
+            return text
+        reasons = check.reasons
+        logger.warning("Summary: проверяльщик отклонил текст: %s", reasons)
+    logger.warning("Summary по шаблону: %d попыток не дали проверенного текста", attempts)
+    return fallback_text(data)

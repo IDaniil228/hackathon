@@ -405,6 +405,14 @@ class ScoringSettings(Section):
         "scripts/essay_check_bench.py quotes с bge-m3 не нашёл порога, который отделяет "
         "честные цитаты от самоутверждений кандидата. Числа замера — docs/taskgen/security.md",
     )
+    summary_attempts: int = Field(
+        default=2,
+        ge=1,
+        description="Сколько раз модель пишет machine summary. Текст, который отклонил барьер "
+        "или проверяльщик, уходит писателю на переписывание вместе с причинами; после "
+        "последней попытки рекрутер видит текст по шаблону. Каждая попытка — вызов писателя "
+        "и, если текст прошёл барьер, вызов проверяльщика. 1 — без переписывания",
+    )
     analyzer_timeout_seconds: float = Field(
         default=30.0,
         gt=0.0,

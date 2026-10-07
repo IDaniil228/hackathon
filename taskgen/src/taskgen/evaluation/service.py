@@ -728,6 +728,7 @@ async def refresh_summary(ev: Evaluator, candidate_ref: str) -> None:
             checker_model=ev.settings.llm.checker.model,
             checker_reasoning_effort=ev.settings.llm.checker.reasoning_effort,
             evidence=ev.settings.evidence,
+            attempts=ev.settings.scoring.summary_attempts,
         )
     except httpx.HTTPError:
         # Summary не должен срывать оценку: при недоступной модели — текст по шаблону.

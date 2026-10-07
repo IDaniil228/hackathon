@@ -144,22 +144,26 @@ def _verdict(data, number, paths, *, mode="spans", supported=True, reason=""):
 
 
 class Models:
-    """Писатель отвечает sentences, проверяльщик — ответами из очереди checker по порядку."""
+    """Писатель отвечает черновиками по порядку, последний повторяет; проверяльщик — ответами
+    из очереди checker. sentences — один черновик или список черновиков."""
 
-    def __init__(self, sentences: list[str], checker: list) -> None:
-        self.sentences = sentences
+    def __init__(self, sentences: list, checker: list) -> None:
+        self.drafts = sentences if sentences and isinstance(sentences[0], list) else [sentences]
+        self.written = 0
         self.checker = iter(checker)
 
     def __call__(self, messages, schema):
         if "sentences" in schema["properties"]:
-            return json.dumps({"sentences": self.sentences}, ensure_ascii=False)
+            draft = self.drafts[min(self.written, len(self.drafts) - 1)]
+            self.written += 1
+            return json.dumps({"sentences": draft}, ensure_ascii=False)
         reply = next(self.checker)
         if isinstance(reply, Exception):
             raise reply
         return json.dumps({"verdicts": reply}, ensure_ascii=False)
 
 
-async def _write(llm, data, evidence=SPANS):
+async def _write(llm, data, evidence=SPANS, attempts=1):
     return await write_summary(
         llm,
         data,
@@ -167,7 +171,51 @@ async def _write(llm, data, evidence=SPANS):
         checker_model="chk",
         checker_reasoning_effort="low",
         evidence=evidence,
+        attempts=attempts,
     )
+
+
+def _writer_calls(llm) -> list:
+    return [call for call in llm.calls if call["model"] == "gen"]
+
+
+async def test_refused_draft_is_rewritten_with_the_checker_reasons():
+    data = _data()
+    wrong = ["Подтверждён грейд middle: решено 2 из 2 заданий.", SENTENCES[1]]
+    refusal = [
+        _verdict(data, 1, [], supported=False, reason="assigned_grade = junior, а не middle"),
+        _verdict(data, 2, PROOF[1]),
+    ]
+    llm = FakeLLM(Models([wrong, SENTENCES], [refusal, _honest(data)]))
+
+    assert await _write(llm, data, attempts=2) == " ".join(SENTENCES)
+
+    second = _writer_calls(llm)[1]["messages"][-1].content
+    assert "assigned_grade = junior, а не middle" in second
+
+
+async def test_draft_stopped_by_the_barrier_is_rewritten_without_the_checker():
+    data = _data()
+    invented = ["Решено 5 из 10 заданий.", SENTENCES[1]]
+    llm = FakeLLM(Models([invented, SENTENCES], [_honest(data)]))
+
+    assert await _write(llm, data, attempts=2) == " ".join(SENTENCES)
+
+    assert len(_writer_calls(llm)) == 2
+    assert len([call for call in llm.calls if call["model"] == "chk"]) == 1
+    assert "5" in _writer_calls(llm)[1]["messages"][-1].content
+
+
+async def test_last_refused_attempt_falls_back_to_the_template():
+    data = _data()
+    refusal = [
+        _verdict(data, 1, [], supported=False, reason="не следует из фактов"),
+        _verdict(data, 2, PROOF[1]),
+    ]
+    llm = FakeLLM(Models(SENTENCES, [refusal, refusal, refusal]))
+
+    assert await _write(llm, data, attempts=3) == fallback_text(data)
+    assert len(_writer_calls(llm)) == 3
 
 
 def _honest(data, mode="spans"):

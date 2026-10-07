@@ -11,6 +11,7 @@ from sqlalchemy import delete, select
 from taskgen.app import create_app
 from taskgen.contracts import AISignal, CaseOutcome, SessionStatus, TaskStatus, TestReport
 from taskgen.db import Answer, CandidateSummary, Task, Template, TestSession
+from taskgen.evaluation import service
 from taskgen.sandbox.errors import SandboxError
 from tests.conftest import ADMIN_KEY
 from tests.evaluation.fakes import FakeLLM, FakeSandbox
@@ -320,6 +321,25 @@ def test_score_session_end_to_end(world):
     # Проверяльщик не подтвердил текст модели, поэтому в summary — текст по шаблону.
     assert "молодец" not in body["text"]
     assert "Тест 1 из 1" in body["text"]
+
+
+def test_summary_attempts_come_from_scoring_settings(world, monkeypatch):
+    seen = []
+    real = service.write_summary
+
+    async def spy(*args, **kwargs):
+        seen.append(kwargs["attempts"])
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(service, "write_summary", spy)
+    world.state.settings = world.state.settings.model_copy(
+        update={"scoring": world.state.settings.scoring.model_copy(update={"summary_attempts": 4})}
+    )
+    session_id, (task_id,) = world.make_session([{"grade": "middle", "kind": "code"}])
+    assert _answer(world, task_id).status_code == 200
+
+    assert world.client.post(f"/sessions/{session_id}/score", headers=AUTH).status_code == 200
+    assert seen == [4]
 
 
 def _choose(world: World, task_id, choice: str, **body):
