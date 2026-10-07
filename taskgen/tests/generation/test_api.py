@@ -461,7 +461,12 @@ def test_end_to_end_generation_answer_and_scoring(world):
     code = next(task for task in result["tasks"] if task["kind"] == "code")
     rows = world.tasks(session["id"])
     total = len(next(r for r in rows if r.kind == "code").hidden_payload["cases"])
-    assert code["tests"] == {"passed": total, "total": total, "compile_error": False}
+    assert code["tests"] == {
+        "passed": total,
+        "total": total,
+        "compile_error": False,
+        "failed_required": [],
+    }
     # Скорость оценена: оценка нашла отчёт эталона, который записала генерация.
     assert code["components"]["performance"] is not None
     assert all(task["solved"] for task in result["tasks"])

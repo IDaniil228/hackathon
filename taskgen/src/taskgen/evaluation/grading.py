@@ -27,6 +27,8 @@ class TaskScore(BaseModel):
     grade: str
     score: float
     kind: TaskKind = TaskKind.CODE
+    # False — упал кейс обязательной группы, и задание не решено при любом балле.
+    required_passed: bool = True
 
 
 class LevelResult(BaseModel):
@@ -60,6 +62,11 @@ def _at_least(value: float, threshold: float) -> bool:
     return value >= threshold - _EPSILON
 
 
+def is_solved(score: float, threshold: float, *, required_passed: bool = True) -> bool:
+    """Решено задание: балл не ниже порога и пройдены все кейсы обязательных групп."""
+    return required_passed and _at_least(score, threshold)
+
+
 def assess_grade(
     tasks: list[TaskScore],
     grades: list[GradeLevel],
@@ -91,24 +98,27 @@ def assess_grade(
     levels: list[LevelResult] = []
     lower_total = lower_solved = 0
     for grade in ordered:
-        scores = [task.score for task in tasks if task.grade == grade.code]
-        if not scores:
+        level_tasks = [task for task in tasks if task.grade == grade.code]
+        if not level_tasks:
             continue
-        solved = sum(_at_least(score, solved_threshold) for score in scores)
-        share = solved / len(scores)
+        solved = sum(
+            is_solved(task.score, solved_threshold, required_passed=task.required_passed)
+            for task in level_tasks
+        )
+        share = solved / len(level_tasks)
         share_passed = _at_least(share, pass_threshold)
         lower_ok = lower_total == 0 or _at_least(lower_solved / lower_total, pass_threshold)
         levels.append(
             LevelResult(
                 grade=grade.code,
-                total=len(scores),
+                total=len(level_tasks),
                 solved=solved,
                 share=share,
                 share_passed=share_passed,
                 confirmed=share_passed and lower_ok,
             )
         )
-        lower_total += len(scores)
+        lower_total += len(level_tasks)
         lower_solved += solved
 
     evidence = sum(task.grade == claimed for task in tasks)

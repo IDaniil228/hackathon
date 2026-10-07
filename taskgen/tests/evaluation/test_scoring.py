@@ -5,6 +5,7 @@ from taskgen.contracts import CaseGroup, CaseOutcome, TaskKind, TestCase, TestRe
 from taskgen.evaluation.scoring import (
     Components,
     code_task_score,
+    failed_required_groups,
     performance_score,
     quiz_score,
     resolve_weights,
@@ -153,6 +154,46 @@ def test_declared_group_without_cases_leaves_the_denominator():
 def test_weighted_pass_rate_needs_an_outcome_per_case():
     with pytest.raises(ValueError):
         weighted_pass_rate(_passed(True), _cases("manual", "stress"), GROUPS)
+
+
+REQUIRED = {"manual": CaseGroup(weight=1), "stress": CaseGroup(weight=1, required=True)}
+STRESS_FAILED = _passed(True, True, False)
+STRESS_CASES = _cases("manual", "manual", "stress")
+
+
+def test_gate_is_off_without_required_groups():
+    assert failed_required_groups(STRESS_FAILED, STRESS_CASES, GROUPS, default=[]) == []
+    assert failed_required_groups(_passed(True, False), _cases(None, None), {}, default=[]) == []
+
+
+def test_template_required_group_fails_on_one_failed_case():
+    assert failed_required_groups(STRESS_FAILED, STRESS_CASES, REQUIRED, default=[]) == ["stress"]
+    passed = _passed(False, True, True)
+    assert failed_required_groups(passed, STRESS_CASES, REQUIRED, default=[]) == []
+
+
+def test_settings_default_requires_group_the_template_left_open():
+    assert failed_required_groups(STRESS_FAILED, STRESS_CASES, GROUPS, default=["stress"]) == [
+        "stress"
+    ]
+
+
+def test_template_can_switch_off_a_group_required_by_settings():
+    groups = {"manual": CaseGroup(weight=1), "stress": CaseGroup(weight=1, required=False)}
+    assert failed_required_groups(STRESS_FAILED, STRESS_CASES, groups, default=["stress"]) == []
+
+
+def test_required_group_absent_from_instance_does_not_fail():
+    cases = _cases("manual", "manual")
+    assert failed_required_groups(_passed(True, True), cases, GROUPS, default=["stress"]) == []
+
+
+def test_missing_test_report_fails_every_required_group():
+    report = TestReport(outcomes=[])
+    assert failed_required_groups(report, STRESS_CASES, REQUIRED, default=["manual"]) == [
+        "manual",
+        "stress",
+    ]
 
 
 def _report(walls: list[int | None], passed: list[bool], memory: int | None) -> TestReport:

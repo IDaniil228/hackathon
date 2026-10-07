@@ -110,7 +110,7 @@ class World:
                             "entrypoint": "add",
                             "runtime": "python",
                             "reference_report": _report([True]).model_dump(),
-                        }
+                        } | spec.get("hidden", {})
                     public = {"signature": "def add(a, b)"}
                     if spec["kind"] == "quiz":
                         hidden = {"answer_key": QUIZ_KEY, "quiz_variant": "positive"}
@@ -255,7 +255,12 @@ def test_score_session_end_to_end(world):
     assert result["outcome"] == "passed"
     assert result["assigned_grade"] == "middle"
     assert [task["solved"] for task in result["tasks"]] == [True, True, True]
-    assert result["tasks"][0]["tests"] == {"passed": 2, "total": 2, "compile_error": False}
+    assert result["tasks"][0]["tests"] == {
+        "passed": 2,
+        "total": 2,
+        "compile_error": False,
+        "failed_required": [],
+    }
     assert result["tasks"][2]["judge"]["yes"] == 1
 
     # Наружу не уходят ни скрытые тесты, ни рубрика, ни эталонный отчёт.
@@ -349,6 +354,31 @@ def test_session_without_claimed_level_tasks_is_insufficient(world):
     recommendation = result["recommendation"]
     assert (recommendation["action"], recommendation["grade"]) == ("take_test", "middle")
     assert "middle" in recommendation["text"]
+
+
+def _grouped_task(required: bool | None) -> dict:
+    stress = {"weight": 1} | ({"required": required} if required is not None else {})
+    cases = [
+        {"input": [1, 2], "expected": 3, "group": "manual"},
+        {"input": [2, 2], "expected": 4, "group": "manual"},
+        {"input": [10**6, 1], "expected": 10**6 + 1, "group": "stress"},
+    ]
+    hidden = {"cases": cases, "case_groups": {"manual": {"weight": 10}, "stress": stress}}
+    return {"grade": "middle", "kind": "code", "hidden": hidden}
+
+
+@pytest.mark.parametrize(("required", "solved"), [(None, True), (False, True), (True, False)])
+def test_failed_required_group_unsolves_task_with_high_score(world, required, solved):
+    session_id, (task_id,) = world.make_session([_grouped_task(required)])
+    world.state.sandbox = FakeSandbox(_report([True, True, False]))
+    _answer(world, task_id)
+    result = world.client.post(f"/sessions/{session_id}/score", headers=AUTH).json()
+    [task] = result["tasks"]
+    # Стресс-кейс весит 1 из 11: балл выше порога и с гейтом, и без него.
+    assert task["score"] >= result["thresholds"]["solved"]
+    assert task["solved"] is solved
+    assert task["tests"]["failed_required"] == ([] if solved else ["stress"])
+    assert result["outcome"] == ("passed" if solved else "failed")
 
 
 def test_zero_pass_rate_scores_zero_without_judge(world):

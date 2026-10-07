@@ -76,6 +76,35 @@ def weighted_pass_rate(
     return weighted / sum(groups[name].weight for name in results)
 
 
+def failed_required_groups(
+    report: TestReport,
+    cases: list[TestCase],
+    groups: Mapping[str, CaseGroup],
+    *,
+    default: Iterable[str],
+) -> list[str]:
+    """Обязательные группы, в которых упал хотя бы один кейс, по алфавиту.
+
+    Группа обязательна, если так решил шаблон, а без его решения — если она есть в default
+    из ScoringSettings.required_case_groups. Группа без кейсов в экземпляре не проваливается.
+    Пустой отчёт значит, что тесты не запускались, и проваливает все обязательные группы.
+    """
+    defaults = set(default)
+    required = {
+        name
+        for name, group in groups.items()
+        if (group.required if group.required is not None else name in defaults)
+    }
+    if not required:
+        return []
+    if not report.outcomes:
+        return sorted(required & {case.group for case in cases})
+    results = _group_results(report, cases)
+    return sorted(
+        name for name in required if name in results and results[name][0] < results[name][1]
+    )
+
+
 def code_task_score(components: Components, weights: Mapping[str, float]) -> float:
     """Взвешенная сумма с жёстким гейтом: ни одного пройденного теста — балл 0.
 

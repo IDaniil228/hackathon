@@ -116,6 +116,27 @@ async def test_tests_component_is_weighted_by_case_groups():
     assert (outcome.tests.passed, outcome.tests.total) == (2, 3)
 
 
+async def test_required_group_modes_reach_the_outcome():
+    judge, _ = _judge()
+    required = GROUPED | {
+        "case_groups": {"manual": {"weight": 1}, "stress": {"weight": 3, "required": True}}
+    }
+    modes = {
+        "выключен": (GROUPED, ScoringSettings()),
+        "шаблон": (required, ScoringSettings()),
+        "настройка": (GROUPED, ScoringSettings(required_case_groups=["stress"])),
+    }
+    failed = {}
+    for mode, (hidden, scoring) in modes.items():
+        task = _task(hidden=hidden)
+        task.answer.test_report = _report([True, True, False])
+        outcome = await evaluate_task(task, judge=judge, scoring=scoring)
+        failed[mode] = outcome.tests.failed_required
+        # Гейт не трогает балл: веса работают и без него.
+        assert outcome.components.tests == pytest.approx(0.25)
+    assert failed == {"выключен": [], "шаблон": ["stress"], "настройка": ["stress"]}
+
+
 async def test_template_weights_override_applies():
     judge, _ = _judge("no")
     plain = await evaluate_task(_task(), judge=judge, scoring=ScoringSettings())
