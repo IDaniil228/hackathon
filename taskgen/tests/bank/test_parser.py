@@ -178,6 +178,12 @@ def test_runtime_must_be_a_language_environment_of_the_registry(runtime):
     assert "runtime" in locations(make_template(runtime=runtime))
 
 
+def test_function_task_needs_a_runtime_with_a_driver():
+    # Драйвера задач-функций для Bash нет: шаблон не дал бы ни одного экземпляра.
+    found = issues_of(make_template(runtime="bash"))
+    assert any(i.location == "io" and "драйвер" in i.message for i in found), found
+
+
 def _solutions_in(language: str, code: str = REFERENCE) -> dict[str, str]:
     wrong = SHORT_RIGHT if code == REFERENCE else code
     return {

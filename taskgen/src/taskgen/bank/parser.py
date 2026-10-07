@@ -18,7 +18,12 @@ from pydantic import ValidationError
 
 from taskgen.contracts import CheckMode, IOKind, RubricItem, TaskKind, TemplateSpec
 from taskgen.db import Template
-from taskgen.evaluation.languages import canonical_language, language_runtimes, source_language
+from taskgen.evaluation.languages import (
+    canonical_language,
+    function_runtimes,
+    language_runtimes,
+    source_language,
+)
 from taskgen.evaluation.scoring import WEIGHT_OF
 from taskgen.markdown import Fence, code_rows, fences, headings, lines, split_frontmatter
 
@@ -268,6 +273,13 @@ def _check_frontmatter(meta: dict[str, Any], *, is_code: bool, out: _Collector) 
     if is_code and runtime and runtime not in language_runtimes():
         known = ", ".join(language_runtimes())
         out.add("runtime", f"неизвестное окружение {runtime!r}; допустимы: {known}")
+    elif is_code and meta.get("io") == IOKind.FUNCTION.value and runtime not in function_runtimes():
+        known = ", ".join(function_runtimes())
+        out.add(
+            "io",
+            f"у окружения {runtime!r} нет драйвера задач-функций, только io=stdio; "
+            f"io=function доступно в: {known}",
+        )
 
     params = meta.get("params")
     if isinstance(params, dict):

@@ -12,9 +12,10 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from taskgen.contracts import RunLimits
+from taskgen.sandbox.drivers import FUNCTION_LANGUAGES
 from taskgen.sandbox.errors import SandboxError
 
 # Рецепты локальных пакетов Piston: taskgen/sandbox/packages. Каталог лежит вне пакета
@@ -25,14 +26,18 @@ REQUIREMENTS_FILE = "requirements.txt"
 
 
 class RuntimeSpec(BaseModel):
+    # Неизвестное поле — ошибка загрузки реестра, а не молча забытая запись.
+    model_config = ConfigDict(extra="forbid")
+
+    # Язык пакета Piston: его имя Piston ждёт в запросе запуска.
     language: str
     version: str
+    # Язык кода окружения: python у python и python-ml. По нему выбираются драйвер задач-
+    # функций, анализаторы, рубрика и проверка решений шаблона.
+    code: str
     # language — язык решений кандидата; tool — служебное окружение сервиса, например
     # анализаторы кода: в нём не решают задания, и кандидату оно не описывается.
     kind: Literal["language", "tool"] = "language"
-    # Драйвер задач-функций из taskgen/sandbox/drivers; None — окружению доступны только
-    # задачи io=stdio.
-    driver: Literal["python", "cpp"] | None = None
     # Имя файла программы кандидата в задаче stdio; по нему же анализаторы узнают язык.
     source_file: str
     # Можно ли положить рядом с программой файлы кейса. Скрипт compile пакета gcc собирает
@@ -58,6 +63,11 @@ class RuntimeSpec(BaseModel):
     @property
     def package_name(self) -> str:
         return self.package or self.language
+
+    @property
+    def functions(self) -> bool:
+        """Доступны ли задачи io=function: для языка кода написан драйвер."""
+        return self.code in FUNCTION_LANGUAGES
 
     def effective_limits(self, limits: RunLimits) -> RunLimits:
         """Запрошенные лимиты, поднятые до пола окружения; бо́льшие запросы не меняются."""

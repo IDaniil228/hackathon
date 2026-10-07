@@ -1,6 +1,6 @@
-# Окружения песочницы: имя runtime из шаблона задания -> пакет Piston и драйвер задач-функций.
+# Окружения песочницы: имя runtime из шаблона задания -> пакет Piston и язык кода.
 # Новое окружение добавляется записью сюда, без правки кода: задачи stdio ему доступны сразу,
-# а задачам-функциям нужен ещё драйвер языка в taskgen/sandbox/drivers.
+# а задачи-функции — если для языка code есть драйвер в taskgen/sandbox/drivers.
 # Поля и допустимые значения задаёт RuntimeSpec в registry.py. Отсюда же скрипт
 # taskgen/sandbox/piston-packages.sh узнаёт, какие пакеты ставить в Piston.
 #
@@ -9,14 +9,14 @@
 python:
   language: python
   version: 3.12.0
-  driver: python
+  code: python
   source_file: solution.py
   description: Python {version}
 
 python-ml:
   language: python-ml
   version: 3.12.0
-  driver: python
+  code: python
   source_file: solution.py
   description: Python {version} для задач машинного обучения
   # У Piston нет такого пакета, он собирается из taskgen/sandbox/packages/python-ml.
@@ -29,7 +29,7 @@ python-ml:
 cpp:
   language: c++
   version: 10.2.0
-  driver: cpp
+  code: cpp
   source_file: solution.cpp
   data_files: false
   package: gcc
@@ -43,7 +43,8 @@ cpp:
 bash:
   language: bash
   version: 5.2.0
-  # Драйвера задач-функций нет: на Bash пишутся только задачи stdio.
+  # Драйвера задач-функций для Bash нет: на нём пишутся только задачи stdio.
+  code: bash
   source_file: solution.sh
   description: Bash {version}
   # Утилиты берутся из образа Piston (Debian 10), а не из пакета bash; версии сверяет живой
@@ -56,6 +57,7 @@ analyzers:
   language: analyzers
   version: 1.0.0
   kind: tool
+  code: python
   source_file: taskgen_analyze.py
   description: анализаторы кода кандидата
   # Пакет собирается из taskgen/sandbox/packages/analyzers.

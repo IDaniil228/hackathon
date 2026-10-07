@@ -201,11 +201,11 @@ def _program_output(result: RunResult, limits: RunLimits) -> Produced:
 
 
 async def _function(run: Run, spec: RuntimeSpec, request: TestRunRequest) -> Execution:
-    if spec.driver is None:
+    if not spec.functions:
         raise SandboxError(
             f"у окружения {request.runtime} нет драйвера задач-функций, только io=stdio"
         )
-    files, args = driver_files(spec.driver, request.entrypoint or "", request.solution)
+    files, args = driver_files(spec.code, request.entrypoint or "", request.solution)
     nonce = secrets.token_hex(16)
     # Эвристика причины обрыва сравнивает пик памяти с действующим лимитом, а не запрошенным.
     limits = spec.effective_limits(request.limits)

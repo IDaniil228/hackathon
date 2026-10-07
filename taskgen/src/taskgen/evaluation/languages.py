@@ -28,6 +28,11 @@ def language_runtimes() -> list[str]:
     return [name for name in registry.names() if registry.get(name).kind == "language"]
 
 
+def function_runtimes() -> list[str]:
+    """Окружения, в которых доступны задачи io=function: для их языка написан драйвер."""
+    return [name for name in language_runtimes() if _registry().get(name).functions]
+
+
 def canonical_language(language: str | None) -> str | None:
     """Каноническое имя или None, если язык сервису неизвестен."""
     if language is None:
@@ -38,9 +43,9 @@ def canonical_language(language: str | None) -> str | None:
 def source_language(language: str | None) -> str | None:
     """Язык исходника: имя языка или окружения; None — сервис такого не знает.
 
-    Окружение пишется на языке своего драйвера (python-ml — на python), а окружение без
-    драйвера — на языке пакета Piston (bash). Ответ кандидата сверяется с окружением задания
-    через canonical_language: там python-ml остаётся отдельным окружением.
+    Язык окружения — его поле code в реестре: python-ml пишется на python. Ответ кандидата
+    сверяется с окружением задания через canonical_language: там python-ml остаётся
+    отдельным окружением.
     """
     if language is None:
         return None
@@ -49,5 +54,4 @@ def source_language(language: str | None) -> str | None:
         return known
     if name not in _registry().names():
         return None
-    spec = _registry().get(name)
-    return canonical_language(spec.driver) or canonical_language(spec.language) or spec.language
+    return _registry().get(name).code
