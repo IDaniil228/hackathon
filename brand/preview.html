@@ -23,12 +23,12 @@
     .pv-type-row > :last-child { margin: 0; }
     .pv-logo-stage { display: flex; flex-wrap: wrap; gap: var(--fsp-space-6); }
     .pv-logo-box { display: flex; align-items: center; justify-content: center; max-width: 100%; overflow-x: auto; padding: var(--fsp-space-6); border: 1px solid var(--fsp-color-border); border-radius: var(--fsp-radius-md); }
-    .pv-logo-box--light { background-color: var(--fsp-palette-light); }
-    .pv-logo-box--dark { background-color: var(--fsp-palette-dark); }
+    /* Плашки как на стр. 13 брендбука: белая для светлого фона, Gray/bright для тёмного */
+    .pv-logo-box--light { background-color: var(--fsp-palette-white); }
+    .pv-logo-box--dark { background-color: var(--fsp-palette-gray-bright); }
     .pv-logo-box .fsp-logo { outline: 1px dashed var(--fsp-color-accent); }
-    .pv-missing { display: none; padding: var(--fsp-space-4); border: 1px dashed var(--fsp-color-border-strong); border-radius: var(--fsp-radius-sm); font-size: var(--fsp-text-sm-size); }
-    .pv-logos-missing .pv-missing { display: block; }
-    .pv-logos-missing .pv-logo-stage { display: none; }
+    .pv-logo-tall { height: var(--fsp-space-16); }
+    .pv-logo-line { height: var(--fsp-space-8); }
     .pv-mock { border: 1px solid var(--fsp-color-border); border-radius: var(--fsp-radius-lg); overflow: hidden; background-color: var(--fsp-color-bg); }
     .pv-mock__body { padding: var(--fsp-space-6); }
     .pv-candidate { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--fsp-space-4); }
@@ -51,7 +51,7 @@
   <header class="fsp-topbar">
     <a href="#top" aria-label="ФСП, на главную">
       <span class="fsp-logo fsp-logo--short" style="--fsp-logo-clearspace: 0">
-        <img class="fsp-only-light" src="assets/logo/logo-short-on-light.svg" alt="ФСП" onerror="document.body.classList.add('pv-logos-missing')">
+        <img class="fsp-only-light" src="assets/logo/logo-short-on-light.svg" alt="ФСП">
         <img class="fsp-only-dark" src="assets/logo/logo-short-on-dark.svg" alt="ФСП">
       </span>
     </a>
@@ -109,8 +109,7 @@
 
     <section class="pv-section" aria-labelledby="logo">
       <h2 id="logo">Логотип</h2>
-      <p class="fsp-muted">Пунктир показывает охранное поле, размеры минимальные. Версия для светлого фона и версия для тёмного фона из брендбука. Полная версия в минимальном размере шире телефона: на узком экране ставьте короткую</p>
-      <div class="pv-missing">Логотипы не скачаны: выполните <code>python3 brand/fetch_logos.py</code>. Брендбук не разрешает явно распространять логотипы, поэтому их нет в репозитории</div>
+      <p class="fsp-muted">Официальные файлы из <code>assets/logo/</code>. Пунктир показывает охранное поле, размеры минимальные. Полная версия в минимальном размере шире телефона: на узком экране ставьте короткую</p>
       <div class="pv-logo-stage">
         <div class="pv-logo-box pv-logo-box--light">
           <span class="fsp-logo"><img src="assets/logo/logo-full-on-light.svg" alt="Федерация спортивного программирования России"></span>
@@ -130,6 +129,20 @@
         <div class="pv-logo-box pv-logo-box--dark">
           <span class="fsp-logo fsp-logo--short"><img src="assets/logo/logo-sign-on-dark.svg" alt="Знак ФСП"></span>
         </div>
+      </div>
+      <h3 style="margin-top: var(--fsp-space-8)">Вертикальные и монохромные версии</h3>
+      <p class="fsp-muted">Вертикальная компоновка подходит для квадратных мест: аватара, плитки. Монохромная нужна там, где цвет недоступен</p>
+      <div class="pv-logo-stage">
+        <div class="pv-logo-box pv-logo-box--light"><img src="assets/logo/logo-full-stacked-on-light.svg" alt="Федерация спортивного программирования" class="pv-logo-tall"></div>
+        <div class="pv-logo-box pv-logo-box--dark"><img src="assets/logo/logo-full-stacked-on-dark.svg" alt="Федерация спортивного программирования" class="pv-logo-tall"></div>
+        <div class="pv-logo-box pv-logo-box--light"><img src="assets/logo/logo-short-stacked-on-light.svg" alt="ФСП" class="pv-logo-tall"></div>
+        <div class="pv-logo-box pv-logo-box--dark"><img src="assets/logo/logo-short-stacked-on-dark.svg" alt="ФСП" class="pv-logo-tall"></div>
+        <div class="pv-logo-box pv-logo-box--light"><img src="assets/logo/logo-full-mono-on-light.svg" alt="Федерация спортивного программирования России" class="pv-logo-line"></div>
+        <div class="pv-logo-box pv-logo-box--dark"><img src="assets/logo/logo-full-mono-on-dark.svg" alt="Федерация спортивного программирования России" class="pv-logo-line"></div>
+        <div class="pv-logo-box pv-logo-box--light"><img src="assets/logo/logo-short-mono-on-light.svg" alt="ФСП" class="pv-logo-line"></div>
+        <div class="pv-logo-box pv-logo-box--dark"><img src="assets/logo/logo-short-mono-on-dark.svg" alt="ФСП" class="pv-logo-line"></div>
+        <div class="pv-logo-box pv-logo-box--light"><img src="assets/logo/logo-sign-mono-on-light.svg" alt="Знак ФСП" class="pv-logo-line"></div>
+        <div class="pv-logo-box pv-logo-box--dark"><img src="assets/logo/logo-sign-mono-on-dark.svg" alt="Знак ФСП" class="pv-logo-line"></div>
       </div>
     </section>
 

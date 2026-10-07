@@ -122,6 +122,14 @@ class BuildTest(unittest.TestCase):
             with self.subTest(file=path.name):
                 self.assertEqual(COLOR_LITERAL.findall(path.read_text(encoding="utf-8")), [])
 
+    def test_preview_references_only_files_in_repository(self):
+        html = (HERE / "preview.html").read_text(encoding="utf-8")
+        paths = [m.group(1) for m in re.finditer(r'(?:src|href)="(?!https?:|#|data:)([^"]+)"', html)]
+        self.assertTrue(any(p.startswith("assets/logo/") for p in paths), "витрина не показывает логотипы")
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertTrue((HERE / path).is_file(), f"нет файла {path}")
+
     def test_media_query_widths_are_breakpoint_tokens(self):
         # CSS-переменная не работает внутри @media, поэтому ширина повторена литералом
         breakpoints = {
