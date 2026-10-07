@@ -54,7 +54,7 @@ def _data() -> dict:
         scored_at="2026-10-06T12:00:00+00:00",
         result=RESULT,
     )
-    return summary_data("cand-1", [session])
+    return summary_data([session])
 
 
 def test_data_carries_facts_but_not_ai_signal():
@@ -185,7 +185,10 @@ async def test_confirmed_summary_is_shown():
     assert (checker["model"], checker["reasoning_effort"]) == ("chk", "low")
     user = checker["messages"][-1].content
     facts = re.search(r"<<<ФАКТЫ-(\w+)>>>\n(.*?)\n<<<КОНЕЦ-ФАКТОВ-\1>>>", user, re.DOTALL)
-    assert '[1] candidate_ref = "cand-1"' in facts.group(2)
+    assert "sessions[0].outcome" in facts.group(2)
+    # Идентификатор кандидата работодателю не нужен, а модели его пересказывают с ошибками.
+    prompts = "\n".join(m.content for call in llm.calls for m in call["messages"])
+    assert "cand-1" not in prompts and "candidate_ref" not in prompts
     text = re.search(r"<<<СПРАВКА-(\w+)>>>\n(.*?)\n<<<КОНЕЦ-СПРАВКИ-\1>>>", user, re.DOTALL)
     assert f"Предложение 2: {SENTENCES[1]}" in text.group(2)
 

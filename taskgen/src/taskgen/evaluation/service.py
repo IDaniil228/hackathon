@@ -717,7 +717,7 @@ async def refresh_summary(ev: Evaluator, candidate_ref: str) -> None:
         )
         for session in sessions
     ]
-    data = summary_data(candidate_ref, facts)
+    data = summary_data(facts)
     try:
         # Текст пишет роль генерации, а сверяет с фактами роль проверяльщика.
         text = await write_summary(

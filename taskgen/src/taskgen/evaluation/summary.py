@@ -138,10 +138,13 @@ def _task_facts(task: dict[str, Any]) -> dict[str, Any]:
     return facts
 
 
-def summary_data(candidate_ref: str, sessions: list[SessionFacts]) -> dict[str, Any]:
-    """Факты по всем оценённым сессиям кандидата; sessions идут от новой к старой."""
+def summary_data(sessions: list[SessionFacts]) -> dict[str, Any]:
+    """Факты по всем оценённым сессиям кандидата; sessions идут от новой к старой.
+
+    Идентификатора кандидата в фактах нет: работодатель знает, о ком сводка, а модели
+    пересказывают идентификатор с ошибками, и проверка этого не ловит.
+    """
     return {
-        "candidate_ref": candidate_ref,
         "sessions_count": len(sessions),
         "sessions": [
             {
