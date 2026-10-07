@@ -19,6 +19,10 @@ params:
       - расписание одного станка на заводе
       - эфирная сетка одного телеканала
       - запись к одному врачу на день
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 3, required: true}
 ---
 
 # Наибольшее число встреч
@@ -106,6 +110,10 @@ def random_meetings(rng, n, horizon, longest):
     return result
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     cases = [
         case([(9, 11), (10, 12), (11, 13), (13, 15)]),
@@ -117,12 +125,14 @@ def generate(params, rng):
         case([(0, 1000000), (0, 1), (999999, 1000000)]),
         case([(3, 8), (1, 4), (7, 9), (2, 3), (8, 10)]),
     ]
+    cases = grouped("manual", cases)
     for _ in range(6):
-        cases.append(case(random_meetings(rng, rng.randint(2, 10), 20, 6)))
+        cases.append(dict(case(random_meetings(rng, rng.randint(2, 10), 20, 6)), group="random"))
     for _ in range(3):
-        cases.append(case(random_meetings(rng, rng.randint(50, 300), 1000, 60)))
+        meetings = random_meetings(rng, rng.randint(50, 300), 1000, 60)
+        cases.append(dict(case(meetings), group="random"))
     n = params["n_max"]
-    cases.append(case(random_meetings(rng, n, 10**6, 5000)))
+    cases.append(dict(case(random_meetings(rng, n, 10**6, 5000)), group="stress"))
     return cases
 ```
 

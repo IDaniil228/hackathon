@@ -20,6 +20,10 @@ params:
       - пересылка пакета между узлами сети с ограничением на число прыжков
       - доставка груза между складами с ограничением на число перегрузок
       - цепочка обменов между валютами с ограничением на число сделок
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 3, required: true}
 ---
 
 # Дешёвый маршрут с ограничением пересадок
@@ -122,8 +126,12 @@ def random_graph(rng, n, m, top):
     return [(rng.randrange(n), rng.randrange(n), rng.randint(0, top)) for _ in range(m)]
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
-    cases = [
+    manual = [
         case(4, [(0, 1, 100), (1, 2, 100), (2, 3, 100), (0, 2, 500), (0, 3, 900)], 0, 3, 1),
         case(3, [(0, 1, 100), (1, 2, 100), (0, 2, 200)], 0, 2, 1),
         case(3, [(0, 1, 5)], 0, 2, 3),
@@ -134,18 +142,19 @@ def generate(params, rng):
         case(4, [(0, 1, 1), (1, 2, 1), (2, 3, 1), (0, 3, 3)], 0, 3, 2),
         case(4, [(0, 1, 10000), (1, 2, 10000), (2, 3, 10000)], 0, 3, 4),
     ]
+    randoms = []
     for _ in range(6):
         n = rng.randint(2, 5)
         edges = random_graph(rng, n, rng.randint(1, 8), 9)
-        cases.append(case(n, edges, rng.randrange(n), rng.randrange(n), rng.randint(0, 4)))
+        randoms.append(case(n, edges, rng.randrange(n), rng.randrange(n), rng.randint(0, 4)))
     for _ in range(3):
         n = rng.randint(10, 40)
         edges = random_graph(rng, n, rng.randint(4 * n, 8 * n), 50)
-        cases.append(case(n, edges, 0, n - 1, rng.randint(1, 6)))
+        randoms.append(case(n, edges, 0, n - 1, rng.randint(1, 6)))
     n = params["n_max"]
     edges = random_graph(rng, n, params["m_max"], 10000)
-    cases.append(case(n, edges, 0, n - 1, rng.randint(15, 30)))
-    return cases
+    stress = [case(n, edges, 0, n - 1, rng.randint(15, 30))]
+    return grouped("manual", manual) + grouped("random", randoms) + grouped("stress", stress)
 ```
 
 ## Рубрика

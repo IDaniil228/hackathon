@@ -19,6 +19,10 @@ params:
       - модель кликов по рекламному баннеру
       - модель одобрения заявки на кредит
       - модель обнаружения подозрительных входов в аккаунт
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 1, required: true}
 ---
 
 # Шаг градиентного спуска логистической регрессии
@@ -103,6 +107,10 @@ def random_case(rng, n, d):
     return case(X, y, w, round(rng.uniform(-1, 1), 3), lr, l2)
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     cases = [
         case([[1.0, 2.0], [-1.0, 0.5], [0.0, -1.0]], [1, 0, 1], [0.1, -0.2], 0.0, 0.5, 0.0),
@@ -113,9 +121,10 @@ def generate(params, rng):
         case([[10.0, -10.0], [-10.0, 10.0]], [1, 1], [1.0, -1.0], 0.0, 0.01, 0.0),
         case([[0.0, 0.0, 0.0]], [0], [0.0, 0.0, 0.0], 0.0, 1.0, 0.0),
     ]
+    cases = grouped("manual", cases)
     for _ in range(5):
-        cases.append(random_case(rng, rng.randint(1, 20), rng.randint(1, 6)))
-    cases.append(random_case(rng, params["rows_max"], 5))
+        cases.append(dict(random_case(rng, rng.randint(1, 20), rng.randint(1, 6)), group="random"))
+    cases.append(dict(random_case(rng, params["rows_max"], 5), group="stress"))
     return cases
 ```
 

@@ -19,6 +19,10 @@ params:
       - кэш курсов валют для платёжного шлюза
       - кэш результатов поиска билетов
       - кэш ответов внешнего API геокодирования
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 1, required: true}
 ---
 
 # Кэш с TTL и вытеснением LRU
@@ -131,6 +135,10 @@ def journal(rng, n, keys, max_gap, max_ttl):
     return ops
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     cases = [
         case(
@@ -216,11 +224,14 @@ def generate(params, rng):
             ],
         ),
     ]
+    cases = grouped("manual", cases)
     for _ in range(6):
         keys = ["k" + str(i) for i in range(rng.randint(2, 6))]
-        cases.append(case(rng.randint(1, 4), journal(rng, rng.randint(10, 80), keys, 3, 30)))
+        operations = case(rng.randint(1, 4), journal(rng, rng.randint(10, 80), keys, 3, 30))
+        cases.append(dict(operations, group="random"))
     keys = ["k" + str(i) for i in range(40)]
-    cases.append(case(rng.randint(10, 30), journal(rng, params["n_max"], keys, 2, 400)))
+    operations = case(rng.randint(10, 30), journal(rng, params["n_max"], keys, 2, 400))
+    cases.append(dict(operations, group="stress"))
     return cases
 ```
 

@@ -19,6 +19,10 @@ params:
       - показатели датчиков станка для модели предсказания поломки
       - медицинские показатели пациентов для модели риска
       - поведение пользователей приложения для модели оттока
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 1, required: true}
 ---
 
 # Стандартизация признаков
@@ -97,6 +101,10 @@ def matrix(rng, rows, columns, constant_columns=()):
     return data
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     cases = [
         case([[1, 10], [3, 30], [5, 50]], [[3, 20], [7, 70]], 0),
@@ -107,14 +115,17 @@ def generate(params, rng):
         case([[1e6, -3], [1e6 + 2, 3]], [[1e6 + 1, 0]], 0),
         case([[-1], [1]], [[0], [2], [-2]], 1),
     ]
+    cases = grouped("manual", cases)
     for ddof in (0, 1):
         columns = rng.randint(2, 5)
         constant = {rng.randrange(columns)}
         train = matrix(rng, rng.randint(2, 20), columns, constant)
-        cases.append(case(train, matrix(rng, rng.randint(1, 10), columns), ddof))
+        test = matrix(rng, rng.randint(1, 10), columns)
+        cases.append(dict(case(train, test, ddof), group="random"))
     columns = rng.randint(3, 5)
     train = matrix(rng, params["rows_max"], columns)
-    cases.append(case(train, matrix(rng, 40, columns), rng.choice([0, 1])))
+    test = matrix(rng, 40, columns)
+    cases.append(dict(case(train, test, rng.choice([0, 1])), group="stress"))
     return cases
 ```
 

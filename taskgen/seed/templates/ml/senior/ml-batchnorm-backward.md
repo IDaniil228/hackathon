@@ -19,6 +19,10 @@ params:
       - учебная библиотека автоматического дифференцирования
       - слой нормализации для модели прогноза спроса
       - нестандартный слой для модели распознавания речи
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 1, required: true}
 ---
 
 # Обратный проход батч-нормализации
@@ -122,6 +126,10 @@ def random_case(rng, n, d):
     return case(x, gamma, matrix(rng, n, d, 1), rng.choice([1e-5, 1e-3, 0.1]))
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     cases = [
         case(
@@ -141,9 +149,10 @@ def generate(params, rng):
             1e-5,
         ),
     ]
+    cases = grouped("manual", cases)
     for _ in range(5):
-        cases.append(random_case(rng, rng.randint(2, 8), rng.randint(1, 4)))
-    cases.append(random_case(rng, params["batch_max"], 6))
+        cases.append(dict(random_case(rng, rng.randint(2, 8), rng.randint(1, 4)), group="random"))
+    cases.append(dict(random_case(rng, params["batch_max"], 6), group="stress"))
     return cases
 ```
 
