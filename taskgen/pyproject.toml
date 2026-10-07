@@ -25,6 +25,14 @@ dev = [
     "pytest-asyncio",
     "ruff",
 ]
+# Проверка фактов эссе моделью NLI (generation/nli.py). Не входит в группы по умолчанию:
+# onnxruntime с токенизатором весят около 150 МБ против 0.9–5 ГБ у torch.
+nli = [
+    "onnxruntime",
+    "tokenizers",
+    "huggingface-hub",
+    "numpy",
+]
 
 [project.scripts]
 taskgen = "taskgen.cli:main"

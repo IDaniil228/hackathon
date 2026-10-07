@@ -1,4 +1,4 @@
-"""Бенчмарк проверки ситуации эссе: режимы llm, embeddings и both на размеченном наборе.
+"""Бенчмарк проверки ситуации эссе: режимы llm, embeddings, both и nli на размеченном наборе.
 
 Разметка известна по построению. Хорошие ситуации и подсказки написаны вручную в
 tests/generation/bench/essays/*.yaml, а варианты собираются из них кодом:
@@ -15,8 +15,10 @@ tests/generation/bench/essays/*.yaml, а варианты собираются �
     uv run python scripts/essay_check_bench.py build --check  # cases.json совпадает с источниками
     uv run python scripts/essay_check_bench.py run --out results.json
     uv run python scripts/essay_check_bench.py quotes --out quotes.json  # смысл цитат
+    uv run --group nli python scripts/essay_check_bench.py nli --out nli.json \
+        --llm-results tests/generation/bench/results/qwen3.5-9b-full.json  # модели NLI
 
-Порог эмбеддингов подбирается на половине эссе (tune) и меряется на другой половине (test):
+Пороги эмбеддингов и NLI подбираются на половине эссе (tune) и меряется на другой половине (test):
 варианты одного эссе не попадают в обе половины. LLM медленная, поэтому режимы llm и both
 идут на стратифицированной по виду варианта подвыборке с фиксированным seed.
 """
@@ -831,6 +833,313 @@ async def run_quotes(args: argparse.Namespace) -> int:
     return 0
 
 
+# --- NLI ------------------------------------------------------------------------------------
+#
+# Режим nli считает только модель NLI и не зовёт ни эмбеддер, ни LLM. С ним сравниваются
+# строки embeddings и llm из сохранённых прогонов команды run (--llm-results): LLM на тех же
+# вариантах не перезапускается. Запрещённые фразы NLI ищет только как эксперимент
+# (PHRASE_HYPOTHESIS), а в комбинациях их решают подстрока и сохранённые вердикты LLM.
+
+NLI_MODELS = {
+    "rubert-base": ("cointegrated/rubert-base-cased-nli-threeway", "onnx/model.onnx"),
+    "mdeberta": ("MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7", "onnx/model.onnx"),
+    "mdeberta-int8": (
+        "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7",
+        "onnx/model_quantized.onnx",
+    ),
+}
+# None — без вето: факт решает только порог entailment.
+CONTRADICTION_GRID: tuple[float | None, ...] = (None, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99)
+WINDOW_NAMES = {0: "вся ситуация", 1: "предложения", 2: "предложения и пары"}
+PHRASE_HYPOTHESIS = "В тексте прямо или другими словами названо понятие «{phrase}»."
+
+
+def probability_grid() -> list[float]:
+    return [round(0.01 * step, 2) for step in range(1, 100)]
+
+
+class MemoNLI:
+    """Модель NLI, которая не считает одну пару дважды: окно 2 включает все пары окна 1."""
+
+    def __init__(self, inner: Any) -> None:
+        self.inner = inner
+        self.name = inner.name
+        self.memo: dict[tuple[str, str], Any] = {}
+
+    async def infer(self, pairs: list[tuple[str, str]]) -> list[Any]:
+        todo = [pair for pair in dict.fromkeys(pairs) if pair not in self.memo]
+        self.memo.update(zip(todo, await self.inner.infer(todo), strict=True))
+        return [self.memo[pair] for pair in pairs]
+
+
+async def nli_scores(
+    model: Any, cases, windows: list[int], phrases: bool, partial: Path, config: str
+) -> dict[str, Any]:
+    """Исходы NLI для каждого варианта; время — на одну ситуацию, как у сервиса.
+
+    Время окна — время всех его пар. Окна 1 и 2 считаются подряд с общей памятью пар, и
+    время окна 2 — это время окна 1 плюс время новых пар. Окно 0, вся ситуация одной
+    посылкой, считается отдельно. Строки пишутся в partial сразу: обрыв долгого прогона на
+    CPU не теряет посчитанное, а новое окно досчитывается к старым строкам.
+    """
+    from taskgen.generation.nli import fact_inferences
+
+    scores: dict[str, Any] = {
+        row["case_id"]: row["entry"] for row in load_partial(partial) if row.get("config") == config
+    }
+    if scores:
+        log(f"из {partial} взято вариантов: {len(scores)}")
+    for number, case in enumerate(cases, start=1):
+        spec = load_spec(case["template"])
+        entry: dict[str, Any] = scores.get(case["id"]) or {
+            "facts": {},
+            "seconds": {},
+            "literal": find_phrases(f"{case['title']}\n{case['situation']}", spec.forbidden),
+        }
+        todo = [window for window in windows if str(window) not in entry["facts"]]
+        if not todo and (not phrases or "phrases" in entry):
+            continue
+        facts = filled_facts(spec, case["params"])
+        sentences = split_sentences(case["situation"])
+        memo = MemoNLI(model)
+        elapsed = 0.0
+        for window in sorted(todo, key=lambda w: w == 0):
+            if window == 0:
+                memo, elapsed = MemoNLI(model), 0.0
+            started = time.perf_counter()
+            result = await fact_inferences(memo, facts, sentences, window)
+            elapsed += time.perf_counter() - started
+            entry["seconds"][str(window)] = elapsed
+            entry["facts"][str(window)] = {
+                fid: [match.entailment, match.contradiction] for fid, match in result.items()
+            }
+        if phrases and "phrases" not in entry:
+            units = list(dict.fromkeys([case["title"].strip(), *sentences]))
+            hypotheses = [PHRASE_HYPOTHESIS.format(phrase=p) for p in spec.forbidden]
+            started = time.perf_counter()
+            inferred = await model.infer([(u, h) for h in hypotheses for u in units])
+            entry["phrase_seconds"] = time.perf_counter() - started
+            entry["phrases"] = {
+                phrase: max(
+                    row.entailment for row in inferred[i * len(units) : (i + 1) * len(units)]
+                )
+                for i, phrase in enumerate(spec.forbidden)
+            }
+        scores[case["id"]] = entry
+        with partial.open("a", encoding="utf-8") as stream:
+            row = {"config": config, "case_id": case["id"], "entry": entry}
+            stream.write(json.dumps(row, ensure_ascii=False) + "\n")
+        if number % 20 == 0:
+            log(f"[{number}/{len(cases)}] NLI посчитан")
+    return scores
+
+
+def nli_missing(entry: dict[str, Any], window: int, threshold: float, veto: float | None):
+    return [
+        fid
+        for fid, (entail, contra) in entry["facts"][str(window)].items()
+        if (veto is not None and contra >= veto) or entail < threshold
+    ]
+
+
+def nli_found(entry: dict[str, Any], threshold: float) -> list[str]:
+    """Фразы, найденные подстрокой или гипотезой PHRASE_HYPOTHESIS не ниже порога."""
+    return [
+        phrase
+        for phrase, value in entry["phrases"].items()
+        if phrase in entry["literal"] or value >= threshold
+    ]
+
+
+def _row(cid: str, missing, found, seconds: float = 0.0, calls: int = 0) -> dict[str, Any]:
+    return {
+        "case_id": cid,
+        "missing_facts": list(missing),
+        "forbidden_found": list(found),
+        "seconds": seconds,
+        "llm_calls": calls,
+    }
+
+
+def tune_nli(scores, by_id, tune_ids, window: int) -> dict[str, Any]:
+    """Порог entailment и порог вето с наибольшим F1 фактов на tune; при равенстве — без вето
+    или с меньшим вето, так как CONTRADICTION_GRID идёт от None по возрастанию."""
+    best: dict[str, Any] | None = None
+    for veto in CONTRADICTION_GRID:
+
+        def f1(threshold: float, veto: float | None = veto) -> float:
+            rows = [
+                _row(cid, nli_missing(scores[cid], window, threshold, veto), []) for cid in tune_ids
+            ]
+            return evaluate(rows, by_id)["fact"][2]
+
+        threshold, value = tune_threshold(probability_grid(), f1)
+        if best is None or value > best["f1"] + 1e-9:
+            best = {"window": window, "threshold": threshold, "veto": veto, "f1": value}
+    assert best is not None
+    return best
+
+
+def load_saved(paths: list[str], by_id: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Строки embeddings и llm сохранённых прогонов; вариант не из cases.json — ошибка."""
+    saved: dict[str, dict[str, Any]] = {}
+    for path in paths:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        unknown = {row["case_id"] for row in data["rows"]} - set(by_id)
+        _require(not unknown, f"{path}: варианты не из cases.json: {sorted(unknown)[:3]}")
+        modes: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
+        for row in data["rows"]:
+            modes[row["mode"]][row["case_id"]] = row
+        saved[Path(path).stem] = {"sample": data["sample"], "modes": modes}
+    return saved
+
+
+async def run_nli(args: argparse.Namespace) -> int:
+    from taskgen.generation.nli import OnnxNLI
+
+    cases = json.loads(CASES.read_text(encoding="utf-8"))
+    if render_cases(build_cases()) != CASES.read_text(encoding="utf-8"):
+        log("cases.json не совпадает с источниками: выполните build")
+        return 1
+    by_id = {case["id"]: case for case in cases}
+    tune, test = split_essays(cases)
+    tune_ids = [case["id"] for case in cases if case["essay"] in tune]
+    test_ids = {case["id"] for case in cases if case["essay"] in test}
+    saved = load_saved(args.llm_results, by_id)
+    windows = sorted(set(args.windows))
+
+    output: list[str] = [f"tune: {', '.join(tune)}", f"test: {', '.join(test)}"]
+    tuned: dict[str, Any] = {}
+    all_rows: dict[str, list[dict[str, Any]]] = {}
+    raw: dict[str, Any] = {}
+    for name in args.models:
+        repo, onnx_file = NLI_MODELS[name]
+        model = OnnxNLI(repo, onnx_file, threads=args.threads)
+        started = time.perf_counter()
+        await model.infer([("Проверка.", "Проверка.")])
+        log(f"{name}: модель загружена за {time.perf_counter() - started:.1f} с")
+        phrases = name in args.phrase_models
+        config = f"{repo}|{onnx_file}|{PHRASE_HYPOTHESIS}"
+        partial = Path(f"{args.out}.partial.jsonl")
+        scores = await nli_scores(model, cases, windows, phrases, partial, config)
+        raw[name] = scores
+        for window in windows:
+            choice = tune_nli(scores, by_id, tune_ids, window)
+            label = f"{name}, {WINDOW_NAMES[window]}"
+            tuned[label] = choice
+            log(f"{label}: {choice}")
+            all_rows[label] = [
+                _row(
+                    cid,
+                    nli_missing(scores[cid], window, choice["threshold"], choice["veto"]),
+                    scores[cid]["literal"],
+                    scores[cid]["seconds"][str(window)],
+                )
+                for cid in by_id
+            ]
+        if phrases:
+
+            def phrase_f1(threshold: float, scores=scores) -> float:
+                rows = [_row(cid, [], nli_found(scores[cid], threshold)) for cid in tune_ids]
+                return evaluate(rows, by_id)["forbidden"][2]
+
+            threshold, value = tune_threshold(probability_grid(), phrase_f1)
+            label = f"{name}, фразы NLI"
+            tuned[label] = {"threshold": threshold, "f1": value}
+            log(f"{label}: порог {threshold}, F1 на tune {value:.3f}")
+            all_rows[label] = [
+                _row(cid, [], nli_found(scores[cid], threshold), scores[cid]["phrase_seconds"])
+                for cid in by_id
+            ]
+
+    def subset(rows, ids):
+        return [row for row in rows if row["case_id"] in ids]
+
+    fact_labels = [label for label in all_rows if "фразы" not in label]
+    output.append(
+        table(
+            "NLI на tune и test: факты моделью, запрещённое подстрокой",
+            [
+                (f"{label}, {half}", evaluate(subset(all_rows[label], ids), by_id))
+                for label in fact_labels
+                for half, ids in (("tune", set(tune_ids)), ("test", test_ids))
+            ],
+        )
+    )
+    phrase_labels = [label for label in all_rows if "фразы" in label]
+    if phrase_labels:
+        output.append(
+            table(
+                "Эксперимент: запрещённые фразы через гипотезу NLI, test",
+                [
+                    (label, evaluate(subset(all_rows[label], test_ids), by_id))
+                    for label in phrase_labels
+                ],
+            )
+        )
+
+    for run_name, run in saved.items():
+        llm_rows = run["modes"]["llm"]
+        for title, ids in (
+            ("все варианты прогона", set(llm_rows)),
+            ("варианты прогона ∩ test", set(llm_rows) & test_ids),
+        ):
+            results = [
+                (
+                    "embeddings",
+                    evaluate(subset(list(run["modes"]["embeddings"].values()), ids), by_id),
+                ),
+                ("llm", evaluate(subset(list(llm_rows.values()), ids), by_id)),
+            ]
+            for label in fact_labels:
+                nli_rows = {row["case_id"]: row for row in all_rows[label]}
+                results.append(
+                    (f"{label} + подстрока", evaluate(subset(list(nli_rows.values()), ids), by_id))
+                )
+                combined = []
+                for cid in sorted(ids):
+                    nli_row = nli_rows[cid]
+                    # LLM зовётся, только если NLI и подстрока ситуацию пропустили: иначе
+                    # она уже отклонена. Вердикты фраз берутся из сохранённого прогона llm.
+                    if nli_row["missing_facts"] or nli_row["forbidden_found"]:
+                        combined.append(nli_row)
+                        continue
+                    llm = llm_rows[cid]
+                    combined.append(
+                        _row(
+                            cid,
+                            nli_row["missing_facts"],
+                            sorted(set(nli_row["forbidden_found"]) | set(llm["forbidden_found"])),
+                            nli_row["seconds"] + llm["seconds"],
+                            llm["llm_calls"],
+                        )
+                    )
+                results.append((f"{label} + LLM для фраз", evaluate(combined, by_id)))
+            output.append(table(f"Сравнение с {run_name}: {title}", results))
+
+    report = "\n".join(output)
+    print(report)
+    Path(args.out).write_text(
+        json.dumps(
+            {
+                "models": {name: NLI_MODELS[name] for name in args.models},
+                "phrase_hypothesis": PHRASE_HYPOTHESIS,
+                "phrase_models": args.phrase_models,
+                "tune": tune,
+                "test": test,
+                "tuned": tuned,
+                "scores": raw,
+                "report": report,
+            },
+            ensure_ascii=False,
+            indent=1,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -858,7 +1167,34 @@ def main(argv: list[str] | None = None) -> int:
         default=[0.35, 0.40, 0.45, 0.50, 0.55, 0.60],
         help="пороги для таблицы, кроме наибольшего без потерь честных",
     )
+    nli = sub.add_parser("nli", help="проверить факты моделями NLI и сравнить с сохранёнными")
+    nli.add_argument("--out", required=True, help="куда записать результаты в JSON")
+    nli.add_argument("--models", nargs="+", default=["rubert-base", "mdeberta"], choices=NLI_MODELS)
+    nli.add_argument(
+        "--windows",
+        nargs="+",
+        type=int,
+        default=[0, 1, 2],
+        choices=[0, 1, 2],
+        help="посылки: 1 — предложение, 2 — ещё и пары соседних, 0 — вся ситуация",
+    )
+    nli.add_argument(
+        "--llm-results",
+        nargs="+",
+        default=[],
+        help="сохранённые результаты команды run, с которыми сравнивать",
+    )
+    nli.add_argument(
+        "--phrase-models",
+        nargs="*",
+        default=[],
+        choices=NLI_MODELS,
+        help="модели, на которых проверить запрещённые фразы гипотезой NLI",
+    )
+    nli.add_argument("--threads", type=int, default=None, help="потоков onnxruntime")
     args = parser.parse_args(argv)
+    if args.command == "nli":
+        return asyncio.run(run_nli(args))
     if args.command == "quotes":
         return asyncio.run(run_quotes(args))
     if args.command == "build":
