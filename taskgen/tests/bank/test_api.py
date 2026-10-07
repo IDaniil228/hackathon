@@ -1,10 +1,13 @@
 import re
 
 import pytest
+from fastapi.testclient import TestClient
 
+from taskgen.app import create_app
 from tests.bank.conftest import FakeEmbedder
-from tests.bank.factory import make_essay, make_template
+from tests.bank.factory import REFERENCE, make_essay, make_template, solution
 from tests.conftest import ADMIN_KEY
+from tests.generation.fakes import LocalSandbox
 
 pytestmark = pytest.mark.integration
 
@@ -154,9 +157,41 @@ def test_get_by_name_hides_body_from_client(api, client_headers, unique):
     as_client = api.get(f"/templates/{unique}-a", headers=client_headers)
     assert as_client.status_code == 200
     assert "body" not in as_client.json()
+    # Ни верное, ни неверное решение не уходит клиенту: строки, которыми они различаются.
+    assert "len(nums) - 1" not in as_client.text and "len(nums) - 2" not in as_client.text
     assert "def two_sum" not in as_client.text
     as_admin = api.get(f"/templates/{unique}-a", headers=ADMIN)
     assert as_admin.json()["body"] == text
+
+
+def test_template_failing_in_piston_is_rejected_and_not_stored(api, unique):
+    # Настоящий Piston: неверное решение совпадает с верным, тесты его не ловят.
+    same = solution("same", "-", REFERENCE, "Ничем не отличается от верного")
+    text = make_template(
+        name=f"{unique}-a",
+        sections={"Решения": solution("reference", "+", REFERENCE) + "\n\n" + same},
+    )
+    response = post_md(api, text)
+
+    assert response.status_code == 422, response.text
+    errors = response.json()["detail"]["errors"]
+    seeds = api.app.state.settings.import_check.seeds
+    assert [e["location"] for e in errors] == [f"seed {seed}" for seed in range(seeds)]
+    assert all("неверное решение 'same'" in e["message"] for e in errors)
+    assert api.get(f"/templates/{unique}-a", headers=ADMIN).status_code == 404
+
+
+def test_upload_with_sandbox_down_is_503_and_writes_nothing(settings, unique, purge_committed):
+    down = LocalSandbox()
+    down.down = True
+    with TestClient(create_app(settings, sandbox=down)) as api:
+        api.app.state.embedder = FakeEmbedder()
+        response = post_md(api, make_template(name=f"{unique}-a"))
+        assert response.status_code == 503, response.text
+        assert "не проверены" in response.json()["detail"]
+        assert api.get(f"/templates/{unique}-a", headers=ADMIN).status_code == 404
+        # Шаблону без кода песочница не нужна.
+        assert post_md(api, make_essay(name=f"{unique}-e")).status_code == 200
 
 
 def test_get_unknown_template_is_404(api, client_headers, unique):

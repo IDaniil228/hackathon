@@ -16,7 +16,7 @@ import httpx
 from taskgen.config import SandboxSettings
 from taskgen.contracts import RunLimits, RunRequest, RunResult, TestReport, TestRunRequest
 from taskgen.sandbox import protocol
-from taskgen.sandbox.errors import SandboxError
+from taskgen.sandbox.errors import SandboxServiceError
 from taskgen.sandbox.harnesses import harness_files
 from taskgen.sandbox.registry import RuntimeRegistry, RuntimeSpec
 
@@ -100,9 +100,11 @@ class PistonRunner:
                 timeout=limits.timeout_ms / 1000 + HTTP_MARGIN_SECONDS,
             )
         except httpx.HTTPError as error:
-            raise SandboxError(f"Piston недоступен: {error!r}") from error
+            raise SandboxServiceError(f"Piston недоступен: {error!r}") from error
         if response.status_code != 200:
-            raise SandboxError(f"Piston отказал ({response.status_code}): {_message(response)}")
+            raise SandboxServiceError(
+                f"Piston отказал ({response.status_code}): {_message(response)}"
+            )
         return response.json()
 
 

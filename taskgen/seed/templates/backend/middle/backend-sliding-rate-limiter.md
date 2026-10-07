@@ -38,7 +38,9 @@ case_groups:
 - вернуть список булевых значений — решение по каждому запросу в исходном порядке;
 - запросов до {n_max}, но решение должно выдерживать 10^6 запросов: время обработки одного запроса не должно расти с длиной всего журнала.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 from collections import defaultdict, deque
@@ -55,6 +57,51 @@ def rate_limit(requests, limit, window):
         allowed = len(recent) < limit
         if allowed:
             recent.append(t)
+        verdicts.append(allowed)
+    return verdicts
+```
+
+### closed-window -
+
+Закрытая левая граница окна
+
+```python
+from collections import defaultdict, deque
+
+
+def rate_limit(requests, limit, window):
+    accepted = defaultdict(deque)
+    verdicts = []
+    for t, client in requests:
+        recent = accepted[client]
+        # Запрос с меткой t - window уже вне окна (t - window, t].
+        while recent and recent[0] < t - window:
+            recent.popleft()
+        allowed = len(recent) < limit
+        if allowed:
+            recent.append(t)
+        verdicts.append(allowed)
+    return verdicts
+```
+
+### rejected-counted -
+
+Отклонённые запросы расходуют лимит
+
+```python
+from collections import defaultdict, deque
+
+
+def rate_limit(requests, limit, window):
+    accepted = defaultdict(deque)
+    verdicts = []
+    for t, client in requests:
+        recent = accepted[client]
+        # Запрос с меткой t - window уже вне окна (t - window, t].
+        while recent and recent[0] <= t - window:
+            recent.popleft()
+        allowed = len(recent) < limit
+        recent.append(t)
         verdicts.append(allowed)
     return verdicts
 ```

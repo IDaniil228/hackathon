@@ -4,7 +4,14 @@ import pytest
 
 from taskgen.bank.parser import TemplateError, content_hash, parse_template, unclosed_fence
 from taskgen.contracts import TaskKind
-from tests.bank.factory import make_essay, make_quiz, make_template
+from tests.bank.factory import (
+    REFERENCE,
+    SHORT_RIGHT,
+    make_essay,
+    make_quiz,
+    make_template,
+    solution,
+)
 
 CYRILLIC = re.compile(r"[а-яё]", re.IGNORECASE)
 
@@ -90,7 +97,7 @@ def test_case_groups_are_parsed_with_optional_required():
 
 
 def test_template_without_case_groups_has_none():
-    assert parse_template(make_template(), source="t.md").case_groups == {}
+    assert parse_template(make_template(case_groups=None), source="t.md").case_groups == {}
 
 
 @pytest.mark.parametrize(
@@ -167,12 +174,12 @@ def test_essay_must_not_carry_runtime():
     assert "runtime" in locations(make_essay(runtime="python"))
 
 
-@pytest.mark.parametrize("section", ["Эталон", "Сигнатура", "Тесты"])
+@pytest.mark.parametrize("section", ["Решения", "Сигнатура", "Тесты"])
 def test_code_template_requires_code_sections(section):
     assert f"раздел «{section}»" in locations(make_template(sections={section: None}))
 
 
-@pytest.mark.parametrize("section", ["Эталон", "Сигнатура", "Тесты"])
+@pytest.mark.parametrize("section", ["Решения", "Сигнатура", "Тесты"])
 def test_essay_must_not_carry_code_sections(section):
     from tests.bank.factory import CODE_SECTIONS
 
@@ -267,12 +274,12 @@ def test_text_before_first_section_is_reported_but_title_is_allowed():
 
 
 def test_section_without_code_block_is_reported():
-    assert "раздел «Эталон»" in locations(make_template(sections={"Эталон": "просто текст"}))
+    assert "раздел «Тесты»" in locations(make_template(sections={"Тесты": "просто текст"}))
 
 
 def test_section_with_two_code_blocks_is_reported():
-    two = "```python\ndef two_sum(a, b):\n    pass\n```\n\n```python\nx = 1\n```"
-    assert "раздел «Эталон»" in locations(make_template(sections={"Эталон": two}))
+    two = "```python\ndef generate(a, b):\n    pass\n```\n\n```python\nx = 1\n```"
+    assert "раздел «Тесты»" in locations(make_template(sections={"Тесты": two}))
 
 
 def test_signature_must_be_one_identifier():
@@ -280,19 +287,120 @@ def test_signature_must_be_one_identifier():
     assert "раздел «Сигнатура»" in locations(bad)
 
 
-def test_reference_must_define_signature_function():
-    other = "```python\ndef other(nums, target):\n    return []\n```"
-    assert "раздел «Эталон»" in locations(make_template(sections={"Эталон": other}))
-
-
-def test_python_syntax_error_in_code_is_reported():
-    broken = "```python\ndef two_sum(nums, target)\n    return []\n```"
-    assert "раздел «Эталон»" in locations(make_template(sections={"Эталон": broken}))
-
-
 def test_test_generator_must_define_generate():
     tests = "```python\ndef cases(params, rng):\n    return []\n```"
     assert "раздел «Тесты»" in locations(make_template(sections={"Тесты": tests}))
+
+
+def solutions_issues(section: str | None) -> list[str]:
+    """Сообщения разбора о разделе «Решения», включая сообщения об одном решении."""
+    found = issues_of(make_template(sections={"Решения": section}))
+    return [i.message for i in found if i.location.startswith("раздел «Решения»")]
+
+
+def test_solutions_are_parsed_in_order_with_marks():
+    fast = solution("fast", "+", REFERENCE)
+    slow_code = (
+        "def two_sum(nums, target):\n"
+        "    for i in range(len(nums)):\n"
+        "        for j in range(i + 1, len(nums)):\n"
+        "            if nums[i] + nums[j] == target:\n"
+        "                return [i, j]\n"
+        "    return []\n"
+    )
+    slow = solution("slow", "+", slow_code, "Честный перебор пар")
+    wrong = solution("short-right", "-", SHORT_RIGHT, "Правый указатель стартует не с конца")
+    text = make_template(sections={"Решения": f"{fast}\n\n{slow}\n\n{wrong}"})
+
+    spec = parse_template(text, source="t.md")
+
+    assert [(s.id, s.correct) for s in spec.solutions] == [
+        ("fast", True),
+        ("slow", True),
+        ("short-right", False),
+    ]
+    assert spec.solutions[1].description == "Честный перебор пар"
+    assert spec.solutions[0].description == ""
+    assert spec.solutions[2].code == SHORT_RIGHT.rstrip("\n")
+    # Мерило и прогон при генерации — первое верное решение, а не первое в разделе.
+    assert spec.reference_solution == REFERENCE.rstrip("\n")
+
+
+def test_reference_is_the_first_correct_solution_even_after_a_wrong_one():
+    wrong = solution("short-right", "-", SHORT_RIGHT)
+    text = make_template(sections={"Решения": f"{wrong}\n\n" + solution("ok", "+", REFERENCE)})
+    assert parse_template(text, source="t.md").reference_solution == REFERENCE.rstrip("\n")
+
+
+def test_longer_fence_keeps_inner_backticks_in_solution_code():
+    # Строка из трёх обратных кавычек закрыла бы блок из трёх, но не блок из четырёх.
+    inner = REFERENCE.replace("    return []\n", '    note = """\n```\n"""\n    return []\n')
+    block = f"### reference +\n\n````python\n{inner}````"
+    text = make_template(
+        sections={"Решения": block + "\n\n" + solution("short-right", "-", SHORT_RIGHT)}
+    )
+    spec = parse_template(text, source="t.md")
+    assert spec.reference_solution == inner.rstrip("\n")
+
+
+@pytest.mark.parametrize(
+    ("section", "fragment"),
+    [
+        (None, "обязателен"),
+        (solution("only", "+", REFERENCE), "неверное решение"),
+        (solution("only", "-", SHORT_RIGHT), "верное решение"),
+        (
+            solution("a", "+", REFERENCE) + "\n\n" + solution("a", "-", SHORT_RIGHT),
+            "повторяется",
+        ),
+        (f"### reference\n\n```python\n{REFERENCE}```", "'### id +'"),
+        (f"### reference ±\n\n```python\n{REFERENCE}```", "'### id +'"),
+        ("текст\n\n" + solution("a", "+", REFERENCE), "до первого решения"),
+        ("### a +\n\nбез кода\n\n" + solution("b", "-", SHORT_RIGHT), "ровно один"),
+        (
+            solution("a", "+", REFERENCE)
+            + f"\n\n```python\n{REFERENCE}```\n\n"
+            + solution("b", "-", SHORT_RIGHT),
+            "ровно один",
+        ),
+        (
+            solution("a", "+", REFERENCE)
+            + "\n\n"
+            + solution("b", "-", "def other(nums, target):\n    return []\n"),
+            "two_sum",
+        ),
+        (
+            solution("a", "+", REFERENCE)
+            + "\n\n"
+            + solution("b", "-", "def two_sum(nums, target)\n    return []\n"),
+            "синтаксическая ошибка",
+        ),
+    ],
+    ids=[
+        "missing",
+        "no-wrong",
+        "no-correct",
+        "duplicate-id",
+        "no-mark",
+        "bad-mark",
+        "stray-text",
+        "no-block",
+        "two-blocks",
+        "no-entrypoint",
+        "syntax-error",
+    ],
+)
+def test_broken_solutions_are_reported(section, fragment):
+    messages = solutions_issues(section)
+    assert any(fragment in message for message in messages), messages
+
+
+def test_solution_issue_names_the_solution():
+    bad = solution("b", "-", "def other(nums, target):\n    return []\n")
+    found = issues_of(
+        make_template(sections={"Решения": solution("a", "+", REFERENCE) + "\n\n" + bad})
+    )
+    assert [i.location for i in found] == ["раздел «Решения», решение 'b'"]
 
 
 def test_unknown_placeholder_in_generation_is_reported():
@@ -398,7 +506,7 @@ def test_quiz_requires_question_and_variants():
     assert {"раздел «Вопрос»", "раздел «Варианты»"} <= found
 
 
-@pytest.mark.parametrize("section", ["Рубрика", "Эталон", "Вопросы", "Факты"])
+@pytest.mark.parametrize("section", ["Рубрика", "Решения", "Вопросы", "Факты"])
 def test_quiz_must_not_carry_other_kinds_sections(section):
     assert f"раздел «{section}»" in locations(make_quiz(sections={section: "- a: b"}))
 

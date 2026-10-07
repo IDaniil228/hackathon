@@ -23,6 +23,8 @@ from taskgen.generation.instance import (
 )
 from taskgen.generation.params import draw_params
 from taskgen.sandbox.environment import describe_runtime
+from taskgen.sandbox.errors import SandboxServiceError
+from taskgen.sandbox.registry import RuntimeRegistry
 from tests.evaluation.fakes import FakeLLM, http_error
 from tests.generation.fakes import (
     BagOfWordsEmbedder,
@@ -140,6 +142,44 @@ async def test_case_groups_go_to_hidden_payload_only():
     prompt = prompt_of(llm.calls[0])
     for word in ("group", "manual", "stress", "weight", "required"):
         assert word not in public and word not in prompt
+
+
+async def test_no_solution_reaches_prompts_or_task_payloads():
+    spec = code_spec()
+    assert {s.correct for s in spec.solutions} == {True, False}
+    llm = FakeLLM(lambda _m, _s: legend())
+    instance = await generate_instance(spec, 3, deps(llm, LocalSandbox()))
+
+    # Верное и неверное решения, их описания и идентификаторы — скрытые данные шаблона.
+    shown = [prompt_of(call) for call in llm.calls]
+    shown += [instance.statement, json.dumps(instance.public_dump(), ensure_ascii=False)]
+    hidden = json.dumps(instance.hidden_dump(), ensure_ascii=False)
+    for solution in spec.solutions:
+        code = [solution.code, solution.code.splitlines()[-1].strip()]
+        labels = [solution.id, solution.description] if solution.description else [solution.id]
+        for marker in code + labels:
+            assert all(marker not in text for text in shown), (solution.id, marker)
+        # Скрытые данные экземпляра хранят отчёт эталона, но не код решений.
+        assert all(marker not in hidden for marker in code), solution.id
+
+
+async def test_sandbox_service_failure_is_unavailable_not_a_crash():
+    class Refusing(LocalSandbox):
+        async def run(self, request):
+            raise SandboxServiceError("Piston отказал (500): внутренняя ошибка")
+
+    with pytest.raises(SandboxUnavailableError):
+        await generate_instance(code_spec(), 1, deps(FakeLLM([]), Refusing()))
+
+
+async def test_unknown_runtime_is_template_defect_not_unavailable():
+    class Strict(LocalSandbox):
+        async def run_tests(self, request):
+            RuntimeRegistry.load().get(request.runtime)
+            return await super().run_tests(request)
+
+    with pytest.raises(TemplateDefectError, match="brainfuck"):
+        await generate_instance(code_spec(runtime="brainfuck"), 1, deps(FakeLLM([]), Strict()))
 
 
 async def test_legend_prompt_names_environment():

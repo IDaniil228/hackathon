@@ -37,7 +37,9 @@ case_groups:
 - вернуть словарь с ключами `items` (элементы страницы), `page`, `per_page` (итоговые числа), `total` (длина списка), `pages` (число страниц, 0 для пустого списка), `has_prev`, `has_next`;
 - страница с номером больше `pages` пуста; `has_prev` истинно при `page > 1`, `has_next` — при `page < pages`.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 def _number(raw, default):
@@ -49,6 +51,64 @@ def _number(raw, default):
 
 def paginate(items, page, per_page, default_per_page, max_per_page):
     page = max(1, _number(page, 1))
+    per_page = min(max(1, _number(per_page, default_per_page)), max_per_page)
+    total = len(items)
+    pages = -(-total // per_page)
+    start = (page - 1) * per_page
+    return {
+        "items": items[start : start + per_page],
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "pages": pages,
+        "has_prev": page > 1,
+        "has_next": page < pages,
+    }
+```
+
+### isdigit -
+
+`isdigit` вместо цифр 0–9
+
+```python
+def _number(raw, default):
+    # isdigit пропускает «²» и цифры других письменностей, поэтому набор задан явно.
+    if raw.strip().isdigit():
+        return int(raw)
+    return default
+
+
+def paginate(items, page, per_page, default_per_page, max_per_page):
+    page = max(1, _number(page, 1))
+    per_page = min(max(1, _number(per_page, default_per_page)), max_per_page)
+    total = len(items)
+    pages = -(-total // per_page)
+    start = (page - 1) * per_page
+    return {
+        "items": items[start : start + per_page],
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "pages": pages,
+        "has_prev": page > 1,
+        "has_next": page < pages,
+    }
+```
+
+### page-below-one -
+
+Страница меньше 1 не поднята
+
+```python
+def _number(raw, default):
+    # isdigit пропускает «²» и цифры других письменностей, поэтому набор задан явно.
+    if raw and all(ch in "0123456789" for ch in raw):
+        return int(raw)
+    return default
+
+
+def paginate(items, page, per_page, default_per_page, max_per_page):
+    page = _number(page, 1)
     per_page = min(max(1, _number(per_page, default_per_page)), max_per_page)
     total = len(items)
     pages = -(-total // per_page)

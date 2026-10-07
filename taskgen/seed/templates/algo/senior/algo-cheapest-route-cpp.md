@@ -38,7 +38,9 @@ case_groups:
 - между двумя вершинами может быть несколько рёбер, бывают петли; `max_stops` от 0 до n;
 - вершин до {n_max}, рёбер до {m_max}; функцию `main` писать не нужно, стандартные заголовки уже подключены.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```cpp
 std::vector<long long> cheapest_route(int n, std::vector<std::vector<int>> edges, int src,
@@ -58,6 +60,64 @@ std::vector<long long> cheapest_route(int n, std::vector<std::vector<int>> edges
         if (best[dst] < answer) {
             answer = best[dst];
             answer_edges = round;
+        }
+    }
+    if (answer == INF) return {-1, -1};
+    return {answer, answer_edges};
+}
+```
+
+### in-place-relax -
+
+Ослабление на месте нарушает лимит рёбер
+
+```cpp
+std::vector<long long> cheapest_route(int n, std::vector<std::vector<int>> edges, int src,
+                                      int dst, int max_stops) {
+    const long long INF = std::numeric_limits<long long>::max() / 4;
+    std::vector<long long> best(n, INF);
+    best[src] = 0;
+    long long answer = best[dst];
+    int answer_edges = src == dst ? 0 : -1;
+    for (int round = 1; round <= max_stops + 1; round++) {
+        // Ослабление только от расстояний прошлого слоя: маршрут удлиняется ровно на ребро.
+        std::vector<long long> next = best;
+        for (const auto& e : edges) {
+            if (best[e[0]] != INF) best[e[1]] = std::min(best[e[1]], best[e[0]] + e[2]);
+        }
+        best = std::move(next);
+        if (best[dst] < answer) {
+            answer = best[dst];
+            answer_edges = round;
+        }
+    }
+    if (answer == INF) return {-1, -1};
+    return {answer, answer_edges};
+}
+```
+
+### edges-not-minimal -
+
+Число рёбер не минимально
+
+```cpp
+std::vector<long long> cheapest_route(int n, std::vector<std::vector<int>> edges, int src,
+                                      int dst, int max_stops) {
+    const long long INF = std::numeric_limits<long long>::max() / 4;
+    std::vector<long long> best(n, INF);
+    best[src] = 0;
+    long long answer = best[dst];
+    int answer_edges = src == dst ? 0 : -1;
+    for (int round = 1; round <= max_stops + 1; round++) {
+        // Ослабление только от расстояний прошлого слоя: маршрут удлиняется ровно на ребро.
+        std::vector<long long> next = best;
+        for (const auto& e : edges) {
+            if (best[e[0]] != INF) next[e[1]] = std::min(next[e[1]], best[e[0]] + e[2]);
+        }
+        best = std::move(next);
+        if (best[dst] < answer) {
+            answer = best[dst];
+            answer_edges = max_stops + 1;
         }
     }
     if (answer == INF) return {-1, -1};

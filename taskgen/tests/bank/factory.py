@@ -6,6 +6,12 @@ from typing import Any
 
 import yaml
 
+from taskgen.bank.parser import TemplateIssue
+from taskgen.bank.validation import TemplateValidator
+from taskgen.config import ImportCheckSettings, ScoringSettings
+from taskgen.contracts import RunLimits, TemplateSpec
+from tests.generation.fakes import LocalSandbox
+
 DEFAULT_FRONTMATTER: dict[str, Any] = {
     "name": "algo-two-sum-sorted",
     "description": "Поиск пары элементов с заданной суммой в отсортированном массиве",
@@ -20,31 +26,55 @@ DEFAULT_FRONTMATTER: dict[str, Any] = {
         "n": {"type": "int", "min": 1000, "max": 5000},
         "unique": {"type": "choice", "choices": [True, False]},
     },
+    "case_groups": {"main": {"weight": 1, "required": True}},
 }
+
+# Строки «## » и «### » внутри блока кода не начинают ни раздел, ни решение.
+REFERENCE = (
+    "## Два указателя с концов массива\n"
+    "def two_sum(nums, target):\n"
+    "    ### i и j сходятся к середине\n"
+    "    i, j = 0, len(nums) - 1\n"
+    "    while i < j:\n"
+    "        s = nums[i] + nums[j]\n"
+    "        if s == target:\n"
+    "            return [i, j]\n"
+    "        if s < target:\n"
+    "            i += 1\n"
+    "        else:\n"
+    "            j -= 1\n"
+    "    return []\n"
+)
+SHORT_RIGHT = REFERENCE.replace("len(nums) - 1", "len(nums) - 2")
+
+
+def solution(solution_id: str, mark: str, code: str, description: str = "") -> str:
+    text = f"\n\n{description}" if description else ""
+    return f"### {solution_id} {mark}{text}\n\n```python\n{code}```"
+
+
+SOLUTIONS = (
+    solution("reference", "+", REFERENCE)
+    + "\n\n"
+    + solution("short-right", "-", SHORT_RIGHT, "Правый указатель стартует с предпоследнего")
+)
 
 CODE_SECTIONS: dict[str, str] = {
     "Генерация": "Придумай легенду про склад. Массив длины {n}, уникальность: {unique}.",
-    "Эталон": (
-        "```python\n"
-        "## Два указателя с концов массива\n"
-        "def two_sum(nums, target):\n"
-        "    i, j = 0, len(nums) - 1\n"
-        "    while i < j:\n"
-        "        s = nums[i] + nums[j]\n"
-        "        if s == target:\n"
-        "            return [i, j]\n"
-        "        if s < target:\n"
-        "            i += 1\n"
-        "        else:\n"
-        "            j -= 1\n"
-        "    return []\n"
-        "```"
-    ),
+    "Решения": SOLUTIONS,
     "Сигнатура": "```\ntwo_sum\n```",
     "Тесты": (
         "```python\n"
         "def generate(params, rng):\n"
-        "    return [{'input': [[1, 2, 3], 5], 'expected': [1, 2]}]\n"
+        "    cases = [\n"
+        "        {'input': [[1, 2, 3], 5], 'expected': [1, 2]},\n"
+        "        {'input': [[1, 2, 3, 9], 12], 'expected': [2, 3]},\n"
+        "        {'input': [[2, 7], 9], 'expected': [0, 1]},\n"
+        "        {'input': [[1, 2], 10], 'expected': []},\n"
+        "        {'input': [[], 0], 'expected': []},\n"
+        "        {'input': [[-3, 0, 4, 8], 5], 'expected': [0, 3]},\n"
+        "    ]\n"
+        "    return [dict(case, group='main') for case in cases]\n"
         "```"
     ),
     "Рубрика": (
@@ -117,9 +147,28 @@ def make_template(
     return f"---\n{head}---\n\n{body}\n"
 
 
+def local_check(sandbox: LocalSandbox | None = None, seeds: int = 1) -> TemplateValidator:
+    """Проверка импорта на LocalSandbox: настоящие генератор и решения без Piston."""
+    return TemplateValidator(
+        LocalSandbox() if sandbox is None else sandbox,
+        check=ImportCheckSettings(seeds=seeds),
+        limits=RunLimits(timeout_ms=5000, memory_bytes=256 * 1024 * 1024),
+        scoring=ScoringSettings(),
+    )
+
+
+class Unchecked:
+    """Импорт без проверки в песочнице. Нужен только тестам, которые кладут в банк заведомо
+    сломанный шаблон, чтобы проверить страховку при генерации экземпляра."""
+
+    async def check(self, templates: list[tuple[str, TemplateSpec]]) -> list[TemplateIssue]:
+        return []
+
+
 def make_essay(**frontmatter: Any) -> str:
     frontmatter.setdefault("kind", "essay")
     frontmatter.setdefault("runtime", None)
+    frontmatter.setdefault("case_groups", None)
     frontmatter.setdefault("params", {})
     return make_template(**frontmatter)
 
@@ -127,5 +176,6 @@ def make_essay(**frontmatter: Any) -> str:
 def make_quiz(**frontmatter: Any) -> str:
     frontmatter.setdefault("kind", "quiz")
     frontmatter.setdefault("runtime", None)
+    frontmatter.setdefault("case_groups", None)
     frontmatter.setdefault("params", {"n": {"type": "int", "min": 50, "max": 90}})
     return make_template(**frontmatter)

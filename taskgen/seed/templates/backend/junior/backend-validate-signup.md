@@ -38,13 +38,109 @@ case_groups:
 - `age` — целое число от 14 до 120 включительно; `true`, `25.0` и `"25"` — ошибка типа;
 - `username` — строка из 3–20 символов: строчные латинские буквы, цифры и `_`, первая — буква.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 import re
 
 USERNAME = re.compile(r"[a-z][a-z0-9_]{2,19}")
 LETTER = re.compile(r"[A-Za-z]")
+DIGIT = re.compile(r"[0-9]")
+
+
+def _is_int(value):
+    # bool — подкласс int, но в JSON true не число.
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _email_ok(value):
+    if " " in value or value.count("@") != 1:
+        return False
+    local, domain = value.split("@")
+    return bool(local) and "." in domain and not domain.startswith(".") and not domain.endswith(".")
+
+
+def validate_signup(payload, min_password):
+    rules = {
+        "email": (lambda v: isinstance(v, str), _email_ok),
+        "password": (
+            lambda v: isinstance(v, str),
+            lambda v: len(v) >= min_password and LETTER.search(v) and DIGIT.search(v),
+        ),
+        "age": (_is_int, lambda v: 14 <= v <= 120),
+        "username": (lambda v: isinstance(v, str), USERNAME.fullmatch),
+    }
+    errors = []
+    if payload.keys() - rules.keys():
+        errors.append("payload.unknown_fields")
+    for field, (type_ok, value_ok) in rules.items():
+        if field not in payload:
+            errors.append(f"{field}.missing")
+        elif not type_ok(payload[field]):
+            errors.append(f"{field}.type")
+        elif not value_ok(payload[field]):
+            errors.append(f"{field}.invalid")
+    return sorted(errors)
+```
+
+### bool-as-int -
+
+`bool` принят за `int`
+
+```python
+import re
+
+USERNAME = re.compile(r"[a-z][a-z0-9_]{2,19}")
+LETTER = re.compile(r"[A-Za-z]")
+DIGIT = re.compile(r"[0-9]")
+
+
+def _is_int(value):
+    # bool — подкласс int, но в JSON true не число.
+    return isinstance(value, int)
+
+
+def _email_ok(value):
+    if " " in value or value.count("@") != 1:
+        return False
+    local, domain = value.split("@")
+    return bool(local) and "." in domain and not domain.startswith(".") and not domain.endswith(".")
+
+
+def validate_signup(payload, min_password):
+    rules = {
+        "email": (lambda v: isinstance(v, str), _email_ok),
+        "password": (
+            lambda v: isinstance(v, str),
+            lambda v: len(v) >= min_password and LETTER.search(v) and DIGIT.search(v),
+        ),
+        "age": (_is_int, lambda v: 14 <= v <= 120),
+        "username": (lambda v: isinstance(v, str), USERNAME.fullmatch),
+    }
+    errors = []
+    if payload.keys() - rules.keys():
+        errors.append("payload.unknown_fields")
+    for field, (type_ok, value_ok) in rules.items():
+        if field not in payload:
+            errors.append(f"{field}.missing")
+        elif not type_ok(payload[field]):
+            errors.append(f"{field}.type")
+        elif not value_ok(payload[field]):
+            errors.append(f"{field}.invalid")
+    return sorted(errors)
+```
+
+### any-letter -
+
+Буква не только латинская
+
+```python
+import re
+
+USERNAME = re.compile(r"[a-z][a-z0-9_]{2,19}")
+LETTER = re.compile(r"[^\W\d_]")
 DIGIT = re.compile(r"[0-9]")
 
 

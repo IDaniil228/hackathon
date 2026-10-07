@@ -37,7 +37,9 @@ case_groups:
 - вычисления — в float64, ответ сравнивается с точностью до относительной погрешности 1e-6; строк до {rows_max}, признаков до 6;
 - можно использовать NumPy и PyTorch, но не готовые модели scikit-learn.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 import numpy as np
@@ -52,6 +54,46 @@ def logreg_step(X, y, w, b, lr, l2):
     error = p - y
     grad_w = X.T @ error / len(y) + l2 * w
     grad_b = error.mean()
+    return [(w - lr * grad_w).tolist(), float(b - lr * grad_b)]
+```
+
+### no-l2 -
+
+Нет L2 в градиенте весов
+
+```python
+import numpy as np
+
+
+def logreg_step(X, y, w, b, lr, l2):
+    w = np.asarray(w, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    X = np.asarray(X, dtype=np.float64).reshape(len(y), len(w))
+    z = X @ w + b
+    p = 0.5 * (1.0 + np.tanh(0.5 * z))  # σ(z) без переполнения exp при больших |z|.
+    error = p - y
+    grad_w = X.T @ error / len(y)
+    grad_b = error.mean()
+    return [(w - lr * grad_w).tolist(), float(b - lr * grad_b)]
+```
+
+### bias-regularized -
+
+Свободный член регуляризуется
+
+```python
+import numpy as np
+
+
+def logreg_step(X, y, w, b, lr, l2):
+    w = np.asarray(w, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    X = np.asarray(X, dtype=np.float64).reshape(len(y), len(w))
+    z = X @ w + b
+    p = 0.5 * (1.0 + np.tanh(0.5 * z))  # σ(z) без переполнения exp при больших |z|.
+    error = p - y
+    grad_w = X.T @ error / len(y) + l2 * w
+    grad_b = error.mean() + l2 * b
     return [(w - lr * grad_w).tolist(), float(b - lr * grad_b)]
 ```
 

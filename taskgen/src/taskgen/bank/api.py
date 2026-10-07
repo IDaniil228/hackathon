@@ -20,8 +20,10 @@ from taskgen.auth import AUTH_ERRORS, Role, require
 from taskgen.bank.embeddings import refresh_embeddings_safely
 from taskgen.bank.importer import ImportOutcome, ImportStatus, TemplateDocument, import_documents
 from taskgen.bank.parser import TemplateError
+from taskgen.bank.validation import TemplateValidator
 from taskgen.contracts import Embedder, TaskKind
 from taskgen.db import Template
+from taskgen.sandbox.errors import SandboxServiceError
 
 router = APIRouter(prefix="/templates", tags=["Шаблоны"], responses=AUTH_ERRORS)
 
@@ -103,9 +105,11 @@ _UPLOAD_ERRORS: dict[int | str, dict[str, Any]] = {
     422: {
         "description": (
             "Шаблон не прошёл проверку. detail.errors перечисляет все проблемы: файл (source), "
-            "поле frontmatter или раздел тела (location) и причину (message)"
+            "поле frontmatter, раздел тела или seed прогона в песочнице (location) и причину "
+            "(message)"
         )
     },
+    503: {"description": "Песочница недоступна: шаблоны с кодом не проверены, ничего не записано"},
 }
 
 
@@ -117,8 +121,10 @@ _UPLOAD_ERRORS: dict[int | str, dict[str, Any]] = {
         "Принимает один md-шаблон: телом запроса с Content-Type text/markdown или JSON "
         "с полем body. Шаблон ищется по имени из frontmatter. Если тело не изменилось, "
         "ничего не пишется; иначе создаётся следующая версия, а прежняя перестаёт быть "
-        "текущей и остаётся в БД. Эмбеддинг описания считается после ответа; его сбой "
-        "не отменяет загрузку"
+        "текущей и остаётся в БД. Шаблон с кодом до записи проверяется в песочнице на "
+        "нескольких seed: верные решения проходят все кейсы, неверные ловятся; на это уходят "
+        "секунды, у шаблона на C++ — до десятков секунд. Эмбеддинг описания считается после "
+        "ответа; его сбой не отменяет загрузку"
     ),
     responses=_UPLOAD_ERRORS,
     dependencies=[Depends(require(Role.ADMIN))],
@@ -151,8 +157,10 @@ async def upload_template(request: Request, background: BackgroundTasks) -> Impo
     summary="Загрузить несколько шаблонов",
     description=(
         "Принимает файлы в multipart/form-data (поле files, по одному md на файл) или JSON "
-        "со списком templates. Набор проверяется целиком: при ошибке в любом файле не "
-        "пишется ничего, а ответ перечисляет проблемы всех файлов"
+        "со списком templates. Набор проверяется целиком, шаблоны с кодом — и в песочнице: "
+        "при ошибке в любом файле не пишется ничего, а ответ перечисляет проблемы всех файлов. "
+        "Ответ ждёт проверки всех шаблонов с кодом: на банк из seed/templates уходит около "
+        "минуты"
     ),
     responses=_UPLOAD_ERRORS,
     dependencies=[Depends(require(Role.ADMIN))],
@@ -260,9 +268,16 @@ async def _import(
 ) -> list[ImportOutcome]:
     if not docs:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Нет ни одного шаблона")
+    state = request.app.state
+    check = TemplateValidator.from_settings(getattr(state, "sandbox", None), state.settings)
     try:
-        async with request.app.state.sessionmaker() as session, session.begin():
-            outcomes = await import_documents(session, docs)
+        async with state.sessionmaker() as session, session.begin():
+            outcomes = await import_documents(session, docs, check=check)
+    except SandboxServiceError as error:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            f"Шаблоны с кодом не проверены, ничего не записано: {error}",
+        ) from error
     except TemplateError as error:
         errors = [
             {"source": i.source, "location": i.location, "message": i.message} for i in error.issues

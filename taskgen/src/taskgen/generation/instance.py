@@ -1,9 +1,11 @@
 """Экземпляр задания по шаблону: "сгенерировал — проверил".
 
 Для kind=code порядок такой: параметры по seed, кейсы от генератора шаблона в песочнице,
-прогон эталона на этих кейсах. Экземпляр, на котором эталон проходит не все кейсы,
-отбрасывается, и берётся следующий seed. Только проверенный экземпляр получает легенду от LLM:
-модель пишет текст условия и не влияет ни на параметры, ни на тесты.
+прогон эталона — первого верного решения шаблона — на этих кейсах. Импорт уже проверил
+шаблон на своих seed (bank/validation.py); здесь проверка повторяется на seed экземпляра теми
+же функциями. Экземпляр, на котором эталон проходит не все кейсы, отбрасывается, и берётся
+следующий seed. Только проверенный экземпляр получает легенду от LLM: модель пишет текст
+условия и не влияет ни на параметры, ни на тесты.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field
 
+from taskgen.bank.validation import generate_cases, reference_problem, run_solution
 from taskgen.config import GenerationSettings
 from taskgen.contracts import (
     ChatMessage,
@@ -30,8 +33,6 @@ from taskgen.contracts import (
     TaskKind,
     TemplateSpec,
     TestCase,
-    TestReport,
-    TestRunRequest,
 )
 from taskgen.evaluation.jsonout import (
     EmptyReplyError,
@@ -44,7 +45,7 @@ from taskgen.generation.essay import (
     EssayScenarioError,
     generate_essay,
 )
-from taskgen.generation.harness import GeneratorError, generator_request, parse_generator_output
+from taskgen.generation.harness import GeneratorError
 from taskgen.generation.leaks import (
     defines_entrypoint,
     hidden_leaks,
@@ -68,7 +69,7 @@ from taskgen.generation.solver import (
 from taskgen.generation.textcheck import text_problems
 from taskgen.markers import markers, new_nonce
 from taskgen.sandbox.environment import describe_all, describe_runtime
-from taskgen.sandbox.errors import SandboxError
+from taskgen.sandbox.errors import SandboxError, SandboxServiceError
 
 # seed хранится в tasks.seed типа BIGINT со знаком.
 SEED_BITS = 63
@@ -401,22 +402,30 @@ async def _code(
         )
     attempts = deps.options.instance_attempts
     last_reason = ""
-    for attempt_seed in attempt_seeds(seed, attempts):
-        params = draw_params(spec.params, random.Random(attempt_seed))
-        try:
-            cases = await _generate_cases(sandbox, spec, params, attempt_seed, deps.limits)
-        except GeneratorError as error:
-            last_reason = str(error)
-            continue
-        report = await _run_reference(sandbox, spec, cases, deps.limits)
-        last_reason = _reference_problem(report, len(cases))
-        if not last_reason:
-            break
-    else:
-        raise TemplateDefectError(
-            f"Шаблон {spec.name}: эталон не дал проверенного экземпляра за {attempts} "
-            f"попыток; последняя причина — {last_reason}"
-        )
+    reference = spec.reference_solution or ""
+    try:
+        for attempt_seed in attempt_seeds(seed, attempts):
+            params = draw_params(spec.params, random.Random(attempt_seed))
+            try:
+                cases = await generate_cases(sandbox, spec, params, attempt_seed, deps.limits)
+            except GeneratorError as error:
+                last_reason = str(error)
+                continue
+            # Импорт прогнал все решения на своих seed; здесь — только эталон на seed экземпляра.
+            report = await run_solution(sandbox, spec, reference, cases, deps.limits)
+            problem = reference_problem(report, len(cases))
+            last_reason = f"эталон: {problem}" if problem else ""
+            if not last_reason:
+                break
+        else:
+            raise TemplateDefectError(
+                f"Шаблон {spec.name}: эталон (первое верное решение) не дал проверенного "
+                f"экземпляра за {attempts} попыток; последняя причина — {last_reason}"
+            )
+    except SandboxServiceError as error:
+        raise SandboxUnavailableError("Песочница недоступна, повторите позже") from error
+    except SandboxError as error:
+        raise TemplateDefectError(f"Шаблон {spec.name}: {error}") from error
 
     shown = public_count(len(cases), deps.options.public_examples)
     public_cases, hidden_cases = cases[:shown], cases[shown:]
@@ -483,51 +492,6 @@ async def _code(
         generated_by=deps.model,
         personalization=context.record(),
     )
-
-
-async def _generate_cases(
-    sandbox: SandboxRunner,
-    spec: TemplateSpec,
-    params: dict[str, Any],
-    seed: int,
-    limits: RunLimits,
-) -> list[TestCase]:
-    request = generator_request(spec.test_generator or "", params, seed, limits)
-    try:
-        result = await sandbox.run(request)
-    except httpx.HTTPError as error:
-        raise SandboxUnavailableError("Песочница недоступна, повторите позже") from error
-    return parse_generator_output(result, spec.case_groups)
-
-
-async def _run_reference(
-    sandbox: SandboxRunner, spec: TemplateSpec, cases: list[TestCase], limits: RunLimits
-) -> TestReport:
-    request = TestRunRequest(
-        runtime=spec.runtime or "",
-        entrypoint=spec.entrypoint or "",
-        solution=spec.reference_solution or "",
-        cases=cases,
-        limits=limits,
-    )
-    try:
-        return await sandbox.run_tests(request)
-    except httpx.HTTPError as error:
-        raise SandboxUnavailableError("Песочница недоступна, повторите позже") from error
-
-
-def _reference_problem(report: TestReport, total: int) -> str:
-    """Пустая строка, если эталон прошёл все кейсы, иначе причина отказа."""
-    if report.compile_error is not None:
-        return f"ошибка компиляции эталона: {report.compile_error}"
-    if len(report.outcomes) != total:
-        return f"песочница вернула {len(report.outcomes)} результатов на {total} кейсов"
-    failed = [i for i, outcome in enumerate(report.outcomes, start=1) if not outcome.passed]
-    if failed:
-        errors = [o.error for o in report.outcomes if o.error]
-        detail = f" ({errors[0]})" if errors else ""
-        return f"эталон не прошёл кейсы {failed} из {total}{detail}"
-    return ""
 
 
 def _code_request(

@@ -493,6 +493,29 @@ class SandboxSettings(BaseModel):
     )
 
 
+class ImportCheckSettings(BaseModel):
+    """Проверка шаблона с кодом в песочнице при импорте.
+
+    Лимиты времени и памяти одного запуска — те же sandbox.run_timeout_ms и
+    sandbox.run_memory_limit_bytes, что у генерации: решение, которое укладывается в лимит
+    только при импорте, провалило бы генерацию экземпляра.
+    """
+
+    seeds: int = Field(
+        default=3,
+        ge=1,
+        description="Сколько seed проверяется: 0, 1, … seeds − 1. На каждом seed каждое верное "
+        "решение проходит все кейсы, а каждое неверное не решено",
+    )
+    concurrency: int = Field(
+        default=4,
+        ge=1,
+        description="Сколько шаблонов проверяется одновременно; запуски одного шаблона идут по "
+        "очереди. Меньшее значение снижает нагрузку на Piston: под большой параллельной "
+        "нагрузкой он возвращал для C++ результаты без кейсов, и шаблон отклонялся бы ложно",
+    )
+
+
 class Settings(BaseSettings):
     """Корень настроек; переменные окружения и файл .env читаются при старте."""
 
@@ -526,6 +549,9 @@ class Settings(BaseSettings):
         default=GenerationSettings(), description=GenerationSettings.__doc__
     )
     sandbox: SandboxSettings = Field(default=SandboxSettings(), description=SandboxSettings.__doc__)
+    import_check: ImportCheckSettings = Field(
+        default=ImportCheckSettings(), description=ImportCheckSettings.__doc__
+    )
 
 
 @lru_cache

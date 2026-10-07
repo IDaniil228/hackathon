@@ -5,7 +5,7 @@ import pytest
 
 from taskgen.config import SandboxSettings
 from taskgen.contracts import RunLimits, RunRequest
-from taskgen.sandbox.errors import SandboxError
+from taskgen.sandbox.errors import SandboxError, SandboxServiceError
 from taskgen.sandbox.piston import PistonRunner
 from tests.sandbox.fakes import execute_response as ok
 from tests.sandbox.fakes import fake_runner, stage
@@ -145,7 +145,7 @@ async def test_piston_refusal_is_a_sandbox_error():
         httpx.Response(400, json={"message": "run_timeout cannot exceed the configured limit"})
     )
 
-    with pytest.raises(SandboxError, match="run_timeout cannot exceed"):
+    with pytest.raises(SandboxServiceError, match="run_timeout cannot exceed"):
         await runner.run(RunRequest(runtime="python", files={"m.py": ""}, limits=LIMITS))
 
 
@@ -153,8 +153,10 @@ async def test_unknown_runtime_fails_before_any_request():
     sent: list[dict] = []
     runner = runner_answering(ok(stage()), sent)
 
-    with pytest.raises(SandboxError, match="brainfuck"):
+    # Неизвестное окружение — ошибка шаблона, а не отказ самой песочницы.
+    with pytest.raises(SandboxError, match="brainfuck") as caught:
         await runner.run(RunRequest(runtime="brainfuck", files={"m.b": ""}, limits=LIMITS))
+    assert not isinstance(caught.value, SandboxServiceError)
     assert sent == []
 
 
@@ -165,5 +167,5 @@ async def test_unreachable_piston_is_a_sandbox_error():
     http = httpx.AsyncClient(base_url="http://piston.test", transport=httpx.MockTransport(refuse))
     runner = PistonRunner(SandboxSettings(piston_url="http://piston.test"), http=http)
 
-    with pytest.raises(SandboxError, match="недоступен"):
+    with pytest.raises(SandboxServiceError, match="недоступен"):
         await runner.run(RunRequest(runtime="python", files={"m.py": ""}, limits=LIMITS))

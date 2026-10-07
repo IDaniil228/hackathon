@@ -22,15 +22,21 @@ from taskgen.db import (
     Template,
     TestSession,
 )
+from tests.bank.factory import Unchecked
 from tests.conftest import ADMIN_KEY
 from tests.evaluation.fakes import FakeLLM, http_error
 from tests.generation.fakes import GatedLLM, LocalSandbox, essay_reply
-from tests.generation.templates import code_template_md, essay_template_md, quiz_template_md
+from tests.generation.templates import (
+    code_template_md,
+    essay_template_md,
+    quiz_template_md,
+    solutions_section,
+)
 
 ADMIN = {"Authorization": f"Bearer {ADMIN_KEY}"}
 ENTRYPOINT_IN_PROMPT = re.compile(r"функцию `(\w+)`")
 ANSWER_IN_JUDGE = re.compile(r"<<<ОТВЕТ-\w+>>>\n(.*?)\n<<<КОНЕЦ", re.DOTALL)
-BROKEN_REFERENCE = "```python\ndef top_sum(nums, k):\n    return 0\n```"
+BROKEN_REFERENCE = "def top_sum(nums, k):\n    return 0\n"
 
 
 class ModelStub:
@@ -91,7 +97,9 @@ class World:
         async def load():
             async with self.state.sessionmaker() as db, db.begin():
                 docs = [TemplateDocument(f"t{i}.md", body) for i, body in enumerate(bodies)]
-                await import_documents(db, docs)
+                # Тесты генерации кладут и заведомо сломанные шаблоны (broken), чтобы проверить
+                # страховку при генерации; проверку импорта проверяют тесты банка.
+                await import_documents(db, docs, check=Unchecked())
 
         self._run(load)
 
@@ -100,7 +108,9 @@ class World:
         return code_template_md(name=f"{self.prefix}-{suffix}", area=self.area, **frontmatter)
 
     def broken(self, suffix: str = "bad", **frontmatter) -> str:
-        return self.code(suffix, sections={"Эталон": BROKEN_REFERENCE}, **frontmatter)
+        return self.code(
+            suffix, sections={"Решения": solutions_section(BROKEN_REFERENCE)}, **frontmatter
+        )
 
     def essay(self, suffix: str = "essay", **frontmatter) -> str:
         frontmatter.setdefault("skills", ["python"])
