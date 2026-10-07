@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from taskgen.bank.parser import find_phrases
 from taskgen.bank.selection import cosine_similarity
+from taskgen.config import EvidenceSettings
 from taskgen.contracts import (
     ChatMessage,
     Embedder,
@@ -38,7 +39,6 @@ from taskgen.contracts import (
 )
 from taskgen.evaluation.evidence import (
     VERBATIM_QUOTES,
-    EvidenceOptions,
     Grounding,
     split_sentences,
 )
@@ -377,7 +377,7 @@ async def _llm_verdicts(
     situation: str,
     model: str,
     reasoning_effort: ReasoningEffort | None,
-    evidence: EvidenceOptions,
+    evidence: EvidenceSettings,
 ) -> _LLMVerdicts | None:
     """Факты и фразы с текстом проверенных доказательств или None, если проверяльщик не
     ответил по схеме."""
@@ -452,7 +452,7 @@ async def check_essay_scenario(
     options: EssayCheckOptions | None = None,
     embedder: Embedder | None = None,
     cache: EmbeddingCache | None = None,
-    evidence_options: EvidenceOptions = VERBATIM_QUOTES,
+    evidence_options: EvidenceSettings = VERBATIM_QUOTES,
     theme: str | None = None,
 ) -> EssayCheck:
     """Проверка ситуации до выдачи кандидату; options=None — проверка только LLM.
@@ -611,7 +611,7 @@ async def generate_essay(
     check_options: EssayCheckOptions | None = None,
     embedder: Embedder | None = None,
     embedding_cache: EmbeddingCache | None = None,
-    evidence_options: EvidenceOptions = VERBATIM_QUOTES,
+    evidence_options: EvidenceSettings = VERBATIM_QUOTES,
     theme: str | None = None,
 ) -> EssayDraft:
     """Проверенное условие эссе за не больше чем attempts попыток написать ситуацию.

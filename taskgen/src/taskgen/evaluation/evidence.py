@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from taskgen.bank.parser import FENCE, closes_fence
-from taskgen.contracts import EvidenceMode
+from taskgen.config import EvidenceSettings
 from taskgen.evaluation.quotes import quote_in_answer
 
 _SENTENCE_END = re.compile(r"(?<=[.!?…])\s+")
@@ -90,32 +90,21 @@ def split_spans(text: str, *, code: bool) -> list[str]:
     return spans
 
 
-@dataclass(frozen=True)
-class EvidenceOptions:
-    """Способ доказательства и его пределы. Значения для сервиса задают настройки."""
-
-    mode: EvidenceMode
-    # Сколько раз переспросить модель об ответе с неверным доказательством или не по схеме.
-    repairs: int = 0
-    # Больше участков на один вердикт не засчитывается: ссылка на весь текст не доказывает
-    # ничего. None — без предела.
-    max_spans: int | None = None
-
-
 # Дословные цитаты без повторов: доказательство по умолчанию для прямых вызовов из кода.
-VERBATIM_QUOTES = EvidenceOptions(mode="quotes")
+# Сервис передаёт Settings.evidence.
+VERBATIM_QUOTES = EvidenceSettings(mode="quotes", repairs=0)
 
 
 @dataclass(frozen=True)
 class Grounding:
     """Текст одного вызова модели и правила, по которым модель на него ссылается."""
 
-    options: EvidenceOptions
+    options: EvidenceSettings
     text: str
     spans: tuple[str, ...]
 
     @classmethod
-    def of(cls, options: EvidenceOptions, text: str, *, code: bool) -> Grounding:
+    def of(cls, options: EvidenceSettings, text: str, *, code: bool) -> Grounding:
         spans = tuple(split_spans(text, code=code)) if options.mode == "spans" else ()
         return cls(options=options, text=text, spans=spans)
 

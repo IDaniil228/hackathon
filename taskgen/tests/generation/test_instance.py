@@ -8,7 +8,7 @@ import re
 
 import pytest
 
-from taskgen.config import GenerationSettings
+from taskgen.config import EvidenceSettings, GenerationSettings
 from taskgen.contracts import HiddenPayload, RunLimits, TestReport
 from taskgen.evaluation.quotes import EmbeddingCache
 from taskgen.generation.essay import essay_questions
@@ -50,6 +50,7 @@ def deps(
     checker_model=None,
     checker_reasoning_effort=None,
     embedder=None,
+    evidence=None,
     **options,
 ) -> InstanceDeps:
     return InstanceDeps(
@@ -57,6 +58,7 @@ def deps(
         sandbox=sandbox,
         model=MODEL,
         options=GenerationSettings(**options),
+        evidence=evidence or EvidenceSettings(),
         limits=LIMITS,
         reasoning_effort=reasoning_effort,
         checker_model=checker_model,
@@ -474,11 +476,11 @@ async def test_essay_quote_threshold_comes_from_generation_settings(threshold, e
 
 
 @pytest.mark.parametrize("mode", ["quotes", "spans"])
-async def test_essay_checker_evidence_comes_from_generation_settings(mode):
+async def test_essay_checker_evidence_comes_from_evidence_settings(mode):
     llm = FakeLLM(essay_reply)
 
     instance = await generate_instance(
-        essay_spec(), 1, deps(llm, None, essay_check_evidence=mode, essay_check_repairs=0)
+        essay_spec(), 1, deps(llm, None, evidence=EvidenceSettings(mode=mode, repairs=0))
     )
 
     _scenario, check = llm.calls

@@ -42,7 +42,6 @@ from taskgen.contracts import (
 from taskgen.db import Answer, CandidateSummary, Grade, Task, Template, TestSession
 from taskgen.evaluation.analyzers import SandboxAnalyzer
 from taskgen.evaluation.detector import LLMAIDetector
-from taskgen.evaluation.evidence import EvidenceOptions
 from taskgen.evaluation.grading import (
     GradeLevel,
     LevelResult,
@@ -352,15 +351,6 @@ async def evaluate_task(task: TaskInput, *, judge: Judge, scoring: ScoringSettin
 # --- Зависимости ---------------------------------------------------------------------------
 
 
-def judge_evidence(scoring: ScoringSettings) -> EvidenceOptions:
-    """Способ доказательства судьи и его пределы из настроек."""
-    return EvidenceOptions(
-        mode=scoring.judge_evidence,
-        repairs=scoring.judge_repairs,
-        max_spans=scoring.judge_max_spans,
-    )
-
-
 def judge_relevance(
     scoring: ScoringSettings, embedder: Embedder | None, cache: EmbeddingCache
 ) -> QuoteRelevance | None:
@@ -400,7 +390,7 @@ class Evaluator:
             temperature=settings.scoring.judge_temperature,
             reasoning_effort=settings.llm.judge.reasoning_effort,
             relevance=relevance,
-            evidence=judge_evidence(settings.scoring),
+            evidence=settings.evidence,
         )
         detector = None
         if settings.ai_detector_enabled:

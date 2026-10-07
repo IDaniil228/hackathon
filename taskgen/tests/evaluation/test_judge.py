@@ -3,9 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from taskgen.config import ScoringSettings, Settings
+from taskgen.config import EvidenceSettings, ScoringSettings, Settings
 from taskgen.contracts import JudgeRequest, RubricItem, TaskKind
-from taskgen.evaluation.evidence import EvidenceOptions
 from taskgen.evaluation.judge import JudgeError, LLMJudge
 from taskgen.evaluation.quotes import QuoteRelevance, quote_in_answer
 from taskgen.evaluation.service import Evaluator
@@ -388,7 +387,7 @@ def _spans_judge(
         model="judge-model",
         samples=3,
         temperature=0.7,
-        evidence=EvidenceOptions(mode="spans", repairs=repairs, max_spans=max_spans),
+        evidence=EvidenceSettings(mode="spans", repairs=repairs, max_spans=max_spans),
         relevance=relevance,
     )
     return judge, llm
@@ -520,9 +519,7 @@ async def test_relevance_check_uses_text_of_referenced_spans():
 async def test_evidence_settings_reach_the_service_judge():
     reply = _spans_sample(leak=("yes", [1, 2]), scheme=("no", []))
     llm = FakeLLM(lambda _m, _s: reply)
-    settings = Settings(
-        scoring=ScoringSettings(judge_evidence="spans", judge_repairs=0, judge_max_spans=1)
-    )
+    settings = Settings(evidence=EvidenceSettings(mode="spans", repairs=0, max_spans=1))
     state = SimpleNamespace(settings=settings, sessionmaker=None, llm=llm, embedder=None)
 
     result = await Evaluator.from_state(state).judge.judge(_essay_request())

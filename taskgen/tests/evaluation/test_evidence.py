@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from taskgen.evaluation.evidence import EvidenceOptions, Grounding, split_spans
+from taskgen.config import EvidenceSettings
+from taskgen.evaluation.evidence import Grounding, split_spans
 from taskgen.markers import has_marker
 
 CODE = "def f(xs):\n\n    total = 0\n    for x in xs:\n        total += x\n    return total\n"
@@ -14,8 +15,8 @@ ESSAY = (
     "```\n"
     "1. Проверить план запроса."
 )
-SPANS = EvidenceOptions(mode="spans")
-QUOTES = EvidenceOptions(mode="quotes")
+SPANS = EvidenceSettings(mode="spans")
+QUOTES = EvidenceSettings(mode="quotes")
 
 
 def test_code_is_split_into_non_blank_lines_with_indentation():
@@ -76,7 +77,7 @@ def test_missing_or_nonexistent_span_is_a_problem():
 
 
 def test_too_many_spans_is_a_problem():
-    grounding = Grounding.of(EvidenceOptions(mode="spans", max_spans=2), CODE, code=True)
+    grounding = Grounding.of(EvidenceSettings(mode="spans", max_spans=2), CODE, code=True)
     assert grounding.resolve([], [1, 2])[1] is None
     texts, problem = grounding.resolve([], [1, 2, 3])
     assert texts == [] and "2" in problem
@@ -93,7 +94,7 @@ def test_quotes_resolve_only_when_found_verbatim():
 def test_rules_name_the_evidence_field_of_the_mode():
     assert "spans" in Grounding.of(SPANS, CODE, code=True).rules("yes", "ответа")
     assert "quotes" in Grounding.of(QUOTES, CODE, code=True).rules("yes", "ответа")
-    limited = Grounding.of(EvidenceOptions(mode="spans", max_spans=3), CODE, code=True)
+    limited = Grounding.of(EvidenceSettings(mode="spans", max_spans=3), CODE, code=True)
     assert "3" in limited.rules("yes", "ответа")
 
 
