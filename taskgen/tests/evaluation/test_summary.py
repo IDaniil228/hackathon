@@ -94,6 +94,208 @@ def test_fallback_text_is_itself_grounded():
     assert summary_problems(text, data) == []
 
 
+def _task(position, kind, grade, score, tests=None, behavior=None):
+    task = {
+        "position": position,
+        "kind": kind,
+        "grade": grade,
+        "score": score,
+        "solved": score >= 0.7,
+        "answered": True,
+        "behavior": behavior or {"paste_count": 0, "focus_lost_count": 0, "time_spent_sec": None},
+    }
+    if tests:
+        task["tests"] = {"passed": tests[0], "total": tests[1]}
+    return task
+
+
+def _session(number, area, claimed, assigned, outcome, levels, quiz, tasks):
+    return {
+        "number": number,
+        "session_id": f"s{number}",
+        "area": area,
+        "skills": ["python"],
+        "scored_at": "2026-10-07T18:40:00+00:00",
+        "claimed_grade": claimed,
+        "assigned_grade": assigned,
+        "outcome": outcome,
+        "levels": [
+            {"grade": grade, "total": total, "solved": solved, "share": solved / total}
+            for grade, solved, total in levels
+        ],
+        "quiz": quiz,
+        "tasks": tasks,
+    }
+
+
+def _facts(*sessions):
+    return {"candidate_ref": "cand", "sessions_count": len(sessions), "sessions": list(sessions)}
+
+
+# Факты сквозного прогона: кандидат A провалил backend middle (тест 1) и подтвердил
+# algo junior (тест 2), кандидат B провалил ml junior, кандидат C провалил backend senior.
+FACTS_A = _facts(
+    _session(
+        1,
+        "backend",
+        "middle",
+        None,
+        "failed",
+        [("middle", 0, 2)],
+        {"correct": 0, "total": 1},
+        [
+            _task(1, "code", "middle", 0.0),
+            _task(2, "essay", "middle", 0.0, behavior={"focus_lost_count": 1}),
+        ],
+    ),
+    _session(
+        2,
+        "algo",
+        "junior",
+        "junior",
+        "passed",
+        [("junior", 2, 2)],
+        {"correct": 1, "total": 1},
+        [_task(1, "code", "junior", 0.94, tests=(17, 17)), _task(2, "essay", "junior", 1.0)],
+    ),
+)
+FACTS_B = _facts(
+    _session(
+        1,
+        "ml",
+        "junior",
+        None,
+        "failed",
+        [("junior", 0, 2)],
+        {"correct": 0, "total": 1},
+        [
+            _task(1, "code", "junior", 0.33, tests=(5, 13)),
+            _task(2, "code", "junior", 0.08, tests=(1, 10)),
+        ],
+    ),
+)
+FACTS_C = _facts(
+    _session(
+        1,
+        "backend",
+        "senior",
+        None,
+        "failed",
+        [("senior", 1, 2)],
+        {"correct": 1, "total": 1},
+        [_task(1, "code", "senior", 0.89, tests=(12, 12)), _task(2, "essay", "senior", 0.0)],
+    ),
+)
+# Одна сессия algo: задание с кодом решено на 0.95, но уровень middle не подтверждён.
+FACTS_D = _facts(
+    _session(
+        1,
+        "algo",
+        "middle",
+        None,
+        "failed",
+        [("middle", 1, 3)],
+        None,
+        [
+            _task(1, "code", "middle", 0.95, tests=(9, 9)),
+            _task(2, "code", "middle", 0.2, tests=(1, 8)),
+            _task(3, "essay", "middle", 0.1),
+        ],
+    ),
+)
+# Исходы upgraded, downgraded и insufficient в трёх тестах одного кандидата.
+FACTS_MIXED = _facts(
+    _session(
+        1,
+        "backend",
+        "junior",
+        "middle",
+        "upgraded",
+        [("junior", 2, 2), ("middle", 1, 1)],
+        None,
+        [_task(1, "code", "junior", 0.9, tests=(10, 10))],
+    ),
+    _session(
+        2,
+        "ml",
+        "senior",
+        "middle",
+        "downgraded",
+        [("middle", 1, 1), ("senior", 0, 2)],
+        {"correct": 3, "total": 5},
+        [_task(1, "code", "senior", 0.4, tests=(4, 11))],
+    ),
+    _session(
+        3,
+        "algo",
+        "middle",
+        None,
+        "insufficient",
+        [("middle", 1, 1)],
+        None,
+        [_task(1, "essay", "middle", 0.8)],
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    ("text", "facts"),
+    [
+        ("Кандидат не справился с заданием по backend (1 из 2 решённых, балл 0.0).", FACTS_A),
+        ("Кандидат прошёл один алго-тест, решив задачу на 0.95 балла.", FACTS_D),
+        ("Кодовые задачи: решён только один из двух заданий.", FACTS_B),
+        ("В коде №1 решён 1 из 13 тестов.", FACTS_B),
+        ("Кандидат прошёл тест по бэкенду, балл 0.89.", FACTS_C),
+        ("По итогам теста кандидат получил senior-грейд, балл 0.89.", FACTS_C),
+        (
+            "Кандидат прошёл два технических теста: по бэкенду (backend) не сдано, по "
+            "алгоритмам — успешно, баллы 0.0 и 0.94.",
+            FACTS_A,
+        ),
+        (
+            "Кандидат не справился с тестом: из 2 задач по коду решён только 1, балл — 0.33.",
+            FACTS_B,
+        ),
+        ("В тесте по backend кандидат не решил ни одного задания из трёх.", FACTS_A),
+        ("Тест 2 из 2: заявленный грейд junior не подтверждён.", FACTS_A),
+        ("Тест 1 из 2: подтверждён грейд middle.", FACTS_A),
+        ("Итог теста — passed, решено 0 из 2 заданий.", FACTS_B),
+        ("Присвоен грейд junior, решено 2 из 2 заданий.", FACTS_A),
+        ("Тест 3 из 3: решено 1 из 1 заданий, кандидат не прошёл тест.", FACTS_MIXED),
+        ("Тест 1 из 3: подтверждён грейд senior.", FACTS_MIXED),
+        ("Тесты задания 1 пройдены (1/13), балл 0.33.", FACTS_B),
+        ("По коду решён один из двенадцати тестов, балл 0.89.", FACTS_C),
+    ],
+)
+def test_false_claims_are_rejected(text, facts):
+    assert summary_problems(text, facts)
+
+
+@pytest.mark.parametrize(
+    ("text", "facts"),
+    [
+        ("На уровне middle решено 0 из 2 заданий.", FACTS_A),
+        ("Тест 2 из 2: algo, заявленный грейд junior подтверждён.", FACTS_A),
+        ("Кандидат не прошёл технический тест: решён только один из двух заданий.", FACTS_C),
+        ("Заявленный грейд junior, назначенный грейд не выставлен, итог сессии — failed.", FACTS_B),
+        ("По итогам второй сессии присвоен грейд junior, результат — passed.", FACTS_A),
+        ("Кандидат прошёл 2 сессии технического теста.", FACTS_A),
+        ("В задании 2 на python набрано 0.08 балла, пройден 1 из 10 тестов.", FACTS_B),
+        ("Кандидат не решил ни одного задания из 2 возможных.", FACTS_B),
+        ("В задании по коду набрано 0.89 балла, тесты пройдены полностью (12/12).", FACTS_C),
+        ("Во второй сессии код-задание выполнено с 17 пройденными тестами из 17.", FACTS_A),
+        ("Тест 1 из 3: кандидат прошёл тест, подтверждён грейд middle.", FACTS_MIXED),
+    ],
+)
+def test_true_claims_pass(text, facts):
+    assert summary_problems(text, facts) == []
+
+
+@pytest.mark.parametrize("facts", [FACTS_A, FACTS_B, FACTS_C, FACTS_D, FACTS_MIXED])
+def test_fallback_text_passes_claim_checks(facts):
+    assert summary_problems(fallback_text(facts), facts) == []
+
+
 async def test_llm_text_used_when_grounded():
     sentences = ["Подтверждён грейд junior: решено 2 из 2 заданий.", "Вставок из буфера: 3."]
     llm = FakeLLM([json.dumps({"sentences": sentences}, ensure_ascii=False)])
