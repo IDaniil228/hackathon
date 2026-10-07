@@ -137,6 +137,29 @@ async def test_router_rejects_a_model_without_a_known_provider(model):
         await router.complete(MESSAGES, model=model)
 
 
+def test_router_reports_the_structured_output_of_the_prefix_provider():
+    settings = LLMSettings()
+    router = ProviderRouter(settings, {"ollama": SlowLLM(), "deepseek": SlowLLM()})
+    assert router.structured_output(settings.generator.model) == "json_schema"
+    assert router.structured_output(settings.judge.model) == "json_object"
+    assert router.structured_output(None) == "json_schema"
+
+
+@pytest.mark.parametrize(
+    ("mode", "response_format"),
+    [("json_schema", "json_schema"), ("json_object", "json_object"), ("text", None)],
+)
+async def test_client_maps_the_schema_to_the_provider_structured_output(mode, response_format):
+    client, requests = _recording_client(
+        ProviderSettings(base_url="http://cloud", structured_output=mode)
+    )
+    await client.complete(MESSAGES, model="m", json_schema={"type": "object"})
+    await client.complete(MESSAGES, model="m")
+    first, plain = (json.loads(request.content) for request in requests)
+    assert first.get("response_format", {}).get("type") == response_format
+    assert "response_format" not in plain
+
+
 def _recording_client(provider: ProviderSettings, status: int = 200):
     requests: list[httpx.Request] = []
 

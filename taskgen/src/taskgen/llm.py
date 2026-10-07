@@ -21,7 +21,13 @@ from taskgen.config import (
     provider_key_variable,
     split_model,
 )
-from taskgen.contracts import ChatMessage, Embedder, LLMClient, ReasoningEffort
+from taskgen.contracts import (
+    ChatMessage,
+    Embedder,
+    LLMClient,
+    ReasoningEffort,
+    StructuredOutput,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +143,11 @@ class ProviderRouter:
             reasoning_effort=reasoning_effort,
         )
 
+    def structured_output(self, model: str | None) -> StructuredOutput:
+        """Режим ответа по схеме у провайдера модели; его читает evaluation.jsonout."""
+        provider, _ = self._route(model or self._settings.generator.model)
+        return self._settings.providers[provider].structured_output
+
     def _route(self, model: str) -> tuple[str, str]:
         provider, name = split_model(model)
         if provider not in self._limited:
@@ -224,11 +235,14 @@ class OpenAICompatibleClient:
             "messages": [m.model_dump() for m in messages],
             "temperature": temperature,
         }
-        if json_schema is not None:
+        mode = self._provider.structured_output
+        if json_schema is not None and mode == "json_schema":
             body["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {"name": "answer", "schema": json_schema, "strict": True},
             }
+        elif json_schema is not None and mode == "json_object":
+            body["response_format"] = {"type": "json_object"}
         # Ollama через этот API не понимает think: false, а reasoning_effort понимает.
         if reasoning_effort is not None:
             body["reasoning_effort"] = reasoning_effort

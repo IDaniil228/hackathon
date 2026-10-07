@@ -3,7 +3,9 @@
 Не все OpenAI-совместимые провайдеры поддерживают response_format с json_schema целиком:
 одни отвечают ошибкой 4xx, другие игнорируют схему. Поэтому вызов идёт в два шага: со схемой,
 а при отказе или ответе не по схеме — без неё, со схемой в тексте запроса и разбором первого
-JSON-объекта из ответа. Результат в обоих случаях проверяет pydantic-модель.
+JSON-объекта из ответа. Провайдер, о котором известно, что json_schema он не принимает
+(llm.providers.<имя>.structured_output), сразу получает второй шаг. Результат в обоих случаях
+проверяет pydantic-модель.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from taskgen.contracts import ChatMessage, LLMClient, ReasoningEffort
+from taskgen.contracts import ChatMessage, LLMClient, ReasoningEffort, StructuredOutput
 
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
 _FENCE = re.compile(r"```(?:json)?\s*\n(.*?)```", re.DOTALL)
@@ -77,6 +79,16 @@ def _fallback_instruction(schema: dict[str, Any]) -> ChatMessage:
     )
 
 
+def _structured_output(llm: LLMClient, model: str | None) -> StructuredOutput:
+    """Режим провайдера модели; клиент без метода structured_output считается json_schema.
+
+    Метод есть у llm.ProviderRouter. Подделки в тестах и обёртки его не имеют и идут прежним
+    путём в два шага.
+    """
+    query = getattr(llm, "structured_output", None)
+    return "json_schema" if query is None else query(model)
+
+
 async def complete_structured[ModelT: BaseModel](
     llm: LLMClient,
     messages: list[ChatMessage],
@@ -90,27 +102,32 @@ async def complete_structured[ModelT: BaseModel](
     """Ответ модели как экземпляр model_cls или StructuredOutputError.
 
     Ошибка провайдера 5xx и сетевые ошибки не скрываются: повтор без схемы их не исправит.
+    Провайдер без json_schema сразу получает схему в тексте запроса, одной попыткой.
     """
-    try:
-        reply = await llm.complete(
-            messages,
-            model=model,
-            temperature=temperature,
-            json_schema=schema,
-            reasoning_effort=reasoning_effort,
-        )
-    except httpx.HTTPStatusError as error:
-        if not error.response.is_client_error:
-            raise
-    else:
-        if not _THINK.sub("", reply).strip():
-            raise EmptyReplyError("Модель вернула пустой ответ")
-        if (parsed := _parse(reply, model_cls)) is not None:
-            return parsed
+    mode = _structured_output(llm, model)
+    if mode == "json_schema":
+        try:
+            reply = await llm.complete(
+                messages,
+                model=model,
+                temperature=temperature,
+                json_schema=schema,
+                reasoning_effort=reasoning_effort,
+            )
+        except httpx.HTTPStatusError as error:
+            if not error.response.is_client_error:
+                raise
+        else:
+            if not _THINK.sub("", reply).strip():
+                raise EmptyReplyError("Модель вернула пустой ответ")
+            if (parsed := _parse(reply, model_cls)) is not None:
+                return parsed
     reply = await llm.complete(
         [*messages, _fallback_instruction(schema)],
         model=model,
         temperature=temperature,
+        # Провайдеру без json_schema клиент передаст из схемы то, что тот принимает.
+        json_schema=None if mode == "json_schema" else schema,
         reasoning_effort=reasoning_effort,
     )
     if (parsed := _parse(reply, model_cls)) is not None:

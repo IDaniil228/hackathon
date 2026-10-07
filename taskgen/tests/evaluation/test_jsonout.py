@@ -113,3 +113,36 @@ async def test_reasoning_effort_reaches_both_attempts():
     llm = FakeLLM(["мусор", '{"x": 1, "y": 1}'])
     await complete_structured(llm, MESSAGES, Point, SCHEMA, model="m", reasoning_effort="none")
     assert [call["reasoning_effort"] for call in llm.calls] == ["none", "none"]
+
+
+class SchemalessLLM(FakeLLM):
+    """Провайдер без json_schema: сообщает свой режим структурированного ответа."""
+
+    def __init__(self, replies: list[str], mode: str) -> None:
+        super().__init__(replies)
+        self.mode = mode
+        self.asked: list[str | None] = []
+
+    def structured_output(self, model: str | None) -> str:
+        self.asked.append(model)
+        return self.mode
+
+
+@pytest.mark.parametrize("mode", ["json_object", "text"])
+async def test_provider_without_json_schema_gets_the_fallback_request_first(mode):
+    # Иначе каждый вызов к такому провайдеру сначала получает 4xx и только потом повтор.
+    llm = SchemalessLLM(['{"x": 1, "y": 2}'], mode)
+    point = await complete_structured(llm, MESSAGES, Point, SCHEMA, model="deepseek/m")
+    assert point == Point(x=1, y=2)
+    assert llm.asked == ["deepseek/m"]
+    (call,) = llm.calls
+    assert json.dumps(SCHEMA, ensure_ascii=False) in call["messages"][-1].content
+    # Схема всё равно передаётся: клиент сам решает, что из неё отправить провайдеру.
+    assert call["json_schema"] == SCHEMA
+
+
+async def test_provider_without_json_schema_gets_one_attempt():
+    llm = SchemalessLLM(["мусор", '{"x": 1, "y": 2}'], "json_object")
+    with pytest.raises(StructuredOutputError):
+        await complete_structured(llm, MESSAGES, Point, SCHEMA, model="deepseek/m")
+    assert len(llm.calls) == 1

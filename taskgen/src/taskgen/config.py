@@ -14,7 +14,7 @@ from typing import Any
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from taskgen.contracts import EssayCheckMethod, ReasoningEffort, TaskKind
+from taskgen.contracts import EssayCheckMethod, ReasoningEffort, StructuredOutput, TaskKind
 
 ENV_PREFIX = "TASKGEN_"
 ENV_DELIMITER = "__"
@@ -51,6 +51,14 @@ class ProviderSettings(BaseModel):
         "оценки на этом провайдере. Локальная модель отвечает по очереди; облачному провайдеру "
         "можно больше",
     )
+    structured_output: StructuredOutput = Field(
+        default="json_schema",
+        description="Как просить у провайдера ответ по схеме. json_schema — response_format со "
+        "схемой, а при отказе 4xx или ответе не по схеме — повтор со схемой в тексте запроса. "
+        "json_object и text — сразу схема в тексте запроса и одна попытка; json_object "
+        'добавляет response_format {"type": "json_object"}, и провайдер отвечает только '
+        "валидным JSON. DeepSeek отвечает 400 на json_schema, а json_object принимает",
+    )
 
 
 def provider_key_variable(provider: str) -> str:
@@ -62,7 +70,12 @@ def provider_key_variable(provider: str) -> str:
 # LLMSettings._merge_defaults.
 DEFAULT_PROVIDERS: dict[str, dict[str, Any]] = {
     "ollama": {"base_url": "http://localhost:11434/v1"},
-    "deepseek": {"base_url": "https://api.deepseek.com", "requires_key": True, "concurrency": 4},
+    "deepseek": {
+        "base_url": "https://api.deepseek.com",
+        "requires_key": True,
+        "concurrency": 4,
+        "structured_output": "json_object",
+    },
 }
 
 
