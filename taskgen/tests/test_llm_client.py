@@ -40,6 +40,28 @@ async def test_missing_content_after_reasoning_is_empty_string():
     assert await client.complete(MESSAGES) == ""
 
 
+async def test_reply_cut_by_length_is_logged_with_token_counts(caplog):
+    # Ollama с окном 4096 обрывала ответ судьи, и в журнале был только отказ схемы.
+    def handler(request: httpx.Request) -> httpx.Response:
+        choice = {"message": {"content": '{"items": ['}, "finish_reason": "length"}
+        usage = {"prompt_tokens": 3979, "completion_tokens": 117, "total_tokens": 4096}
+        return httpx.Response(200, json={"choices": [choice], "usage": usage})
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://llm")
+    client = OpenAICompatibleClient(LLMSettings(), http=http)
+    with caplog.at_level("WARNING", logger="taskgen.llm"):
+        assert await client.complete(MESSAGES, model="m") == '{"items": ['
+    (record,) = [r for r in caplog.records if r.name == "taskgen.llm"]
+    assert "4096" in record.getMessage() and "m" in record.getMessage()
+
+
+async def test_complete_reply_is_not_logged(caplog):
+    client, _ = _client("ответ")
+    with caplog.at_level("WARNING", logger="taskgen.llm"):
+        await client.complete(MESSAGES, model="m")
+    assert not [r for r in caplog.records if r.name == "taskgen.llm"]
+
+
 async def test_limiter_passes_reasoning_effort_through():
     inner = FakeLLM(["ок"])
     await LimitedLLM(inner, limit=1).complete(MESSAGES, reasoning_effort="low")

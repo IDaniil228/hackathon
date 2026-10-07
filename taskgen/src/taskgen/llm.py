@@ -7,12 +7,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 import httpx
 
 from taskgen.config import LLMSettings, Settings
 from taskgen.contracts import ChatMessage, Embedder, LLMClient, ReasoningEffort
+
+logger = logging.getLogger(__name__)
 
 
 class LimitedLLM:
@@ -105,8 +108,18 @@ class OpenAICompatibleClient:
             body["reasoning_effort"] = reasoning_effort
         response = await self._http.post("/chat/completions", json=body)
         response.raise_for_status()
+        data = response.json()
+        choice = data["choices"][0]
+        if choice.get("finish_reason") == "length":
+            # Обрыв по длине выглядит дальше как ответ не по схеме; причина видна только здесь.
+            logger.warning(
+                "Ответ модели %s оборван по длине, токены %s; у Ollama это окно контекста "
+                "сервера, docs/taskgen/deployment.md",
+                body["model"],
+                data.get("usage"),
+            )
         # Модель с рассуждениями может истратить весь ответ на них и вернуть content: null.
-        return response.json()["choices"][0]["message"].get("content") or ""
+        return choice["message"].get("content") or ""
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         response = await self._http.post(
