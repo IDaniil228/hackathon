@@ -304,7 +304,10 @@ async def main() -> int:
                 if answer_set.spec().kind is not TaskKind.ESSAY:
                     continue
                 # Судье эссе нужны только условие и рубрика: ситуация собирается из фактов.
-                instance = _essay_from_facts(answer_set)
+                # Условие из фактов тоже идёт в кэш: следующий прогон оценивает то же условие.
+                instance = cache[f"{answer_set.template}#{answer_set.seed}"] = _essay_from_facts(
+                    answer_set
+                )
                 print(f"{answer_set.name}: условие собрано из фактов шаблона", flush=True)
             if args.instances:
                 args.instances.write_text(
