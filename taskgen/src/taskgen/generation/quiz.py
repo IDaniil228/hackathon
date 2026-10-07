@@ -3,7 +3,7 @@
 Вариант кейса выбирает seed. Факты варианта определяют верный ответ, а разные варианты
 одного шаблона ведут к разным ответам, поэтому утёкший ответ не подходит к другому
 экземпляру. Кейс пишет LLM по фактам варианта и проверяется так же, как ситуация эссе
-(essay.py): все факты есть с цитатами, запрещённых фраз нет. Вопрос и ответы идут
+(essay.py): все факты есть с доказательством, запрещённых фраз нет. Вопрос и ответы идут
 дословно, ответы — в порядке, перемешанном по seed, под непрозрачными id.
 
 Неверный ответ не становится верным из-за кейса только тогда, когда факты варианта
@@ -25,6 +25,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from taskgen.contracts import LLMClient, QuizVariant, ReasoningEffort, SolverRecord, TemplateSpec
+from taskgen.evaluation.evidence import VERBATIM_QUOTES, EvidenceOptions
 from taskgen.generation.essay import EssayScenarioError, filled_facts, generate_essay
 from taskgen.generation.params import fill_placeholders
 from taskgen.generation.solver import SolverConfig, solve_quiz
@@ -107,6 +108,7 @@ async def write_case(
     solver: SolverConfig | None = None,
     system_suffix: str = "",
     request_suffix: str = "",
+    evidence_options: EvidenceOptions = VERBATIM_QUOTES,
 ) -> QuizDraft:
     """Проверенный кейс за не больше чем attempts попыток.
 
@@ -137,6 +139,7 @@ async def write_case(
                 checker_reasoning_effort=checker_reasoning_effort,
                 system_suffix=QUIZ_WRITER_RULES + system_suffix,
                 request_suffix=request_suffix + retry,
+                evidence_options=evidence_options,
             )
         except EssayScenarioError as error:
             reason = "; ".join(error.check.reasons) if error.check else str(error)

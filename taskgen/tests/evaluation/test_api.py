@@ -41,11 +41,13 @@ class Responder:
         user = "\n".join(message.content for message in messages)
         answer = re.search(r"<<<ОТВЕТ-\w+>>>\n(.*?)\n<<<КОНЕЦ", user, re.DOTALL).group(1)
         quote = next(line for line in answer.splitlines() if line.strip())
-        ids = properties["items"]["items"]["properties"]["item_id"]["enum"]
+        item = properties["items"]["items"]["properties"]
+        ids = item["item_id"]["enum"]
         verdict = self.verdict
+        # Первый участок ответа — его первая непустая строка.
+        evidence = {"spans": [1]} if "spans" in item else {"quotes": [quote]}
         items = [
-            {"item_id": i, "verdict": verdict, "quotes": [quote] if verdict != "no" else []}
-            for i in ids
+            {"item_id": i, "verdict": verdict, **(evidence if verdict != "no" else {})} for i in ids
         ]
         return json.dumps({"items": items}, ensure_ascii=False)
 

@@ -7,9 +7,15 @@
 песочницей Piston, ответ с кодом проходит тот же check_code, что в API, а балл считает
 evaluate_task с LLM-судьёй. Судья — роль llm.judge из настроек, например
 TASKGEN_LLM__JUDGE__MODEL=deepseek/deepseek-flash; флаги --judge-* заменяют её модель вместе с
-провайдером и рассуждения.
+провайдером и рассуждения. Способ доказательства и повторы судьи тоже берутся из настроек,
+например TASKGEN_SCORING__JUDGE_EVIDENCE=spans.
 Экземпляры кэшируются в --instances: повторный прогон и прогон другим судьёй оценивают те
 же условия.
+
+    uv run python scripts/adversarial_eval.py --summary results.json [другие.json ...]
+
+печатает сводку прогонов: баллы честных ответов и атак, вердикты, снятые из-за неверного
+доказательства, повторы судьи и время.
 """
 
 from __future__ import annotations
@@ -17,9 +23,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import math
 import sys
+import time
 import uuid
 from pathlib import Path
+from statistics import fmean
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -34,13 +43,18 @@ from taskgen.contracts import (  # noqa: E402
     TaskKind,
 )
 from taskgen.evaluation.analyzers import default_analyzers  # noqa: E402
+from taskgen.evaluation.evidence import split_spans  # noqa: E402
+from taskgen.evaluation.jsonout import extract_json_object  # noqa: E402
 from taskgen.evaluation.judge import JudgeError, LLMJudge  # noqa: E402
+from taskgen.evaluation.quotes import EmbeddingCache  # noqa: E402
 from taskgen.evaluation.service import (  # noqa: E402
     AnswerInput,
     Evaluator,
     TaskInput,
     check_code,
     evaluate_task,
+    judge_evidence,
+    judge_relevance,
 )
 from taskgen.generation.instance import (  # noqa: E402
     GenerationError,
@@ -143,14 +157,90 @@ async def _evaluate(
     return result
 
 
+def _referenced_spans(row: dict[str, Any]) -> list[tuple[int, int]]:
+    """Число участков в каждой ссылке yes или partial из сырых ответов судьи и число
+    участков ответа: по ним выбирается предел judge_max_spans."""
+    total = len(split_spans(row["content"], code=row["kind"] == TaskKind.CODE.value))
+    found = []
+    for reply in row.get("replies", []):
+        try:
+            items = extract_json_object(reply).get("items", [])
+        except ValueError:
+            continue
+        for item in items:
+            if isinstance(item, dict) and item.get("verdict") in ("yes", "partial"):
+                spans = item.get("spans")
+                if isinstance(spans, list) and spans:
+                    found.append((len(set(map(str, spans))), total))
+    return found
+
+
+def _quantile(values: list[float], share: float) -> float:
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, int(share * len(ordered)))]
+
+
+def summary(paths: list[Path]) -> None:
+    for path in paths:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+        scored = [row for row in rows if not math.isnan(row["score"])]
+        honest = [row for row in scored if row["class"].startswith("valid-")]
+        attacks = [row for row in scored if row["class"].startswith("inject-")]
+        judged = [row["judge"] for row in scored if "judge" in row]
+        claimed = sum(judge.get("claimed", 0) for judge in judged)
+        unsupported = sum(judge.get("unsupported", 0) for judge in judged)
+        below = [row for row in honest if any("ниже" in p for p in row["problems"])]
+        above = [row for row in attacks if any("выше" in p for p in row["problems"])]
+        evidence = rows[0].get("evidence", {}) if rows else {}
+        print(f"{path}: {rows[0]['judge_model'] if rows else '-'} {evidence}")
+        print(f"  ответов {len(rows)}, без оценки {len(rows) - len(scored)}")
+        if honest:
+            print(
+                f"  честные: средний балл {fmean(r['score'] for r in honest):.3f}, "
+                f"ниже диапазона {len(below)} из {len(honest)}"
+            )
+        if attacks:
+            print(
+                f"  атаки: средний балл {fmean(r['score'] for r in attacks):.3f}, "
+                f"выше диапазона {len(above)} из {len(attacks)}"
+            )
+        share = unsupported / claimed if claimed else 0.0
+        print(
+            f"  вердиктов yes и partial {claimed}, снято из-за доказательства {unsupported} "
+            f"({share:.1%}), повторов судьи {sum(j.get('repairs', 0) for j in judged)}"
+        )
+        seconds = [row.get("seconds", 0.0) for row in rows]
+        print(
+            f"  вызовов судьи {sum(row['judge_calls'] for row in rows)}, "
+            f"время {sum(seconds):.0f} с, на ответ {fmean(seconds) if seconds else 0:.1f} с"
+        )
+        for name, group in (("честные", honest), ("атаки", attacks)):
+            refs = [ref for row in group for ref in _referenced_spans(row)]
+            if refs:
+                counts = [count for count, _ in refs]
+                shares = [count / total for count, total in refs if total]
+                print(
+                    f"  участков на ссылку, {name}: медиана {_quantile(counts, 0.5)}, "
+                    f"90 % {_quantile(counts, 0.9)}, максимум {max(counts)}; доля ответа: "
+                    f"медиана {_quantile(shares, 0.5):.2f}, 90 % {_quantile(shares, 0.9):.2f}, "
+                    f"максимум {max(shares):.2f}"
+                )
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--out", type=Path)
     parser.add_argument("--instances", type=Path)
     parser.add_argument("--only", nargs="*", default=[])
     parser.add_argument("--judge-model")
     parser.add_argument("--judge-reasoning-effort")
+    parser.add_argument("--summary", nargs="+", type=Path)
     args = parser.parse_args()
+    if args.summary:
+        summary(args.summary)
+        return 0
+    if args.out is None:
+        parser.error("нужен --out или --summary")
 
     settings = Settings()
     judge_role = settings.llm.judge.model_copy(
@@ -176,6 +266,9 @@ async def main() -> int:
         samples=settings.scoring.judge_samples,
         temperature=settings.scoring.judge_temperature,
         reasoning_effort=judge_role.reasoning_effort,
+        evidence=judge_evidence(settings.scoring),
+        # Эмбеддинги для проверки смысла доказательств даёт роль llm.embedding из настроек.
+        relevance=judge_relevance(settings.scoring, router, EmbeddingCache()),
     )
     piston = PistonRunner(settings.sandbox)
     ev = Evaluator(
@@ -212,7 +305,10 @@ async def main() -> int:
                 if answer_set.spec().kind is not TaskKind.ESSAY:
                     continue
                 # Судье эссе нужны только условие и рубрика: ситуация собирается из фактов.
-                instance = _essay_from_facts(answer_set)
+                # Условие из фактов тоже идёт в кэш: следующий прогон оценивает то же условие.
+                instance = cache[f"{answer_set.template}#{answer_set.seed}"] = _essay_from_facts(
+                    answer_set
+                )
                 print(f"{answer_set.name}: условие собрано из фактов шаблона", flush=True)
             if args.instances:
                 args.instances.write_text(
@@ -224,11 +320,13 @@ async def main() -> int:
                 if wanted is not None and answer.id not in wanted:
                     continue
                 before = counting.calls
+                started = time.perf_counter()
                 try:
                     result = await _evaluate(ev, answer_set, instance, answer.content)
                 except JudgeError as error:
                     # Судья без ответа по схеме срывает оценку всей сессии: это тоже итог.
                     result = {"score": float("nan"), "error": str(error)}
+                seconds = time.perf_counter() - started
                 if "error" in result:
                     problems = [f"оценки нет: {result['error']}"]
                 else:
@@ -240,6 +338,11 @@ async def main() -> int:
                     "class": answer.cls,
                     "expect": list(answer.expect),
                     "judge_model": judge_model,
+                    "evidence": vars(judge_evidence(settings.scoring))
+                    | {"quote_threshold": settings.scoring.judge_quote_threshold},
+                    "kind": instance["kind"],
+                    "content": answer.content,
+                    "seconds": seconds,
                     "judge_calls": counting.calls - before,
                     "replies": counting.replies[before:],
                     "problems": problems,

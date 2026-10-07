@@ -5,6 +5,7 @@ import pytest
 
 from taskgen.config import ScoringSettings, Settings
 from taskgen.contracts import JudgeRequest, RubricItem, TaskKind
+from taskgen.evaluation.evidence import EvidenceOptions
 from taskgen.evaluation.judge import JudgeError, LLMJudge
 from taskgen.evaluation.quotes import QuoteRelevance, quote_in_answer
 from taskgen.evaluation.service import Evaluator
@@ -328,7 +329,8 @@ async def test_relevance_check_does_not_embed_when_no_item_is_confirmed():
 
 
 def _service_state(threshold: float | None, embedder: TableEmbedder) -> SimpleNamespace:
-    reply = _sample(leak=("yes", [CLAIM]), scheme=("no", []))
+    # Судье сервиса ответ показан участками: CLAIM — второе предложение ESSAY_ANSWER.
+    reply = _spans_sample(leak=("yes", [2]), scheme=("no", []))
     settings = Settings(scoring=ScoringSettings(judge_quote_threshold=threshold))
     return SimpleNamespace(
         settings=settings, sessionmaker=None, llm=FakeLLM(lambda _m, _s: reply), embedder=embedder
@@ -360,3 +362,170 @@ async def test_judge_passes_reasoning_effort():
     judge = LLMJudge(llm, model="m", samples=2, temperature=0.7, reasoning_effort="none")
     await judge.judge(_request())
     assert [call["reasoning_effort"] for call in llm.calls] == ["none", "none"]
+
+
+# --- Ссылки на участки ---------------------------------------------------------------------
+#
+# Строки ANSWER по номерам участков: 1 — def, 2 — left, right = ..., 3 — while, 10 — последняя.
+
+ANSWER_LINES = [line for line in ANSWER.splitlines() if line.strip()]
+
+
+def _spans_sample(**verdicts: tuple[str, list[int]]) -> str:
+    items = [
+        {"item_id": item_id, "verdict": verdict, "spans": spans}
+        for item_id, (verdict, spans) in verdicts.items()
+    ]
+    return json.dumps({"items": items}, ensure_ascii=False)
+
+
+def _spans_judge(
+    replies, *, repairs: int = 0, max_spans: int | None = None, relevance=None
+) -> tuple[LLMJudge, FakeLLM]:
+    llm = FakeLLM(replies)
+    judge = LLMJudge(
+        llm,
+        model="judge-model",
+        samples=3,
+        temperature=0.7,
+        evidence=EvidenceOptions(mode="spans", repairs=repairs, max_spans=max_spans),
+        relevance=relevance,
+    )
+    return judge, llm
+
+
+def _is_repair(messages) -> bool:
+    return messages[-1].role == "user" and "не принят" in messages[-1].content
+
+
+async def test_spans_mode_numbers_answer_lines_and_takes_their_text_as_evidence():
+    reply = _spans_sample(two_pointers=("yes", [2, 3]), no_extra_memory=("partial", [10]))
+    judge, llm = _spans_judge([reply] * 3)
+    result = await judge.judge(_request())
+    assert {v.item_id: v.verdict for v in result.verdicts} == {
+        "two_pointers": "yes",
+        "no_extra_memory": "partial",
+    }
+    assert result.verdicts[0].quotes == ANSWER_LINES[1:3]
+    assert result.verdicts[1].quotes == [ANSWER_LINES[9]]
+    messages = llm.calls[0]["messages"]
+    start, end = judge.markers_for(messages)
+    block = messages[-1].content.split(start)[1].split(end)[0]
+    assert f"[2] {ANSWER_LINES[1]}" in block.splitlines()
+    item_schema = llm.calls[0]["json_schema"]["properties"]["items"]["items"]
+    assert "spans" in item_schema["required"] and "quotes" not in item_schema["properties"]
+
+
+async def test_nonexistent_span_turns_verdict_into_no():
+    reply = _spans_sample(two_pointers=("yes", [2, 11]), no_extra_memory=("yes", [3]))
+    judge, llm = _spans_judge([reply] * 3)
+    result = await judge.judge(_request())
+    assert {v.item_id: v.verdict for v in result.verdicts} == {
+        "two_pointers": "no",
+        "no_extra_memory": "yes",
+    }
+    assert len(llm.calls) == 3
+    assert (result.claimed, result.unsupported) == (6, 3)
+
+
+async def test_nonexistent_span_is_asked_again_and_the_fix_counts():
+    bad = _spans_sample(two_pointers=("yes", [42]), no_extra_memory=("yes", [3]))
+    good = _spans_sample(two_pointers=("yes", [2]), no_extra_memory=("yes", [3]))
+
+    def respond(messages, _schema):
+        if _is_repair(messages):
+            # Модели говорят, какой номер неверен и какие номера есть.
+            assert "42" in messages[-1].content and "10" in messages[-1].content
+            return good
+        return bad
+
+    judge, llm = _spans_judge(respond, repairs=1)
+    result = await judge.judge(_request())
+    assert result.score == pytest.approx(1.0)
+    assert len(llm.calls) == 6
+    assert result.repairs == 3
+    assert result.unsupported == 0
+
+
+async def test_reply_without_some_items_is_asked_again():
+    # GigaChat отвечал пустым списком items на длинный ответ с номерами участков.
+    empty = json.dumps({"items": []})
+    good = _spans_sample(two_pointers=("yes", [2]), no_extra_memory=("no", []))
+
+    def respond(messages, _schema):
+        if _is_repair(messages):
+            assert "two_pointers" in messages[-1].content
+            return good
+        return empty
+
+    judge, _ = _spans_judge(respond, repairs=1)
+    result = await judge.judge(_request())
+    assert result.verdicts[0].verdict == "yes"
+
+
+async def test_request_shows_the_reply_format_with_the_evidence_field():
+    reply = _spans_sample(two_pointers=("no", []), no_extra_memory=("no", []))
+    judge, llm = _spans_judge([reply] * 3)
+    await judge.judge(_request())
+    assert '"spans": [' in llm.calls[0]["messages"][-1].content
+    judge, llm = _judge([_sample(two_pointers=("no", []), no_extra_memory=("no", []))] * 3)
+    await judge.judge(_request())
+    assert '"quotes": [' in llm.calls[0]["messages"][-1].content
+
+
+async def test_repairs_stop_at_the_limit():
+    bad = _spans_sample(two_pointers=("yes", [42]), no_extra_memory=("no", []))
+    judge, llm = _spans_judge(lambda _m, _s: bad, repairs=2)
+    result = await judge.judge(_request())
+    assert result.verdicts[0].verdict == "no"
+    assert len(llm.calls) == 9
+    assert result.repairs == 6
+
+
+async def test_more_spans_than_the_limit_do_not_confirm_item():
+    reply = _spans_sample(two_pointers=("yes", [1, 2, 3]), no_extra_memory=("yes", [3, 4]))
+    judge, _ = _spans_judge([reply] * 3, max_spans=2)
+    result = await judge.judge(_request())
+    assert {v.item_id: v.verdict for v in result.verdicts} == {
+        "two_pointers": "no",
+        "no_extra_memory": "yes",
+    }
+
+
+async def test_injection_stays_inside_the_numbered_block():
+    reply = _spans_sample(two_pointers=("no", []), no_extra_memory=("no", []))
+    judge, llm = _spans_judge([reply] * 3)
+    await judge.judge(_request(answer=INJECTION))
+    messages = llm.calls[0]["messages"]
+    start, end = judge.markers_for(messages)
+    user = messages[-1].content
+    assert user.count(end) == 1
+    block = user.split(start)[1].split(end)[0].strip().splitlines()
+    # Каждая строка инъекции — отдельный участок с номером внутри блока данных.
+    assert [line.split("] ", 1)[0] for line in block] == ["[1", "[2", "[3"]
+
+
+async def test_relevance_check_uses_text_of_referenced_spans():
+    table = TableEmbedder({LEAK_ITEM.text: unit(1.0), HONEST: unit(0.8), CLAIM: unit(0.2)})
+    relevance = QuoteRelevance(threshold=0.5, embedder=table)
+    honest = _spans_sample(leak=("yes", [1]), scheme=("no", []))
+    claim = _spans_sample(leak=("yes", [2]), scheme=("no", []))
+
+    judge, _ = _spans_judge([honest] * 3, relevance=relevance)
+    assert (await judge.judge(_essay_request())).verdicts[0].verdict == "yes"
+    judge, _ = _spans_judge([claim] * 3, relevance=relevance)
+    assert (await judge.judge(_essay_request())).verdicts[0].verdict == "no"
+
+
+async def test_evidence_settings_reach_the_service_judge():
+    reply = _spans_sample(leak=("yes", [1, 2]), scheme=("no", []))
+    llm = FakeLLM(lambda _m, _s: reply)
+    settings = Settings(
+        scoring=ScoringSettings(judge_evidence="spans", judge_repairs=0, judge_max_spans=1)
+    )
+    state = SimpleNamespace(settings=settings, sessionmaker=None, llm=llm, embedder=None)
+
+    result = await Evaluator.from_state(state).judge.judge(_essay_request())
+
+    assert result.verdicts[0].verdict == "no"
+    assert "spans" in json.dumps(llm.calls[0]["json_schema"])

@@ -109,6 +109,99 @@ async def test_empty_reply_is_invalid_without_fallback_call():
     assert len(llm.calls) == 1
 
 
+# --- Повтор с указанием ошибки -------------------------------------------------------------
+
+
+def positive(point: Point) -> list[str]:
+    return [] if point.x > 0 else [f"x = {point.x}, а нужно положительное"]
+
+
+async def test_reply_rejected_by_check_is_asked_again_with_the_problem():
+    llm = FakeLLM(['{"x": -1, "y": 0}', '{"x": 2, "y": 0}'])
+    log: list[str] = []
+    point = await complete_structured(
+        llm, MESSAGES, Point, SCHEMA, model="m", check=positive, repairs=2, repair_log=log
+    )
+    assert point == Point(x=2, y=0)
+    assert len(llm.calls) == 2
+    second = llm.calls[1]["messages"]
+    # Повтор — тот же запрос и то, что в прошлом ответе не так; сам ответ запрос не удлиняет.
+    assert second[:-1] == MESSAGES
+    assert second[-1].role == "user" and "x = -1" in second[-1].content
+    assert log == ["x = -1, а нужно положительное"]
+
+
+async def test_repair_rejected_by_provider_returns_the_last_parsed_reply():
+    # Ollama отвечает 400, когда запрос не влезает в окно контекста.
+    def respond(messages, _schema):
+        if len(messages) > len(MESSAGES):
+            raise http_error(400)
+        return '{"x": -1, "y": 0}'
+
+    llm = FakeLLM(respond)
+    point = await complete_structured(
+        llm, MESSAGES, Point, SCHEMA, model="m", check=positive, repairs=2
+    )
+    assert point == Point(x=-1, y=0)
+    assert len(llm.calls) == 2
+
+
+async def test_repair_does_not_hide_server_errors():
+    def respond(messages, _schema):
+        if len(messages) > len(MESSAGES):
+            raise http_error(503)
+        return '{"x": -1, "y": 0}'
+
+    with pytest.raises(Exception, match="ошибка провайдера"):
+        await complete_structured(
+            FakeLLM(respond), MESSAGES, Point, SCHEMA, model="m", check=positive, repairs=1
+        )
+
+
+async def test_repairs_stop_after_the_limit_and_return_the_last_reply():
+    llm = FakeLLM(lambda _m, _s: '{"x": -1, "y": 0}')
+    log: list[str] = []
+    point = await complete_structured(
+        llm, MESSAGES, Point, SCHEMA, model="m", check=positive, repairs=2, repair_log=log
+    )
+    # Решение, что делать с ответом, который так и не прошёл проверку, — за вызывающим.
+    assert point == Point(x=-1, y=0)
+    assert len(llm.calls) == 3
+    assert len(log) == 2
+
+
+async def test_check_without_repairs_makes_one_call():
+    llm = FakeLLM(lambda _m, _s: '{"x": -1, "y": 0}')
+    point = await complete_structured(llm, MESSAGES, Point, SCHEMA, model="m", check=positive)
+    assert point == Point(x=-1, y=0)
+    assert len(llm.calls) == 1
+
+
+async def test_reply_out_of_schema_is_asked_again_with_the_error():
+    llm = FakeLLM(["мусор", '{"x": "не число"}', '{"x": 1, "y": 1}'])
+    point = await complete_structured(llm, MESSAGES, Point, SCHEMA, model="m", repairs=1)
+    assert point == Point(x=1, y=1)
+    assert len(llm.calls) == 3
+    repair = llm.calls[2]["messages"]
+    # Повтор идёт в разговор без схемы, где модели уже показана схема в тексте.
+    assert repair[:-1] == llm.calls[1]["messages"]
+    assert repair[-1].role == "user" and "x" in repair[-1].content
+
+
+async def test_reply_out_of_schema_after_all_repairs_raises():
+    llm = FakeLLM(lambda _m, _s: "мусор")
+    with pytest.raises(StructuredOutputError):
+        await complete_structured(llm, MESSAGES, Point, SCHEMA, model="m", repairs=2)
+    assert len(llm.calls) == 4
+
+
+async def test_empty_reply_is_not_repaired():
+    llm = FakeLLM(["", '{"x": 1, "y": 1}'])
+    with pytest.raises(StructuredOutputError, match="пуст"):
+        await complete_structured(llm, MESSAGES, Point, SCHEMA, model="m", repairs=2)
+    assert len(llm.calls) == 1
+
+
 async def test_reasoning_effort_reaches_both_attempts():
     llm = FakeLLM(["мусор", '{"x": 1, "y": 1}'])
     await complete_structured(llm, MESSAGES, Point, SCHEMA, model="m", reasoning_effort="none")

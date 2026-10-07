@@ -43,6 +43,7 @@ import yaml
 from taskgen.bank.parser import find_phrases, normalize_phrase, parse_template
 from taskgen.config import ChatRole, LLMSettings, Settings
 from taskgen.contracts import ChatMessage, TemplateSpec
+from taskgen.evaluation.evidence import EvidenceOptions, split_sentences
 from taskgen.evaluation.quotes import EmbeddingCache, QuoteRelevance
 from taskgen.generation.essay import (
     EssayCheckOptions,
@@ -50,8 +51,8 @@ from taskgen.generation.essay import (
     check_essay_scenario,
     embedding_scores,
     filled_facts,
-    split_sentences,
 )
+from taskgen.generation.instance import checker_evidence
 from taskgen.llm import ProviderRouter
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -273,6 +274,7 @@ async def run_check(
     options: EssayCheckOptions,
     model: str,
     effort: str | None,
+    evidence: EvidenceOptions,
 ) -> Row:
     spec = load_spec(case["template"])
     scenario = EssayScenario(title=case["title"], situation=case["situation"])
@@ -288,6 +290,7 @@ async def run_check(
         options=options,
         embedder=embedder,
         cache=cache,
+        evidence_options=evidence,
     )
     return Row(
         case_id=case["id"],
@@ -466,7 +469,13 @@ async def run(args: argparse.Namespace) -> int:
     settings = LLMSettings.model_validate({**dict(base), "checker": checker})
     client = ProviderRouter.from_settings(settings, roles=("checker", "embedding"))
     llm = CountingLLM(client)
-    log(f"эмбеддер {settings.embedding.model}, проверяльщик {settings.checker.model}")
+    # Способ доказательства проверяльщика — из настроек, например
+    # TASKGEN_GENERATION__ESSAY_CHECK_EVIDENCE=spans.
+    evidence = checker_evidence(Settings().generation)
+    log(
+        f"эмбеддер {settings.embedding.model}, проверяльщик {settings.checker.model}, "
+        f"доказательство {evidence}"
+    )
 
     started = time.perf_counter()
     scores = await all_scores(cases, client)
@@ -524,7 +533,7 @@ async def run(args: argparse.Namespace) -> int:
     partial = Path(f"{args.out}.partial.jsonl")
     config = (
         f"{fact_threshold}|{forbidden_threshold}|{args.grey_zone}|{client.model_name}|"
-        f"{args.checker_model}|{args.reasoning_effort}"
+        f"{args.checker_model}|{args.reasoning_effort}|{evidence}"
     )
     done = {
         (row["case_id"], row["mode"]): row
@@ -546,6 +555,7 @@ async def run(args: argparse.Namespace) -> int:
                 opts(mode),
                 args.checker_model,
                 args.reasoning_effort,
+                evidence,
             )
         )
         row["config"] = config

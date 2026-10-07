@@ -82,6 +82,19 @@ async def test_quiz_is_case_then_question_with_shuffled_options_and_hidden_key()
     assert instance.hidden.solver is None
 
 
+@pytest.mark.parametrize("mode", ["quotes", "spans"])
+async def test_case_checker_evidence_comes_from_generation_settings(mode):
+    spec = quiz_spec()
+    llm = FakeLLM(honest(spec, 77))
+
+    instance = await generate_instance(spec, 77, deps(llm, essay_check_evidence=mode))
+
+    _case, check = llm.calls
+    item = check["json_schema"]["properties"]["facts"]["items"]["properties"]
+    assert mode in item
+    assert instance.statement
+
+
 async def test_variant_and_option_order_come_from_seed():
     spec = quiz_spec()
     variants: Counter[str] = Counter()

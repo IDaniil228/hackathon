@@ -17,6 +17,7 @@ import pytest
 
 from taskgen.bank.parser import parse_template
 from taskgen.contracts import ChatMessage, TemplateSpec
+from taskgen.evaluation.evidence import EvidenceOptions, split_spans
 from taskgen.generation.essay import (
     EssayScenario,
     EssayScenarioError,
@@ -344,3 +345,101 @@ async def test_attempts_exhausted_raise_with_last_check():
 
     assert caught.value.check.forbidden_found == ["утечк"]
     assert len([c for c in llm.calls if c["model"] == "writer"]) == 2
+
+
+# --- Ссылки на участки ситуации --------------------------------------------------------------
+
+GOOD_SENTENCES = split_spans(GOOD_SITUATION, code=False)
+
+
+def numbers_of(quotes: list[str]) -> list[int]:
+    """Номера предложений GOOD_SITUATION, в которых стоят цитаты."""
+    return [i for i, sentence in enumerate(GOOD_SENTENCES, 1) if any(q in sentence for q in quotes)]
+
+
+GOOD_SPANS = {fid: numbers_of(quotes) for fid, quotes in GOOD_QUOTES.items()}
+
+
+def spans_checker(verdicts: dict[str, list[int]], spec: TemplateSpec, repaired=None) -> FakeLLM:
+    def reply(chosen: dict[str, list[int]]) -> str:
+        items = [
+            {"fact_id": fact.id, "present": fact.id in chosen, "spans": chosen.get(fact.id, [])}
+            for fact in spec.scenario_facts
+        ]
+        return json.dumps({"facts": items}, ensure_ascii=False)
+
+    def respond(messages: list[ChatMessage], _schema) -> str:
+        if repaired is not None and "не принят" in messages[-1].content:
+            return reply(repaired)
+        return reply(verdicts)
+
+    return FakeLLM(respond)
+
+
+async def check_spans(llm: FakeLLM, spec: TemplateSpec, repairs: int = 0):
+    return await check_essay_scenario(
+        llm,
+        spec,
+        EssayScenario(title="Отток", situation=GOOD_SITUATION),
+        PARAMS,
+        model="checker",
+        evidence_options=EvidenceOptions(mode="spans", repairs=repairs),
+    )
+
+
+async def test_spans_checker_sees_numbered_sentences_and_their_text_is_evidence():
+    spec = leakage_spec()
+    llm = spans_checker(GOOD_SPANS, spec)
+
+    result = await check_spans(llm, spec)
+
+    assert result.ok, result.reasons
+    split = "После этого она случайно разбила строки на две части."
+    assert result.evidence["random-split"] == split
+    user = llm.calls[0]["messages"][1].content
+    assert f"[5] {split}" in user.splitlines()
+    assert "spans" in json.dumps(llm.calls[0]["json_schema"])
+
+
+async def test_spans_checker_nonexistent_span_does_not_confirm_fact():
+    spec = leakage_spec()
+    llm = spans_checker(GOOD_SPANS | {"dated-records": [len(GOOD_SENTENCES) + 1]}, spec)
+
+    result = await check_spans(llm, spec)
+
+    assert result.missing_facts == ["dated-records"] and not result.ok
+    assert len(llm.calls) == 1
+
+
+async def test_checker_reply_without_some_facts_is_asked_again():
+    spec = leakage_spec()
+    partial = {k: v for k, v in GOOD_SPANS.items() if k != "dated-records"}
+
+    def respond(messages: list[ChatMessage], _schema) -> str:
+        repaired = "не принят" in messages[-1].content
+        chosen = GOOD_SPANS if repaired else partial
+        facts = (
+            spec.scenario_facts
+            if repaired
+            else [f for f in spec.scenario_facts if f.id != "dated-records"]
+        )
+        items = [{"fact_id": f.id, "present": True, "spans": chosen[f.id]} for f in facts]
+        return json.dumps({"facts": items}, ensure_ascii=False)
+
+    llm = FakeLLM(respond)
+    result = await check_spans(llm, spec, repairs=1)
+
+    assert result.ok, result.reasons
+    assert "dated-records" in llm.calls[1]["messages"][-1].content
+
+
+async def test_spans_checker_is_asked_again_about_nonexistent_span():
+    spec = leakage_spec()
+    bad = GOOD_SPANS | {"dated-records": [99]}
+    llm = spans_checker(bad, spec, repaired=GOOD_SPANS)
+
+    result = await check_spans(llm, spec, repairs=1)
+
+    assert result.ok, result.reasons
+    assert len(llm.calls) == 2
+    assert "99" in llm.calls[1]["messages"][-1].content

@@ -12,13 +12,13 @@ from typing import Any
 import pytest
 
 from taskgen.contracts import ChatMessage, ScenarioFact, TemplateSpec
+from taskgen.evaluation.evidence import split_sentences
 from taskgen.evaluation.quotes import EmbeddingCache
 from taskgen.generation.essay import (
     EssayCheckOptions,
     EssayScenario,
     check_essay_scenario,
     generate_essay,
-    split_sentences,
 )
 from tests.evaluation.fakes import FakeLLM, TableEmbedder, unit
 from tests.generation.test_essay import leakage_spec

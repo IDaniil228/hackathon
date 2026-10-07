@@ -24,6 +24,7 @@ from taskgen.contracts import (
     AIDetector,
     AnalysisReport,
     Analyzer,
+    Embedder,
     HiddenPayload,
     Judge,
     JudgeRequest,
@@ -40,6 +41,7 @@ from taskgen.contracts import (
 from taskgen.db import Answer, CandidateSummary, Grade, Task, Template, TestSession
 from taskgen.evaluation.analyzers import default_analyzers, run_analyzers
 from taskgen.evaluation.detector import LLMAIDetector
+from taskgen.evaluation.evidence import EvidenceOptions
 from taskgen.evaluation.grading import (
     GradeLevel,
     LevelResult,
@@ -52,7 +54,7 @@ from taskgen.evaluation.grading import (
 from taskgen.evaluation.judge import JudgeError, LLMJudge
 from taskgen.evaluation.languages import canonical_language
 from taskgen.evaluation.metrics import MetricScore, compute_quality, judge_facts, load_rubric
-from taskgen.evaluation.quotes import QuoteRelevance, state_embedding_cache
+from taskgen.evaluation.quotes import EmbeddingCache, QuoteRelevance, state_embedding_cache
 from taskgen.evaluation.scoring import (
     Components,
     SessionScore,
@@ -349,6 +351,24 @@ async def evaluate_task(task: TaskInput, *, judge: Judge, scoring: ScoringSettin
 # --- Зависимости ---------------------------------------------------------------------------
 
 
+def judge_evidence(scoring: ScoringSettings) -> EvidenceOptions:
+    """Способ доказательства судьи и его пределы из настроек."""
+    return EvidenceOptions(
+        mode=scoring.judge_evidence,
+        repairs=scoring.judge_repairs,
+        max_spans=scoring.judge_max_spans,
+    )
+
+
+def judge_relevance(
+    scoring: ScoringSettings, embedder: Embedder | None, cache: EmbeddingCache
+) -> QuoteRelevance | None:
+    """Проверка смысла доказательств судьи из настроек; None — проверка выключена."""
+    if scoring.judge_quote_threshold is None:
+        return None
+    return QuoteRelevance(threshold=scoring.judge_quote_threshold, embedder=embedder, cache=cache)
+
+
 @dataclass
 class Evaluator:
     settings: Settings
@@ -368,15 +388,8 @@ class Evaluator:
         """
         settings: Settings = state.settings
         llm = limited_llm(state)
-        threshold = settings.scoring.judge_quote_threshold
-        relevance = (
-            None
-            if threshold is None
-            else QuoteRelevance(
-                threshold=threshold,
-                embedder=state_embedder(state),
-                cache=state_embedding_cache(state),
-            )
+        relevance = judge_relevance(
+            settings.scoring, state_embedder(state), state_embedding_cache(state)
         )
         judge = getattr(state, "judge", None) or LLMJudge(
             llm,
@@ -385,6 +398,7 @@ class Evaluator:
             temperature=settings.scoring.judge_temperature,
             reasoning_effort=settings.llm.judge.reasoning_effort,
             relevance=relevance,
+            evidence=judge_evidence(settings.scoring),
         )
         detector = None
         if settings.ai_detector_enabled:
