@@ -2,9 +2,26 @@
 
 import pytest
 
-from taskgen.contracts import IOKind, OutputCheck, RunLimits, TestCase, TestRunRequest
+from taskgen.contracts import (
+    Checker,
+    IOKind,
+    OutputCheck,
+    RunLimits,
+    TestCase,
+    TestRunRequest,
+)
 
 pytestmark = pytest.mark.integration
+
+# Проверяльщик принимает любой порядок чисел: ответ — множество, а не строка.
+SET_CHECKER = Checker(
+    runtime="python",
+    code=(
+        "import sys\n"
+        "_, output, answer = (open(name).read().split() for name in sys.argv[1:4])\n"
+        "sys.exit(0 if sorted(output) == sorted(answer) else 1)\n"
+    ),
+)
 
 LIMITS = RunLimits(timeout_ms=3000, memory_bytes=256 * 1024 * 1024)
 
@@ -93,6 +110,22 @@ async def test_cpp_program_is_compiled_and_run_per_case(piston):
 
     assert report.compile_error is None
     assert passed(report) == [True, True, True], report
+
+
+async def test_template_checker_runs_in_piston(piston):
+    solution = "import sys\nprint(*sorted(set(sys.stdin.read().split()), reverse=True))\n"
+    cases = [
+        TestCase(stdin="3 1 2 3\n", expected="1 2 3\n"),
+        TestCase(stdin="5 5\n", expected="5 6\n"),
+    ]
+    request = make_request("python", solution, cases).model_copy(
+        update={"check": OutputCheck(mode="checker", checker=SET_CHECKER)}
+    )
+
+    report = await piston.run_tests(request)
+
+    assert passed(report) == [True, False], report
+    assert report.outcomes[1].error == "неверный ответ"
 
 
 async def test_cpp_compile_error_is_reported_once(piston):

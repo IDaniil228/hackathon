@@ -76,16 +76,27 @@ async def run_tests(
     concurrency — сколько запусков кейсов stdio идёт одновременно.
     """
     spec = registry.get(request.runtime)
+    checker = _checker_spec(registry, request)
     if request.io is IOKind.FUNCTION:
         execution = await _function(run, spec, request)
     else:
         execution = await _stdio(run, spec, request, concurrency)
     if execution.compile_error is not None:
         return failed_report(request.cases, execution.compile_error)
-    outcomes = [
-        _verdict(request, case, produced)
-        for case, produced in zip(request.cases, execution.produced, strict=True)
-    ]
+    gate = asyncio.Semaphore(concurrency)
+
+    async def verdict(case: TestCase, produced: Produced) -> CaseOutcome:
+        async with gate:
+            return await _verdict(run, checker, request, case, produced)
+
+    outcomes = list(
+        await asyncio.gather(
+            *(
+                verdict(case, produced)
+                for case, produced in zip(request.cases, execution.produced, strict=True)
+            )
+        )
+    )
     times = [o.wall_ms for o in outcomes if o.wall_ms is not None]
     return TestReport(
         outcomes=outcomes,
@@ -240,6 +251,13 @@ def _ms(value: Any) -> int | None:
 # --- Сверка ответа ---------------------------------------------------------------------
 
 
+def input_text(io: IOKind, case: TestCase) -> str:
+    """Вход кейса текстом: у функции это JSON аргументов, у stdio — stdin."""
+    if io is IOKind.FUNCTION:
+        return _json_text(case.input)
+    return case.stdin or ""
+
+
 def expected_text(io: IOKind, case: TestCase) -> str:
     """Ожидаемый ответ текстом: у функции это JSON значения, у stdio — сама строка."""
     if io is IOKind.FUNCTION:
@@ -247,12 +265,85 @@ def expected_text(io: IOKind, case: TestCase) -> str:
     return str(case.expected)
 
 
-def _verdict(request: TestRunRequest, case: TestCase, produced: Produced) -> CaseOutcome:
+async def _verdict(
+    run: Run,
+    checker: RuntimeSpec | None,
+    request: TestRunRequest,
+    case: TestCase,
+    produced: Produced,
+) -> CaseOutcome:
     if produced.output is None:
         return CaseOutcome(passed=False, wall_ms=produced.wall_ms, error=produced.error)
-    if request.check.mode == "checker":
-        raise SandboxError("свой проверяльщик пока не поддерживается")
-    passed = output_matches(request.check.mode, produced.output, expected_text(request.io, case))
-    return CaseOutcome(
-        passed=passed, wall_ms=produced.wall_ms, error=None if passed else WRONG_ANSWER
+    if checker is None:
+        passed = output_matches(
+            request.check.mode, produced.output, expected_text(request.io, case)
+        )
+        error = None if passed else WRONG_ANSWER
+    else:
+        error = await _run_checker(run, checker, request, case, produced.output)
+        passed = error is None
+    return CaseOutcome(passed=passed, wall_ms=produced.wall_ms, error=error)
+
+
+# --- Свой проверяльщик шаблона -----------------------------------------------------------
+#
+# Проверяльщик — программа шаблона на любом языке реестра, который принимает файлы данных.
+# Она исполняется в песочнице, как решение, а не в сервисе. Рядом с ней лежат input.txt
+# (вход кейса: stdin у stdio, JSON аргументов у функции), output.txt (ответ решения),
+# answer.txt (ожидаемый ответ) и файлы кейса stdio; имена приходят и аргументами в порядке
+# testlib. Код выхода 0 — верно, 1 — неверно, другой код, сигнал или лимит — отказ самого
+# проверяльщика: кейс не засчитан, а причина начинается с CHECKER_FAILURE.
+
+CHECKER_FILES = ("input.txt", "output.txt", "answer.txt")
+CHECKER_ARGS = list(CHECKER_FILES)
+CHECKER_FAILURE = "проверяльщик отказал"
+# Piston принимает тело запроса не больше 100 КиБ; ответ решения уходит в нём целиком.
+CHECKER_MAX_OUTPUT_BYTES = 64 * 1024
+
+
+def _checker_spec(registry: RuntimeRegistry, request: TestRunRequest) -> RuntimeSpec | None:
+    """Окружение своего проверяльщика; None — режим встроенный. SandboxError — ошибка шаблона."""
+    if request.check.mode != "checker":
+        return None
+    checker = request.check.checker
+    if checker is None:
+        raise SandboxError("режим checker без программы проверяльщика")
+    spec = registry.get(checker.runtime)
+    if not spec.data_files:
+        raise SandboxError(
+            f"проверяльщик на {checker.runtime} не получит файлы ответа: пакет окружения "
+            "собирает каждый файл запуска как исходник"
+        )
+    reserved = {spec.source_file, *CHECKER_FILES}
+    for case in request.cases:
+        clash = reserved & set(case.files)
+        if clash:
+            raise SandboxError(f"файл кейса {sorted(clash)[0]} занят проверяльщиком")
+    return spec
+
+
+async def _run_checker(
+    run: Run, spec: RuntimeSpec, request: TestRunRequest, case: TestCase, output: str
+) -> str | None:
+    """Причина отказа или None, если проверяльщик принял ответ."""
+    size = len(output.encode())
+    if size > CHECKER_MAX_OUTPUT_BYTES:
+        return f"ответ занимает {size} байт, проверяльщик принимает до {CHECKER_MAX_OUTPUT_BYTES}"
+    checker = request.check.checker
+    assert checker is not None
+    texts = (input_text(request.io, case), output, expected_text(request.io, case))
+    files = {spec.source_file: checker.code, **dict(zip(CHECKER_FILES, texts, strict=True))}
+    if request.io is IOKind.STDIO:
+        files |= case.files
+    result = await run(
+        RunRequest(runtime=checker.runtime, files=files, args=CHECKER_ARGS, limits=request.limits)
     )
+    if result.compile_error is not None:
+        return f"{CHECKER_FAILURE}: не собрался: {result.compile_error[-STDERR_TAIL:]}"
+    if result.exit_code == 0 and not result.timed_out:
+        return None
+    if result.exit_code == 1 and not result.timed_out:
+        return WRONG_ANSWER
+    limits = spec.effective_limits(request.limits)
+    reason = failure_reason(result, limits, f"код выхода {result.exit_code}")
+    return f"{CHECKER_FAILURE}: {reason}"
