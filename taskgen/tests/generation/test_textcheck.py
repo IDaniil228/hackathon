@@ -34,6 +34,16 @@ def test_bench_situations_have_no_problems():
     assert flagged == {}
 
 
+def test_copied_prompt_header_is_a_problem():
+    # GigaChat начал условие rate_limit заголовком запроса и пересказал инструкцию автора.
+    statement = (
+        "Инструкция автора задания:\n\nПопытки входа в аккаунт с одного IP-адреса.\n\n"
+        "Обязательные условия:\n- функция `rate_limit(requests, limit, window)` получает список"
+    )
+    [problem] = text_problems(statement)
+    assert "Инструкция автора задания" in problem
+
+
 def test_unclosed_code_block_is_a_cut_off():
     # Saiga закрыла строку JSON посреди примера в блоке кода.
     [problem] = text_problems("Пример использования:\n```python\ninput = [[")

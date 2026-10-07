@@ -49,7 +49,7 @@ from taskgen.evaluation.quotes import (
     RelevanceUnavailableError,
 )
 from taskgen.generation.params import fill_placeholders
-from taskgen.generation.textcheck import text_problems
+from taskgen.generation.textcheck import AUTHOR_INSTRUCTIONS, text_problems
 from taskgen.markers import markers, new_nonce
 
 logger = logging.getLogger(__name__)
@@ -115,7 +115,7 @@ def scenario_messages(
     """
     facts = "\n".join(f"- {fact.text}" for fact in filled_facts(spec, params))
     request = (
-        f"Инструкция автора задания:\n{fill_placeholders(spec.generator_prompt, params)}\n\n"
+        f"{AUTHOR_INSTRUCTIONS}:\n{fill_placeholders(spec.generator_prompt, params)}\n\n"
         f"Факты, которые обязаны быть в ситуации:\n{facts}"
     )
     if spec.forbidden:

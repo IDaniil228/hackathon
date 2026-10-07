@@ -6,6 +6,7 @@
 - генератор даёт не меньше MIN_CASES кейсов, не все с одним ответом; у задачи-функции входы —
   массивы аргументов и все вместе помещаются в один запрос к Piston, у задачи stdio в один
   запрос помещается вход каждого кейса;
+- раздел «Генерация» после подстановки параметров не содержит данных скрытых кейсов;
 - каждое верное решение ('### id +') проходит все кейсы, и свой проверяльщик шаблона на нём
   не отказывает;
 - каждое неверное решение ('### id -') и решения-константы, которые не смотрят на вход,
@@ -29,7 +30,7 @@ from typing import Any
 import httpx
 
 from taskgen.bank.parser import TemplateIssue
-from taskgen.config import ImportCheckSettings, ScoringSettings, Settings
+from taskgen.config import GenerationSettings, ImportCheckSettings, ScoringSettings, Settings
 from taskgen.contracts import (
     IOKind,
     RunLimits,
@@ -49,7 +50,8 @@ from taskgen.evaluation.scoring import (
     weighted_pass_rate,
 )
 from taskgen.generation.harness import GeneratorError, generator_request, parse_generator_output
-from taskgen.generation.params import draw_params
+from taskgen.generation.leaks import hidden_leaks, public_count
+from taskgen.generation.params import draw_params, fill_placeholders
 from taskgen.sandbox.cases import CHECKER_FAILURE
 from taskgen.sandbox.checkers import output_matches
 from taskgen.sandbox.errors import SandboxError, SandboxServiceError
@@ -289,11 +291,13 @@ class TemplateValidator:
         check: ImportCheckSettings,
         limits: RunLimits,
         scoring: ScoringSettings,
+        public_examples: int = GenerationSettings.model_fields["public_examples"].default,
     ) -> None:
         self.sandbox = sandbox
         self.options = check
         self.limits = limits
         self.scoring = scoring
+        self.public_examples = public_examples
 
     @classmethod
     def from_settings(cls, sandbox: SandboxRunner | None, settings: Settings) -> TemplateValidator:
@@ -305,6 +309,7 @@ class TemplateValidator:
                 memory_bytes=settings.sandbox.run_memory_limit_bytes,
             ),
             scoring=settings.scoring,
+            public_examples=settings.generation.public_examples,
         )
 
     async def check(self, templates: list[tuple[str, TemplateSpec]]) -> list[TemplateIssue]:
@@ -335,6 +340,24 @@ class TemplateValidator:
             issues += [TemplateIssue(f"seed {seed}", p, source) for p in result.problems]
         return issues
 
+    def prompt_problems(
+        self, spec: TemplateSpec, params: dict[str, Any], cases: list[TestCase]
+    ) -> list[str]:
+        """Данные скрытых кейсов в разделе «Генерация» после подстановки параметров.
+
+        Модель переносит примеры из инструкции автора в условие, а генерация экземпляра
+        отклоняет условие с данными скрытого кейса. Такой шаблон не дал бы ни одного задания.
+        """
+        shown = public_count(len(cases), self.public_examples)
+        prompt = fill_placeholders(spec.generator_prompt, params)
+        leaks = hidden_leaks(prompt, cases[:shown], cases[shown:])
+        if not leaks:
+            return []
+        return [
+            f"раздел «Генерация» содержит данные скрытых кейсов {leaks}: модель перепишет их "
+            "в условие, и проверка утечки отклонит каждое условие"
+        ]
+
     async def check_seed(self, spec: TemplateSpec, seed: int) -> SeedCheck:
         sandbox = self.sandbox
         if sandbox is None:
@@ -348,6 +371,7 @@ class TemplateValidator:
             return result
         cases = result.cases
         result.problems += case_problems(spec, cases)
+        result.problems += self.prompt_problems(spec, params, cases)
         try:
             await self._run_correct(spec, result)
             await self._run_wrong(spec, result)

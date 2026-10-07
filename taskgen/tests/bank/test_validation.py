@@ -244,6 +244,15 @@ async def test_valid_stdio_template_passes_and_runs_programs_per_case():
     assert {STDIO_REFERENCE.rstrip("\n"), STDIO_SKIPS_EMPTY.rstrip("\n")} <= programs
 
 
+async def test_generation_section_with_hidden_case_data_is_reported():
+    # Строка "-3 3 10" есть только в скрытых кейсах. Модель перепишет пример из раздела
+    # «Генерация» в условие, и проверка утечки отклонит каждое условие экземпляра.
+    prompt = "Придумай легенду про кассу. Пример строки входа: `-3 3 10`."
+    issues = await issues_of(make_stdio(sections={"Генерация": prompt}), seeds=1)
+    leaks = [i for i in issues if "«Генерация»" in i.message]
+    assert leaks and "-3310" in leaks[0].message, issues
+
+
 async def test_stdio_wrong_solution_that_passes_is_named():
     text = make_stdio(
         sections={
