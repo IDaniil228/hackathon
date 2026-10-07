@@ -113,12 +113,83 @@ def test_quiz_session_end_to_end_keeps_answer_key_hidden(world, client_headers):
     assert all(level["total"] == 1 for level in result["levels"])
 
 
+def test_session_is_closed_until_all_tasks_are_ready(world):
+    # Только код: free=1 пропускает ровно одно задание, второе ждёт модель.
+    world.add_templates(world.code("a"), world.code("b"))
+    gated = world.gate(free=1)
+    response = world.create()
+    assert response.status_code == 201, response.text
+    created = response.json()
+    # Ответ приходит сразу, без ожидания заданий: клиент опрашивает GET /sessions/{id}.
+    assert created["status"] == "generating"
+    assert created["early_start"] is False
+    assert created["tasks_issued"] is False
+
+    done = world.wait_task_ready(created["id"])
+    view = world.view(created["id"])
+    assert view["status"] == "generating"
+    assert view["tasks_issued"] is False
+    # Готовое задание видно по статусу, но условие кандидату ещё не выдаётся.
+    assert "ready" in [task["status"] for task in view["tasks"]]
+    assert all(task["statement"] is None and task["public"] is None for task in view["tasks"])
+    assert done.statement not in world.client.get(f"/sessions/{created['id']}", headers=ADMIN).text
+
+    task = world.client.get(f"/tasks/{done.id}", headers=ADMIN)
+    assert task.status_code == 409
+    assert "генерир" in task.json()["detail"]
+    assert done.statement not in task.text
+    answer = {"content": "def top_sum(nums, k):\n    return 0\n", "language": "python"}
+    answered = world.client.post(f"/tasks/{done.id}/answer", json=answer, headers=ADMIN)
+    assert answered.status_code == 409
+    assert "генерир" in answered.json()["detail"]
+    scored = world.client.post(f"/sessions/{created['id']}/score", headers=ADMIN)
+    assert scored.status_code == 409
+
+    world.open(gated)
+    world.wait()
+    view = world.view(created["id"])
+    assert view["status"] == "ready"
+    assert view["tasks_issued"] is True
+    assert all(task["statement"] and task["public"] for task in view["tasks"])
+    task = world.client.get(f"/tasks/{done.id}", headers=ADMIN)
+    assert task.status_code == 200
+    assert task.json()["statement"] == done.statement
+    answered = world.client.post(f"/tasks/{done.id}/answer", json=answer, headers=ADMIN)
+    assert answered.status_code == 200, answered.text
+
+
+def test_generation_failure_without_early_start_is_visible_in_session(world):
+    world.add_templates(world.code())
+    world.state.sandbox = None
+    response = world.create()
+    # Сбой генерации больше не ответ на POST: он попадает в failure сессии.
+    assert response.status_code == 201, response.text
+    world.wait()
+    view = world.view(response.json()["id"])
+    assert view["status"] == "failed"
+    assert view["tasks_issued"] is False
+    assert "Песочница" in view["failure"]
+    assert all(task["status"] == "failed" for task in view["tasks"])
+
+
+def test_early_start_is_stored_and_shown(world):
+    world.add_templates(world.code())
+    early = world.create_ready(early_start=True)
+    plain = world.create_ready()
+    assert early["early_start"] is True
+    assert plain["early_start"] is False
+    flags = {str(row.id): row.early_start for row in world.sessions()}
+    assert flags == {early["id"]: True, plain["id"]: False}
+
+
 def test_background_quiz_needs_two_model_calls(world):
     # Первое задание — код (один вызов), задачка в фоне ждёт свои два вызова: кейс и
     # проверку фактов. free=1 держит её, пока тест не откроет модель.
     world.add_templates(world.code(), world.quiz())
     gated = world.gate(free=1)
-    created = world.create(selection_override={"code_tasks": 1, "quiz_tasks": 1}).json()
+    created = world.create(
+        early_start=True, selection_override={"code_tasks": 1, "quiz_tasks": 1}
+    ).json()
     assert [task["kind"] for task in created["tasks"]] == ["code", "quiz"]
     assert [task["status"] for task in created["tasks"]] == ["ready", "pending"]
     world.open(gated)
@@ -126,17 +197,19 @@ def test_background_quiz_needs_two_model_calls(world):
     assert [task["status"] for task in world.view(created["id"])["tasks"]] == ["ready", "ready"]
 
 
-def test_first_task_is_ready_at_once_and_rest_arrive_in_background(world):
+def test_early_start_gives_first_task_at_once_and_rest_arrive_in_background(world):
     # Только задания с кодом: каждому нужен ровно один вызов модели, и free=1 пропускает
     # ровно первое задание. Эссе нужно два вызова (ситуация и проверка фактов): выпади оно
     # первым по случайному отбору, его второй вызов ждал бы gated.open() вечно.
     world.add_templates(world.code("a"), world.code("b"), world.code("c"))
     gated = world.gate(free=1)
-    response = world.create()
+    response = world.create(early_start=True)
     assert response.status_code == 201, response.text
     created = response.json()
     # Ответ пришёл, когда готово только первое задание: остальные ждут модель.
     assert created["status"] == "generating"
+    assert created["early_start"] is True
+    assert created["tasks_issued"] is True
     assert [task["status"] for task in created["tasks"]] == ["ready", "pending", "pending"]
     first, *rest = created["tasks"]
     assert first["statement"] and first["public"]
@@ -150,10 +223,10 @@ def test_first_task_is_ready_at_once_and_rest_arrive_in_background(world):
     assert all(task["statement"] for task in view["tasks"])
 
 
-def test_pending_task_takes_no_answer_and_session_is_not_scored(world):
+def test_early_start_pending_task_takes_no_answer_and_session_is_not_scored(world):
     world.add_templates(world.code("a"), world.code("b"))
     world.gate(free=1)
-    created = world.create().json()
+    created = world.create(early_start=True).json()
     pending = next(task for task in created["tasks"] if task["status"] == "pending")
 
     task = world.client.get(f"/tasks/{pending['id']}", headers=ADMIN).json()
@@ -280,21 +353,21 @@ def _failed(world, response, status: int, fragment: str) -> None:
     assert "failure" not in session.selection
 
 
-def test_no_sandbox_is_503_and_session_failed(world):
+def test_early_start_no_sandbox_is_503_and_session_failed(world):
     world.add_templates(world.code())
     world.state.sandbox = None
-    _failed(world, world.create(), 503, "Песочница")
+    _failed(world, world.create(early_start=True), 503, "Песочница")
 
 
-def test_llm_down_is_502_and_session_failed(world):
+def test_early_start_llm_down_is_502_and_session_failed(world):
     world.add_templates(world.code(), world.essay())
     world.state.model_stub.down = True
-    _failed(world, world.create(), 502, "Модель")
+    _failed(world, world.create(early_start=True), 502, "Модель")
 
 
-def test_broken_reference_without_replacement_is_500_and_names_template(world):
+def test_early_start_broken_reference_without_replacement_is_500_and_names_template(world):
     world.add_templates(world.broken())
-    _failed(world, world.create(), 500, f"{world.prefix}-bad")
+    _failed(world, world.create(early_start=True), 500, f"{world.prefix}-bad")
 
 
 def test_failed_template_is_replaced_by_next_of_same_grade_and_kind(world):
@@ -345,7 +418,9 @@ def test_replacement_limit_stops_replacing(world):
     )
     world.add_templates(world.broken(), world.code("good"))
     override = {"selection_override": {"code_tasks": 1, "temperature": 1.0}}
-    statuses = {world.create(seed=seed, **override).status_code for seed in range(20)}
+    statuses = {
+        world.create(seed=seed, early_start=True, **override).status_code for seed in range(20)
+    }
     # Где выпал сломанный шаблон, замены нет даже при свободном шаблоне того же грейда.
     assert statuses == {201, 500}
 
@@ -388,7 +463,7 @@ def test_code_task_is_not_replaced_by_template_of_another_kind(world):
     # и задание с кодом без замены своего типа не создаётся.
     world.add_templates(world.broken(), world.essay())
     response = world.create(selection_override={"code_tasks": 1, "essay_tasks": 0})
-    assert response.status_code == 500, response.text
+    assert response.status_code == 201, response.text
     world.wait()
     [session] = world.sessions()
     assert session.status == "failed"
@@ -401,8 +476,7 @@ def test_failure_without_same_grade_replacement_fails_session(world):
     # Оба шаблона junior попадают в сессию, поэтому заменить сломанный нечем.
     world.add_templates(world.code("good"), world.broken())
     response = world.create(selection_override={"code_tasks": 2})
-    # Сломанный шаблон мог выпасть первым (ответ 500) или вторым (сбой в фоне).
-    assert response.status_code in (201, 500), response.text
+    assert response.status_code == 201, response.text
     world.wait()
     [session] = world.sessions()
     assert session.status == "failed"
@@ -418,16 +492,18 @@ def test_get_unknown_session_and_task_are_404(world):
     assert world.client.get(f"/tasks/{uuid.uuid4()}", headers=ADMIN).status_code == 404
 
 
-def test_unfinished_session_is_resumed_after_restart(settings):
-    # Первый запуск: ответ с первым заданием, остальные стоят в очереди к модели, когда
-    # сервис останавливается.
+@pytest.mark.parametrize("early_start", [False, True])
+def test_unfinished_session_is_resumed_after_restart(settings, early_start):
+    # Первый запуск: одно задание готово, остальные стоят в очереди к модели, когда сервис
+    # останавливается.
     with TestClient(create_app(settings)) as client:
         world = fake_world(client)
-        # Только код: free=1 должен пропустить ровно первое задание, а эссе нужно два вызова.
+        # Только код: free=1 должен пропустить ровно одно задание, а эссе нужно два вызова.
         world.add_templates(world.code("a"), world.code("b"), world.code("c"))
         world.gate(free=1)
-        created = world.create().json()
+        created = world.create(early_start=early_start).json()
         assert created["status"] == "generating"
+        world.wait_task_ready(created["id"])
     area, candidate, prefix = world.area, world.candidate, world.prefix
 
     # Пул выключен: иначе он пополнялся бы по всем шаблонам общей тестовой БД.
@@ -441,6 +517,7 @@ def test_unfinished_session_is_resumed_after_restart(settings):
             again.wait()
             view = again.view(created["id"])
             assert view["status"] == "ready"
+            assert view["early_start"] is early_start
             assert [task["status"] for task in view["tasks"]] == ["ready"] * 3
         finally:
             again.cleanup()

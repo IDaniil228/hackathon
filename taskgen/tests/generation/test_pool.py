@@ -127,6 +127,7 @@ def test_instance_older_than_max_age_is_not_issued_and_is_replaced(world):
 
     world._run(age)
     session = world.create(**ONE_TASK).json()
+    world.wait()
     [task] = world.tasks(session["id"])
     assert task.status == "ready"
     assert task.seed not in {i.seed for i in stale}

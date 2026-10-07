@@ -39,6 +39,14 @@ _FAILURE_STATUS = {
 }
 
 
+EARLY_START_RISK = (
+    "Ранний старт: кандидат получает первое задание сразу, остальные — по мере готовности. "
+    "Риск: если позднее задание не создастся и замены ему не найдётся, сессия станет failed, "
+    "а ответы кандидата на уже выданные задания пропадут. По умолчанию false: задания "
+    "выдаются, только когда готовы все"
+)
+
+
 def _generator(request: Request) -> Generator:
     return Generator.from_state(request.app.state)
 
@@ -91,6 +99,7 @@ class SessionCreate(BaseModel):
         "сложность. Хранится в сессии, пока генерируются её задания, затем удаляется; "
         "остаётся только хэш",
     )
+    early_start: bool = Field(default=False, description=EARLY_START_RISK)
 
 
 class ProfileCheck(BaseModel):
@@ -132,13 +141,18 @@ class TaskOut(BaseModel):
         description="pending — задание ещё создаётся, ready — готово, failed — не создано"
     )
     kind: TaskKind
-    statement: str | None = Field(description="Текст условия в Markdown; есть только у ready")
-    public: PublicPayload | None = Field(description="Публичная часть; есть только у ready")
+    statement: str | None = Field(
+        description="Текст условия в Markdown; есть только у ready и только когда сессия "
+        "выдаёт задания (tasks_issued)"
+    )
+    public: PublicPayload | None = Field(
+        description="Публичная часть; есть только у ready и только когда сессия выдаёт задания"
+    )
     failure: str | None = Field(description="Почему задание не создано")
 
     @classmethod
-    def of(cls, task: Task) -> TaskOut:
-        ready = task.status == TaskStatus.READY
+    def of(cls, task: Task, issued: bool) -> TaskOut:
+        ready = issued and task.status == TaskStatus.READY
         return cls(
             id=task.id,
             session_id=task.session_id,
@@ -158,11 +172,17 @@ class SessionOut(BaseModel):
     claimed_grade: str
     skills: list[str]
     status: SessionStatus = Field(
-        description="generating — первое задание выдано, остальные создаются; ready — все "
-        "задания готовы; failed — набор заданий не собран, причина в failure; scored — "
-        "сессия оценена"
+        description="generating — задания создаются, кандидат их ещё не видит (с ранним "
+        "стартом — видит готовые); ready — все задания готовы, можно проходить; failed — "
+        "набор заданий не собран, причина в failure; scored — сессия оценена"
     )
     failure: str | None = Field(description="Причина статуса failed")
+    early_start: bool = Field(description=EARLY_START_RISK)
+    tasks_issued: bool = Field(
+        description="Условия заданий выдаются кандидату и ответы на них принимаются: сессия "
+        "ready или scored, а с ранним стартом ещё и generating. Ответы на оценённую сессию "
+        "не принимаются"
+    )
     assigned_grade: str | None = Field(description="Грейд по итогам оценки; null — до оценки")
     profile_hash: str | None = Field(description="Хэш профиля, с которым создана сессия")
     profile_changed: bool = Field(description="Основной бэкенд сообщил о другом профиле")
@@ -173,6 +193,7 @@ class SessionOut(BaseModel):
     def of(cls, view: service.SessionView) -> SessionOut:
         session = view.session
         result = session.result or {}
+        issued = session.tasks_closed() is None
         return cls(
             id=session.id,
             candidate_ref=session.candidate_ref,
@@ -181,11 +202,13 @@ class SessionOut(BaseModel):
             skills=list(session.skills),
             status=SessionStatus(session.status),
             failure=session.failure,
+            early_start=session.early_start,
+            tasks_issued=issued,
             assigned_grade=result.get("assigned_grade"),
             profile_hash=session.profile_hash,
             profile_changed=session.profile_changed,
             created_at=session.created_at,
-            tasks=[TaskOut.of(task) for task in view.tasks],
+            tasks=[TaskOut.of(task, issued) for task in view.tasks],
         )
 
 
@@ -241,14 +264,16 @@ class SelectionOut(BaseModel):
     description=(
         "Отбирает шаблоны области по заявленному грейду и навыкам кандидата отдельно для "
         "каждого типа заданий и создаёт сессию со всеми заданиями. Первые задания каждого "
-        "типа, по квоте min_claimed_per_kind, всегда заявленного грейда. Ответ приходит, "
-        "когда готово первое задание; остальные создаются в фоне и появляются в "
-        "GET /sessions/{id} по мере готовности, сессия при этом в статусе generating. "
-        "Задание с кодом выдаётся только после того, как эталон прошёл все его тесты в "
-        "песочнице. Шаблон, который не дал экземпляра, заменяется другим того же грейда и "
-        "типа. Параметры отбора берутся из настроек теста; переопределить их может только "
-        "admin. Если первое задание создать не удалось, сессия остаётся со "
-        "статусом failed, а detail ответа содержит message и session_id"
+        "типа, по квоте min_claimed_per_kind, всегда заявленного грейда. Задания создаются в "
+        "фоне. По умолчанию ответ приходит сразу, в статусе generating и без условий: клиент "
+        "опрашивает GET /sessions/{id}, пока сессия не станет ready, и только тогда кандидат "
+        "приступает. Если генерация не удалась, сессия становится failed, а причина — в её "
+        "поле failure. С early_start=true ответ приходит, когда готово первое задание, а "
+        "остальные появляются по мере готовности; если первое задание создать не удалось, "
+        "ответ — ошибка 500, 502 или 503, а detail содержит message и session_id. Задание с "
+        "кодом готово только после того, как эталон прошёл все его тесты в песочнице. "
+        "Шаблон, который не дал экземпляра, заменяется другим того же грейда и типа. "
+        "Параметры отбора берутся из настроек теста; переопределить их может только admin"
     ),
     responses={
         403: {"description": "Ключ не имеет нужной роли или client передал selection_override"},
@@ -257,9 +282,18 @@ class SelectionOut(BaseModel):
             "типа меньше квоты min_claimed_per_kind; detail называет тип и число"
         },
         422: {"description": "Неизвестная область, грейд или навык; неверные параметры отбора"},
-        500: {"description": "Шаблон первого задания и его замены не дали экземпляра"},
-        502: {"description": "Модель генерации недоступна или не написала условие"},
-        503: {"description": "Песочница не настроена или недоступна; сессия failed"},
+        500: {
+            "description": "Только с early_start: шаблон первого задания и его замены не дали "
+            "экземпляра; сессия failed"
+        },
+        502: {
+            "description": "Только с early_start: модель генерации недоступна или не написала "
+            "условие; сессия failed"
+        },
+        503: {
+            "description": "Только с early_start: песочница не настроена или недоступна; "
+            "сессия failed"
+        },
     },
 )
 async def create_session(
@@ -283,6 +317,7 @@ async def create_session(
         if body.selection_override
         else None,
         profile=body.profile,
+        early_start=body.early_start,
     )
     try:
         session_id = await service.create_session(gen, spec)
@@ -290,12 +325,17 @@ async def create_session(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
     except service.ConflictError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
-    try:
-        await _worker(request).start(session_id)
-    except service.SessionFailedError as error:
-        code = _FAILURE_STATUS.get(type(error.cause), status.HTTP_500_INTERNAL_SERVER_ERROR)
-        detail = {"message": str(error.cause), "session_id": str(error.session_id)}
-        raise HTTPException(code, detail) from error
+    worker = _worker(request)
+    if not body.early_start:
+        # Генерация на локальной модели идёт минуты: столько HTTP-запрос не ждёт.
+        worker.schedule(session_id)
+    else:
+        try:
+            await worker.start(session_id)
+        except service.SessionFailedError as error:
+            code = _FAILURE_STATUS.get(type(error.cause), status.HTTP_500_INTERNAL_SERVER_ERROR)
+            detail = {"message": str(error.cause), "session_id": str(error.session_id)}
+            raise HTTPException(code, detail) from error
     response.headers["Location"] = f"/sessions/{session_id}"
     return SessionOut.of(await service.get_session(gen, session_id))
 
@@ -306,8 +346,9 @@ async def create_session(
     summary="Тестовая сессия",
     description=(
         "Статус сессии и её задания: условие и публичная часть, без скрытых тестов. Пока "
-        "сессия в статусе generating, клиент опрашивает этот эндпоинт и получает задания по "
-        "мере готовности"
+        "сессия в статусе generating, клиент опрашивает этот эндпоинт: статусы заданий видны "
+        "сразу, а условия — когда tasks_issued=true, то есть когда сессия ready. Сессии с "
+        "ранним стартом условия выдаются по мере готовности заданий"
     ),
     responses={404: {"description": "Сессия не найдена"}},
     dependencies=[Depends(require(Role.CLIENT))],
@@ -390,13 +431,23 @@ async def get_selection(session_id: uuid.UUID, request: Request) -> SelectionOut
     summary="Задание",
     description=(
         "Статус задания, а у готового — условие и публичная часть: сигнатура, примеры, "
-        "окружение, ожидаемое время"
+        "окружение, ожидаемое время. Задание выдаётся, только когда сессия выдаёт задания "
+        "(tasks_issued в GET /sessions/{id})"
     ),
-    responses={404: {"description": "Задание не найдено"}},
+    responses={
+        404: {"description": "Задание не найдено"},
+        409: {
+            "description": "Сессия ещё генерируется без раннего старта или её генерация не "
+            "удалась; detail объясняет, что именно"
+        },
+    },
     dependencies=[Depends(require(Role.CLIENT))],
 )
 async def get_task(task_id: uuid.UUID, request: Request) -> TaskOut:
     try:
-        return TaskOut.of(await service.get_task(_generator(request), task_id))
+        view = await service.get_task(_generator(request), task_id)
     except service.NotFoundError as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
+    if (reason := view.session.tasks_closed()) is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, reason)
+    return TaskOut.of(view.task, issued=True)

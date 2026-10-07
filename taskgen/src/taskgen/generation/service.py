@@ -1,7 +1,8 @@
 """Тестовая сессия: отбор шаблонов, задания по ним и генерация каждого задания.
 
-Сессия создаётся сразу со всеми заданиями в статусе pending. Первое задание генерируется до
-ответа клиенту, остальные — в фоне (worker.py) и появляются в сессии по мере готовности.
+Сессия создаётся сразу со всеми заданиями в статусе pending, а генерируются они в фоне
+(worker.py). Кандидат видит задания, когда готовы все; сессия с ранним стартом получает первое
+задание до ответа клиенту, а остальные — по мере готовности (TestSession.tasks_closed).
 Шаблон, который не дал экземпляра, заменяется следующим по вероятности шаблоном того же
 грейда и типа из отбора: так замена не меняет ни состав теста по типам, ни квоту
 заявленного грейда. Если замены нет или сервис генерации недоступен, сессия получает статус
@@ -103,6 +104,7 @@ class SessionSpec:
     # Поля SelectionSettings; задаются только admin-ключом, проверяет это API.
     selection_override: dict[str, Any] | None = None
     profile: CandidateProfile | None = None
+    early_start: bool = False
 
 
 @dataclass
@@ -221,6 +223,7 @@ async def _insert_session(
             selection=selection,
             profile=spec.profile.model_dump(mode="json") if spec.profile else None,
             profile_hash=profile_hash(spec.profile) if spec.profile else None,
+            early_start=spec.early_start,
         )
         db.add(row)
         await db.flush()
@@ -462,9 +465,21 @@ async def get_session(gen: Generator, session_id: uuid.UUID) -> SessionView:
         return SessionView(session, list(tasks))
 
 
-async def get_task(gen: Generator, task_id: uuid.UUID) -> Task:
+@dataclass(frozen=True)
+class TaskView:
+    task: Task
+    session: TestSession
+
+
+async def get_task(gen: Generator, task_id: uuid.UUID) -> TaskView:
     async with gen.sessionmaker() as db:
-        task = await db.get(Task, task_id)
-    if task is None:
+        row = (
+            await db.execute(
+                select(Task, TestSession)
+                .join(TestSession, Task.session_id == TestSession.id)
+                .where(Task.id == task_id)
+            )
+        ).one_or_none()
+    if row is None:
         raise NotFoundError("Задание не найдено")
-    return task
+    return TaskView(*row)

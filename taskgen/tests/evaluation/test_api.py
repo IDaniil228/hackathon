@@ -75,6 +75,7 @@ class World:
         tasks: list[dict],
         claimed: str = "middle",
         status: SessionStatus = SessionStatus.READY,
+        early_start: bool = False,
     ) -> tuple[uuid.UUID, list]:
         async def seed():
             async with self.state.sessionmaker() as db, db.begin():
@@ -85,6 +86,7 @@ class World:
                     skills=["python"],
                     temperature=0.3,
                     status=status,
+                    early_start=early_start,
                 )
                 db.add(session)
                 await db.flush()
@@ -457,6 +459,26 @@ def test_session_not_ready_cannot_be_scored(world, status, fragment):
     assert response.status_code == 409
     assert fragment in response.json()["detail"]
     assert world.client.get(f"/sessions/{session_id}/result", headers=AUTH).status_code == 409
+
+
+@pytest.mark.parametrize(
+    ("status", "early_start", "code", "fragment"),
+    [
+        (SessionStatus.GENERATING, False, 409, "генерир"),
+        (SessionStatus.FAILED, False, 409, "не удалась"),
+        (SessionStatus.FAILED, True, 409, "не удалась"),
+        (SessionStatus.GENERATING, True, 200, None),
+    ],
+)
+def test_answer_is_taken_only_once_tasks_are_issued(world, status, early_start, code, fragment):
+    _, (task_id,) = world.make_session(
+        [{"grade": "middle", "kind": "code"}], status=status, early_start=early_start
+    )
+    response = _answer(world, task_id)
+    assert response.status_code == code, response.text
+    if fragment is not None:
+        assert fragment in response.json()["detail"]
+        assert world.answers(task_id) == []
 
 
 def test_summary_of_unknown_candidate_is_404(world):

@@ -41,9 +41,10 @@ class GenerationWorker:
         return Generator.from_state(self._state)
 
     async def start(self, session_id: uuid.UUID) -> None:
-        """Запускает генерацию сессии и ждёт, пока первое задание будет готово.
+        """Запускает генерацию сессии с ранним стартом и ждёт, пока первое задание будет готово.
 
-        Остальные задания генерируются в фоне. Ожидание защищено от отмены: если клиент
+        Остальные задания генерируются в фоне. Сессию без раннего старта запускает schedule:
+        ей ответ клиенту ждать нечего. Ожидание защищено от отмены: если клиент
         отключится, генерация первого задания и всей сессии продолжится. SessionFailedError —
         первое задание не создано, и сессия failed.
         """
@@ -52,6 +53,7 @@ class GenerationWorker:
         await asyncio.shield(first)
 
     def schedule(self, session_id: uuid.UUID) -> None:
+        """Запускает генерацию всех заданий сессии в фоне; сбой попадает в failure сессии."""
         self._spawn(session_id, None)
 
     async def resume(self) -> int:
