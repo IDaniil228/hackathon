@@ -93,6 +93,13 @@ def test_radon_separates_simple_and_tangled_code():
     assert simple.metrics["sloc"] > 0
 
 
+def test_radon_measures_program_without_functions():
+    # Программа задачи stdio может не объявлять ни одной функции.
+    report = RadonAnalyzer().analyze("import sys\nprint(len(sys.stdin.read()))\n", "python")
+    assert "cc_max" not in report.metrics
+    assert report.metrics["sloc"] == 2
+
+
 def test_radon_reports_syntax_error_instead_of_failing():
     report = RadonAnalyzer().analyze("def broken(:\n", "python")
     assert report.metrics == {}

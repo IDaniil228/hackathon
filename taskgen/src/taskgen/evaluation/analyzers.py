@@ -131,7 +131,8 @@ class RadonAnalyzer(_FileAnalyzer):
     def _radon(self, path: Path, *args: str) -> Any:
         command = [sys.executable, "-m", "radon", *args, "-j", path.name]
         result = self._run(command, path.parent)
-        return json.loads(result.stdout)[path.name]
+        # radon cc не называет файл вовсе, если в нём нет ни функции, ни класса.
+        return json.loads(result.stdout).get(path.name, [])
 
     def _analyze_file(self, path: Path) -> AnalysisReport:
         blocks = self._radon(path, "cc")
