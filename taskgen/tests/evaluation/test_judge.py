@@ -446,6 +446,32 @@ async def test_nonexistent_span_is_asked_again_and_the_fix_counts():
     assert result.unsupported == 0
 
 
+async def test_reply_without_some_items_is_asked_again():
+    # GigaChat отвечал пустым списком items на длинный ответ с номерами участков.
+    empty = json.dumps({"items": []})
+    good = _spans_sample(two_pointers=("yes", [2]), no_extra_memory=("no", []))
+
+    def respond(messages, _schema):
+        if _is_repair(messages):
+            assert "two_pointers" in messages[-1].content
+            return good
+        return empty
+
+    judge, _ = _spans_judge(respond, repairs=1)
+    result = await judge.judge(_request())
+    assert result.verdicts[0].verdict == "yes"
+
+
+async def test_request_shows_the_reply_format_with_the_evidence_field():
+    reply = _spans_sample(two_pointers=("no", []), no_extra_memory=("no", []))
+    judge, llm = _spans_judge([reply] * 3)
+    await judge.judge(_request())
+    assert '"spans": [' in llm.calls[0]["messages"][-1].content
+    judge, llm = _judge([_sample(two_pointers=("no", []), no_extra_memory=("no", []))] * 3)
+    await judge.judge(_request())
+    assert '"quotes": [' in llm.calls[0]["messages"][-1].content
+
+
 async def test_repairs_stop_at_the_limit():
     bad = _spans_sample(two_pointers=("yes", [42]), no_extra_memory=("no", []))
     judge, llm = _spans_judge(lambda _m, _s: bad, repairs=2)

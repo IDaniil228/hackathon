@@ -146,6 +146,15 @@ class Grounding:
             schema["maxItems"] = self.options.max_spans
         return schema
 
+    def example(self) -> str:
+        """Поле доказательства в примере ответа для промпта.
+
+        Без примера GigaChat отвечал пустым списком вердиктов на длинный ответ с номерами.
+        """
+        if self.options.mode == "quotes":
+            return '"quotes": ["фрагмент текста"]'
+        return '"spans": [3, 4]'
+
     def rules(self, verdicts: str, subject: str) -> str:
         """Правила доказательства для промпта: verdicts — какие вердикты его требуют,
         subject — чей текст в родительном падеже, например "ответа кандидата"."""

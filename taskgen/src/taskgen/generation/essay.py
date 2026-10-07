@@ -320,7 +320,8 @@ def _checker_messages(
         asked = "facts и phrases" if facts else "phrases"
     user += (
         f"{start}\n{grounding.block()}\n{end}\n\n"
-        f"Для каждого пункта верни вердикт и доказательство в JSON с полем {asked}."
+        f"Для каждого пункта верни вердикт и доказательство в JSON с полем {asked}, например "
+        f'{{"facts": [{{"fact_id": "id факта", "present": true, {grounding.example()}}}]}}.'
     )
     return [ChatMessage(role="system", content=system), ChatMessage(role="user", content=user)]
 
@@ -331,9 +332,18 @@ class _LLMVerdicts:
     phrases: dict[str, list[str]]
 
 
-def _checker_problems(reply: _CheckerReply, grounding: Grounding) -> list[str]:
-    """Претензии к доказательствам найденных фактов и фраз; по ним проверяльщика переспрашивают."""
+def _checker_problems(
+    reply: _CheckerReply, facts: list[ScenarioFact], phrases: list[str], grounding: Grounding
+) -> list[str]:
+    """Претензии к ответу проверяльщика: факты и фразы без вердикта и неверные доказательства
+    найденного. По ним проверяльщика переспрашивают."""
     problems = []
+    given_facts = {v.fact_id for v in reply.facts}
+    missing = [fact.id for fact in facts if fact.id not in given_facts]
+    given_phrases = {v.phrase for v in reply.phrases}
+    missing += [f"«{phrase}»" for phrase in phrases if phrase not in given_phrases]
+    if missing:
+        problems.append(f"нет вердикта по пунктам {', '.join(missing)}")
     found = [(f"факт {v.fact_id}", v) for v in reply.facts if v.present]
     found += [(f"понятие «{v.phrase}»", v) for v in reply.phrases if v.present]
     for name, verdict in found:
@@ -364,7 +374,7 @@ async def _llm_verdicts(
             model=model,
             temperature=0.0,
             reasoning_effort=reasoning_effort,
-            check=lambda checked: _checker_problems(checked, grounding),
+            check=lambda checked: _checker_problems(checked, facts, phrases, grounding),
             repairs=evidence.repairs,
         )
     except StructuredOutputError:

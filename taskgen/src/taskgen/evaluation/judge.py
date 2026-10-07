@@ -123,7 +123,9 @@ def _messages(request: JudgeRequest, grounding: Grounding, nonce: str) -> list[C
         f"Факты о решении:\n{json.dumps(request.facts, ensure_ascii=False, indent=1)}\n\n"
         f"Вид ответа: {kind}.\n\n"
         f"{start}\n{grounding.block()}\n{end}\n\n"
-        "Оцени каждый пункт рубрики и верни JSON с полем items."
+        "Оцени каждый пункт рубрики и верни JSON с полем items: по элементу на каждый пункт, "
+        f'например {{"items": [{{"item_id": "{request.rubric[0].id}", "verdict": "yes", '
+        f"{grounding.example()}}}, ...]}}."
     )
     system = _SYSTEM.format(
         evidence=grounding.rules("yes и partial", "ответа кандидата"),
@@ -137,9 +139,14 @@ def _messages(request: JudgeRequest, grounding: Grounding, nonce: str) -> list[C
     ]
 
 
-def _problems(sample: _Sample, grounding: Grounding) -> list[str]:
-    """Претензии к доказательствам вердиктов yes и partial; по ним судью переспрашивают."""
+def _problems(sample: _Sample, rubric: list[RubricItem], grounding: Grounding) -> list[str]:
+    """Претензии к ответу судьи: пункты без вердикта и неверные доказательства вердиктов yes
+    и partial. По ним судью переспрашивают."""
     problems = []
+    given = {item.item_id for item in sample.items}
+    missing = [item.id for item in rubric if item.id not in given]
+    if missing:
+        problems.append(f"нет вердикта по пунктам {', '.join(missing)}")
     for item in sample.items:
         if item.verdict == "no":
             continue
@@ -219,7 +226,7 @@ class LLMJudge:
                 model=self._model,
                 temperature=self._temperature,
                 reasoning_effort=self._reasoning_effort,
-                check=lambda reply: _problems(reply, grounding),
+                check=lambda reply: _problems(reply, request.rubric, grounding),
                 repairs=self._evidence.repairs,
                 repair_log=repairs,
             )

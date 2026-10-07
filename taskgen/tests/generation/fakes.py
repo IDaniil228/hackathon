@@ -40,19 +40,25 @@ def essay_reply(messages, schema, *, keep_facts: bool = True) -> str | None:
         return json.dumps({"title": "Ситуация", "situation": situation}, ensure_ascii=False)
     if "facts" in properties:
         listing, situation = user.split("<<<СИТУАЦИЯ-", 1)
+        listing = listing.split("Запрещённые понятия:", 1)[0]
         numbered = dict((int(found[1]), found[2]) for found in _NUMBERED_SPAN.finditer(situation))
-        by_spans = "spans" in properties["facts"]["items"]["properties"]
+        field = "spans" if "spans" in properties["facts"]["items"]["properties"] else "quotes"
         items = []
         for match in _CHECKER_FACT.finditer(listing):
             text = match["text"]
-            if by_spans:
+            if field == "spans":
                 spans = [n for n, span in numbered.items() if span in text or text in span]
                 items.append({"fact_id": match["id"], "present": bool(spans), "spans": spans})
             else:
                 present = text in situation
                 quotes = [text] if present else []
                 items.append({"fact_id": match["id"], "present": present, "quotes": quotes})
-        return json.dumps({"facts": items}, ensure_ascii=False)
+        reply: dict[str, Any] = {"facts": items}
+        if "phrases" in properties:
+            # Честная ситуация из фактов запрещённых понятий не пересказывает.
+            phrases = properties["phrases"]["items"]["properties"]["phrase"]["enum"]
+            reply["phrases"] = [{"phrase": p, "present": False, field: []} for p in phrases]
+        return json.dumps(reply, ensure_ascii=False)
     return None
 
 

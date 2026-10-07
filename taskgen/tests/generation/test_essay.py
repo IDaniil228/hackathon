@@ -411,6 +411,28 @@ async def test_spans_checker_nonexistent_span_does_not_confirm_fact():
     assert len(llm.calls) == 1
 
 
+async def test_checker_reply_without_some_facts_is_asked_again():
+    spec = leakage_spec()
+    partial = {k: v for k, v in GOOD_SPANS.items() if k != "dated-records"}
+
+    def respond(messages: list[ChatMessage], _schema) -> str:
+        repaired = "не принят" in messages[-1].content
+        chosen = GOOD_SPANS if repaired else partial
+        facts = (
+            spec.scenario_facts
+            if repaired
+            else [f for f in spec.scenario_facts if f.id != "dated-records"]
+        )
+        items = [{"fact_id": f.id, "present": True, "spans": chosen[f.id]} for f in facts]
+        return json.dumps({"facts": items}, ensure_ascii=False)
+
+    llm = FakeLLM(respond)
+    result = await check_spans(llm, spec, repairs=1)
+
+    assert result.ok, result.reasons
+    assert "dated-records" in llm.calls[1]["messages"][-1].content
+
+
 async def test_spans_checker_is_asked_again_about_nonexistent_span():
     spec = leakage_spec()
     bad = GOOD_SPANS | {"dated-records": [99]}
