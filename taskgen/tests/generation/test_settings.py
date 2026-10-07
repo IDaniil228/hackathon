@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from taskgen.config import Settings
+from taskgen.config import EvidenceSettings, Settings
+from taskgen.evaluation.service import Evaluator
 from taskgen.generation.service import Generator
 from tests.evaluation.fakes import FakeLLM
 from tests.generation.fakes import BagOfWordsEmbedder
@@ -35,3 +36,17 @@ def test_essay_check_settings_reach_instance_deps(monkeypatch):
     # Генератор собирается на каждый запрос, а кэш векторов шаблонов живёт в app.state.
     assert first.embedding_cache is not None
     assert first.embedding_cache is second.embedding_cache
+
+
+def test_one_evidence_block_reaches_judge_and_checker(monkeypatch):
+    monkeypatch.setenv("TASKGEN_EVIDENCE__MODE", "quotes")
+    monkeypatch.setenv("TASKGEN_EVIDENCE__REPAIRS", "5")
+    monkeypatch.setenv("TASKGEN_EVIDENCE__MAX_SPANS", "3")
+    state = SimpleNamespace(settings=Settings(), sessionmaker=None, llm=FakeLLM([]))
+
+    deps = Generator.from_state(state).instance_deps()
+    judge = Evaluator.from_state(state).judge
+
+    expected = EvidenceSettings(mode="quotes", repairs=5, max_spans=3)
+    assert deps.evidence == expected
+    assert judge._evidence == expected

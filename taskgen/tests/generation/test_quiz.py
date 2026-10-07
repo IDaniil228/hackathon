@@ -8,7 +8,7 @@ from collections import Counter
 
 import pytest
 
-from taskgen.config import GenerationSettings
+from taskgen.config import EvidenceSettings, GenerationSettings
 from taskgen.contracts import RunLimits, TaskKind
 from taskgen.generation.instance import (
     InstanceDeps,
@@ -28,12 +28,13 @@ SOLVER = "solver-model"
 LIMITS = RunLimits(timeout_ms=5000, memory_bytes=256 * 1024 * 1024)
 
 
-def deps(llm, **options) -> InstanceDeps:
+def deps(llm, evidence=None, **options) -> InstanceDeps:
     return InstanceDeps(
         llm=llm,
         sandbox=None,
         model=MODEL,
         options=GenerationSettings(**options),
+        evidence=evidence or EvidenceSettings(),
         limits=LIMITS,
         solver_model=SOLVER,
     )
@@ -83,11 +84,11 @@ async def test_quiz_is_case_then_question_with_shuffled_options_and_hidden_key()
 
 
 @pytest.mark.parametrize("mode", ["quotes", "spans"])
-async def test_case_checker_evidence_comes_from_generation_settings(mode):
+async def test_case_checker_evidence_comes_from_evidence_settings(mode):
     spec = quiz_spec()
     llm = FakeLLM(honest(spec, 77))
 
-    instance = await generate_instance(spec, 77, deps(llm, essay_check_evidence=mode))
+    instance = await generate_instance(spec, 77, deps(llm, evidence=EvidenceSettings(mode=mode)))
 
     _case, check = llm.calls
     item = check["json_schema"]["properties"]["facts"]["items"]["properties"]

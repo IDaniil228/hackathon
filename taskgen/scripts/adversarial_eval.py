@@ -8,7 +8,7 @@
 evaluate_task с LLM-судьёй. Судья — роль llm.judge из настроек, например
 TASKGEN_LLM__JUDGE__MODEL=deepseek/deepseek-flash; флаги --judge-* заменяют её модель вместе с
 провайдером и рассуждения. Способ доказательства и повторы судьи тоже берутся из настроек,
-например TASKGEN_SCORING__JUDGE_EVIDENCE=spans.
+например TASKGEN_EVIDENCE__MODE=quotes.
 Экземпляры кэшируются в --instances: повторный прогон и прогон другим судьёй оценивают те
 же условия.
 
@@ -53,7 +53,6 @@ from taskgen.evaluation.service import (  # noqa: E402
     TaskInput,
     check_code,
     evaluate_task,
-    judge_evidence,
     judge_relevance,
 )
 from taskgen.generation.instance import (  # noqa: E402
@@ -159,7 +158,7 @@ async def _evaluate(
 
 def _referenced_spans(row: dict[str, Any]) -> list[tuple[int, int]]:
     """Число участков в каждой ссылке yes или partial из сырых ответов судьи и число
-    участков ответа: по ним выбирается предел judge_max_spans."""
+    участков ответа: по ним выбирается предел evidence.max_spans."""
     total = len(split_spans(row["content"], code=row["kind"] == TaskKind.CODE.value))
     found = []
     for reply in row.get("replies", []):
@@ -266,7 +265,7 @@ async def main() -> int:
         samples=settings.scoring.judge_samples,
         temperature=settings.scoring.judge_temperature,
         reasoning_effort=judge_role.reasoning_effort,
-        evidence=judge_evidence(settings.scoring),
+        evidence=settings.evidence,
         # Эмбеддинги для проверки смысла доказательств даёт роль llm.embedding из настроек.
         relevance=judge_relevance(settings.scoring, router, EmbeddingCache()),
     )
@@ -289,6 +288,7 @@ async def main() -> int:
         sandbox=piston,
         model=llm_settings.generator.model,
         options=settings.generation,
+        evidence=settings.evidence,
         limits=RunLimits(
             timeout_ms=settings.sandbox.run_timeout_ms,
             memory_bytes=settings.sandbox.run_memory_limit_bytes,
@@ -342,7 +342,7 @@ async def main() -> int:
                     "class": answer.cls,
                     "expect": list(answer.expect),
                     "judge_model": judge_model,
-                    "evidence": vars(judge_evidence(settings.scoring))
+                    "evidence": settings.evidence.model_dump()
                     | {"quote_threshold": settings.scoring.judge_quote_threshold},
                     "kind": instance["kind"],
                     "content": answer.content,

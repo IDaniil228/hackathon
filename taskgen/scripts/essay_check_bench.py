@@ -41,9 +41,9 @@ from typing import Any
 import yaml
 
 from taskgen.bank.parser import find_phrases, normalize_phrase, parse_template
-from taskgen.config import ChatRole, LLMSettings, Settings
+from taskgen.config import ChatRole, EvidenceSettings, LLMSettings, Settings
 from taskgen.contracts import ChatMessage, TemplateSpec
-from taskgen.evaluation.evidence import EvidenceOptions, split_sentences
+from taskgen.evaluation.evidence import split_sentences
 from taskgen.evaluation.quotes import EmbeddingCache, QuoteRelevance
 from taskgen.generation.essay import (
     EssayCheckOptions,
@@ -52,7 +52,6 @@ from taskgen.generation.essay import (
     embedding_scores,
     filled_facts,
 )
-from taskgen.generation.instance import checker_evidence
 from taskgen.llm import ProviderRouter
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -274,7 +273,7 @@ async def run_check(
     options: EssayCheckOptions,
     model: str,
     effort: str | None,
-    evidence: EvidenceOptions,
+    evidence: EvidenceSettings,
 ) -> Row:
     spec = load_spec(case["template"])
     scenario = EssayScenario(title=case["title"], situation=case["situation"])
@@ -469,9 +468,8 @@ async def run(args: argparse.Namespace) -> int:
     settings = LLMSettings.model_validate({**dict(base), "checker": checker})
     client = ProviderRouter.from_settings(settings, roles=("checker", "embedding"))
     llm = CountingLLM(client)
-    # Способ доказательства проверяльщика — из настроек, например
-    # TASKGEN_GENERATION__ESSAY_CHECK_EVIDENCE=spans.
-    evidence = checker_evidence(Settings().generation)
+    # Способ доказательства — из настроек, например TASKGEN_EVIDENCE__MODE=quotes.
+    evidence = Settings().evidence
     log(
         f"эмбеддер {settings.embedding.model}, проверяльщик {settings.checker.model}, "
         f"доказательство {evidence}"

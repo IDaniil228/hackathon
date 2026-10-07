@@ -3,7 +3,7 @@
 Каждый пункт рубрики судья оценивает как yes, partial или no и подтверждает yes и partial
 доказательством из ответа: дословными цитатами или номерами участков (evidence.py). Код
 проверяет доказательство каждого пункта. Если оно неверно, судью переспрашивают с перечнем
-ошибок, не больше EvidenceOptions.repairs раз, а неисправленный вердикт засчитывается как no.
+ошибок, не больше EvidenceSettings.repairs раз, а неисправленный вердикт засчитывается как no.
 С QuoteRelevance вердикт ещё и снимается в no, если текст доказательства по смыслу не
 относится к пункту. Судья вызывается judge_samples раз при ненулевой температуре; по
 каждому пункту берётся нижняя медиана вердиктов, а разброс баллов сэмплов идёт в spread.
@@ -18,6 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from taskgen.config import EvidenceSettings
 from taskgen.contracts import (
     ChatMessage,
     JudgeRequest,
@@ -28,7 +29,7 @@ from taskgen.contracts import (
     RubricVerdict,
     TaskKind,
 )
-from taskgen.evaluation.evidence import VERBATIM_QUOTES, EvidenceOptions, Grounding
+from taskgen.evaluation.evidence import VERBATIM_QUOTES, Grounding
 from taskgen.evaluation.jsonout import StructuredOutputError, complete_structured
 from taskgen.evaluation.quotes import QuoteRelevance, RelevanceUnavailableError
 from taskgen.markers import find_nonce, markers, new_nonce
@@ -194,7 +195,7 @@ class LLMJudge:
         temperature: float,
         reasoning_effort: ReasoningEffort | None = None,
         relevance: QuoteRelevance | None = None,
-        evidence: EvidenceOptions = VERBATIM_QUOTES,
+        evidence: EvidenceSettings = VERBATIM_QUOTES,
     ) -> None:
         self._llm = llm
         self._model = model

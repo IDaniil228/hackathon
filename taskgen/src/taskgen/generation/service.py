@@ -144,6 +144,7 @@ class Generator:
             embedder=self.embedder,
             embedding_cache=self.embedding_cache,
             options=self.options,
+            evidence=self.settings.evidence,
             limits=RunLimits(
                 timeout_ms=sandbox.run_timeout_ms, memory_bytes=sandbox.run_memory_limit_bytes
             ),

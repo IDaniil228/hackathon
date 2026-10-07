@@ -9,7 +9,7 @@ from dataclasses import replace
 
 import pytest
 
-from taskgen.config import GenerationSettings
+from taskgen.config import EvidenceSettings, GenerationSettings
 from taskgen.contracts import RunLimits
 from taskgen.generation.essay import THEME_FACT_ID, essay_questions, theme_fact
 from taskgen.generation.instance import (
@@ -222,12 +222,13 @@ async def test_number_in_theme_name_is_not_invented_in_quiz_case():
     assert instance.personalization == record("python312")
 
 
-async def themed_essay(embedder, **options):
+async def themed_essay(embedder, evidence=None, **options):
     llm = FakeLLM(themed())
+    base = deps(llm, adjacent_topic_probability=1.0, **options)
     instance = await generate_instance(
         essay_spec(),
         9,
-        replace(deps(llm, adjacent_topic_probability=1.0, **options), embedder=embedder),
+        replace(base, embedder=embedder, evidence=evidence or base.evidence),
         profile(),
     )
     assert instance.personalization == record("pytorch")
@@ -244,8 +245,12 @@ async def test_theme_skips_embeddings_check_and_goes_to_llm():
 
 async def test_theme_quotes_skip_embedding_relevance_check():
     embedder = BagOfWordsEmbedder()
-    await themed_essay(embedder, essay_quote_threshold=0.5)
-    # Ситуацию в режиме llm эмбеддер не видит: он сравнивает только цитаты с фактами.
+    await themed_essay(
+        embedder, evidence=EvidenceSettings(mode="quotes"), essay_quote_threshold=0.5
+    )
+    # Ситуацию в режиме llm эмбеддер не видит: он сравнивает только цитаты с фактами. Режим
+    # quotes задан явно: в spans доказательство — целое предложение, и тема может стоять в нём
+    # рядом с фактом.
     assert embedder.calls
     assert not any("PyTorch" in text for call in embedder.calls for text in call)
 

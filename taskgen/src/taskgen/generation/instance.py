@@ -25,7 +25,7 @@ from taskgen.bank.validation import (
     run_solution,
     solution_request,
 )
-from taskgen.config import GenerationSettings
+from taskgen.config import EvidenceSettings, GenerationSettings
 from taskgen.contracts import (
     ChatMessage,
     Embedder,
@@ -40,7 +40,6 @@ from taskgen.contracts import (
     TemplateSpec,
     TestCase,
 )
-from taskgen.evaluation.evidence import EvidenceOptions
 from taskgen.evaluation.jsonout import (
     EmptyReplyError,
     StructuredOutputError,
@@ -305,6 +304,8 @@ class InstanceDeps:
     # Эмбеддер и кэш векторов шаблонов для проверки ситуации эссе; способ проверки — в options.
     embedder: Embedder | None = None
     embedding_cache: EmbeddingCache | None = None
+    # Чем LLM-проверяльщик подтверждает найденное; сервис передаёт Settings.evidence.
+    evidence: EvidenceSettings = EvidenceSettings()
 
     def solver(self) -> SolverConfig | None:
         """Настройки слепого решателя; None — решатель выключен."""
@@ -358,15 +359,6 @@ async def _generate(
     return await _code(spec, seed, deps, context)
 
 
-def checker_evidence(options: GenerationSettings) -> EvidenceOptions:
-    """Способ доказательства LLM-проверяльщика ситуации и его пределы из настроек."""
-    return EvidenceOptions(
-        mode=options.essay_check_evidence,
-        repairs=options.essay_check_repairs,
-        max_spans=options.essay_check_max_spans,
-    )
-
-
 async def _quiz(
     spec: TemplateSpec, seed: int, deps: InstanceDeps, context: _LegendContext
 ) -> TaskInstance:
@@ -392,7 +384,7 @@ async def _quiz(
             solver=deps.solver(),
             system_suffix=system_suffix,
             request_suffix=request_suffix,
-            evidence_options=checker_evidence(deps.options),
+            evidence_options=deps.evidence,
             theme=context.theme,
         )
     except httpx.HTTPError as error:
@@ -443,7 +435,7 @@ async def _essay(
             ),
             embedder=deps.embedder,
             embedding_cache=deps.embedding_cache,
-            evidence_options=checker_evidence(deps.options),
+            evidence_options=deps.evidence,
             theme=context.theme,
         )
     except httpx.HTTPError as error:
@@ -727,6 +719,6 @@ async def _check_theme(
         {},
         model=deps.checker_model or deps.model,
         reasoning_effort=deps.checker_reasoning_effort,
-        evidence_options=checker_evidence(deps.options),
+        evidence_options=deps.evidence,
         theme=theme,
     )

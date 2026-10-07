@@ -11,7 +11,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from taskgen.contracts import (
@@ -287,6 +287,41 @@ class SelectionSettings(BaseModel):
         return self
 
 
+class EvidenceSettings(BaseModel):
+    """Чем модель подтверждает вердикт: один способ для судьи ответа и для LLM-проверяльщика
+    ситуации эссе, кейса задачки и темы легенды. Механика — taskgen/evaluation/evidence.py."""
+
+    model_config = ConfigDict(frozen=True)
+
+    mode: EvidenceMode = Field(
+        default="spans",
+        description="Способ доказательства: quotes — дословные цитаты текста, spans — номера "
+        "его участков, которые модели показаны с номерами: строк кода или предложений. "
+        "Судья так подтверждает вердикты yes и partial, проверяльщик — найденный факт, "
+        "запрещённое понятие или тему. spans по умолчанию: судья и проверяльщик по "
+        "умолчанию — deepseek-flash, и на нём ссылки не уступают цитатам. GigaChat с "
+        "цитатами терял больше половины верных вердиктов судьи, но со ссылками засчитывает и "
+        "самоутверждения кандидата. Замеры — docs/taskgen/validation.md",
+    )
+    repairs: int = Field(
+        default=2,
+        ge=0,
+        description="Сколько раз переспросить модель с перечнем ошибок, если её ответ не по "
+        "схеме, без вердикта по пункту или ссылается на текст, которого нет: цитату не "
+        "дословно или номер участка, которого нет. Каждый повтор — ещё один вызов модели. "
+        "0 выключает повторы",
+    )
+    max_spans: int | None = Field(
+        default=None,
+        ge=1,
+        description="Сколько участков самое большее подтверждают один вердикт в режиме spans; "
+        "вердикт с большим числом участков не засчитывается. Ссылка на весь текст не "
+        "доказывает ничего и обходит проверку смысла цитат. null — без предела, и по "
+        "умолчанию предела нет: на наборе ложных срабатываний судьи честные ссылки доходили "
+        "до 8 участков, а атаки до 5, и число не отделяет одни от других",
+    )
+
+
 class ScoringSettings(BaseModel):
     """Балл за задание с кодом — взвешенная сумма компонентов из диапазона 0..1."""
 
@@ -348,32 +383,6 @@ class ScoringSettings(BaseModel):
         le=2.0,
         description="Температура судьи. Ненулевая нужна, чтобы сэмплы различались и разброс "
         "что-то значил",
-    )
-    judge_evidence: EvidenceMode = Field(
-        default="spans",
-        description="Чем судья подтверждает вердикты yes и partial: quotes — дословные "
-        "цитаты ответа, spans — номера участков ответа, которые ему показаны с номерами: "
-        "строк кода или предложений текста. spans по умолчанию: с судьёй deepseek-flash "
-        "честные ответы со ссылками не теряют балл, а атаки его не набирают. GigaChat с "
-        "цитатами терял больше половины верных вердиктов, но со ссылками засчитывает и "
-        "самоутверждения кандидата. Замер — docs/taskgen/validation.md",
-    )
-    judge_repairs: int = Field(
-        default=2,
-        ge=0,
-        description="Сколько раз переспросить судью с перечнем ошибок, если его ответ не по "
-        "схеме, без вердикта по пункту или ссылается на текст, которого нет: цитату не "
-        "дословно или номер участка, которого нет. Каждый повтор — ещё один вызов модели на "
-        "сэмпл. 0 выключает повторы",
-    )
-    judge_max_spans: int | None = Field(
-        default=None,
-        ge=1,
-        description="Сколько участков ответа самое большее подтверждают один вердикт в режиме "
-        "spans; вердикт с большим числом участков не засчитывается. Ссылка на весь ответ не "
-        "доказывает ничего и обходит проверку смысла цитат. null — без предела, и по "
-        "умолчанию предела нет: на наборе ложных срабатываний честные ссылки доходили до 8 "
-        "участков, а атаки до 5, и число не отделяет одни от других",
     )
     judge_quote_threshold: float | None = Field(
         default=None,
@@ -518,26 +527,6 @@ class GenerationSettings(BaseModel):
         description="Полуширина серой зоны вокруг порогов в режиме both: такие факты и фразы "
         "решает LLM",
     )
-    essay_check_evidence: EvidenceMode = Field(
-        default="quotes",
-        description="Чем LLM-проверяльщик ситуации эссе и кейса задачки подтверждает найденный "
-        "факт или запрещённое понятие: quotes — дословные цитаты ситуации, spans — номера её "
-        "предложений, которые ему показаны с номерами. quotes по умолчанию: бенчмарк "
-        "scripts/essay_check_bench.py run с GigaChat не показал, что spans лучше, а "
-        "проверяльщик по умолчанию — облачная модель. Замер — docs/taskgen/validation.md",
-    )
-    essay_check_repairs: int = Field(
-        default=2,
-        ge=0,
-        description="Сколько раз переспросить проверяльщика с перечнем ошибок, если его ответ "
-        "не по схеме или ссылается на текст, которого в ситуации нет. 0 выключает повторы",
-    )
-    essay_check_max_spans: int | None = Field(
-        default=None,
-        ge=1,
-        description="Сколько предложений ситуации самое большее подтверждают один факт в "
-        "режиме spans; факт с большим числом предложений не засчитывается. null — без предела",
-    )
 
 
 class SandboxSettings(BaseModel):
@@ -615,6 +604,9 @@ class Settings(BaseSettings):
         default=SelectionSettings(), description=SelectionSettings.__doc__
     )
     scoring: ScoringSettings = Field(default=ScoringSettings(), description=ScoringSettings.__doc__)
+    evidence: EvidenceSettings = Field(
+        default=EvidenceSettings(), description=EvidenceSettings.__doc__
+    )
     generation: GenerationSettings = Field(
         default=GenerationSettings(), description=GenerationSettings.__doc__
     )

@@ -16,8 +16,9 @@ from typing import Any
 import pytest
 
 from taskgen.bank.parser import parse_template
+from taskgen.config import EvidenceSettings
 from taskgen.contracts import ChatMessage, TemplateSpec
-from taskgen.evaluation.evidence import EvidenceOptions, split_spans
+from taskgen.evaluation.evidence import split_spans
 from taskgen.generation.essay import (
     EssayScenario,
     EssayScenarioError,
@@ -383,7 +384,7 @@ async def check_spans(llm: FakeLLM, spec: TemplateSpec, repairs: int = 0):
         EssayScenario(title="Отток", situation=GOOD_SITUATION),
         PARAMS,
         model="checker",
-        evidence_options=EvidenceOptions(mode="spans", repairs=repairs),
+        evidence_options=EvidenceSettings(mode="spans", repairs=repairs),
     )
 
 
