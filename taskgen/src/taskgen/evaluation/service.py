@@ -60,6 +60,7 @@ from taskgen.evaluation.scoring import (
     quiz_score,
     resolve_weights,
     session_score,
+    weighted_pass_rate,
 )
 from taskgen.evaluation.summary import SessionFacts, fallback_text, summary_data, write_summary
 from taskgen.llm import limited_llm, state_embedder
@@ -310,7 +311,7 @@ async def evaluate_task(task: TaskInput, *, judge: Judge, scoring: ScoringSettin
             )
         )
     components = Components(
-        tests=report.pass_rate,
+        tests=weighted_pass_rate(report, task.hidden.cases, task.hidden.case_groups),
         rubric=judge_result.score if judge_result else None,
         quality=quality.score if quality else None,
         performance=performance_score(report, task.hidden.reference_report),

@@ -1,7 +1,7 @@
 import pytest
 
 from taskgen.config import ScoringSettings
-from taskgen.contracts import CaseOutcome, TaskKind, TestReport
+from taskgen.contracts import CaseGroup, CaseOutcome, TaskKind, TestCase, TestReport
 from taskgen.evaluation.scoring import (
     Components,
     code_task_score,
@@ -9,6 +9,7 @@ from taskgen.evaluation.scoring import (
     quiz_score,
     resolve_weights,
     session_score,
+    weighted_pass_rate,
 )
 
 CODE, ESSAY, QUIZ = TaskKind.CODE, TaskKind.ESSAY, TaskKind.QUIZ
@@ -92,6 +93,53 @@ def test_all_weights_zero_is_rejected():
     zero = {name: 0.0 for name in WEIGHTS}
     with pytest.raises(ValueError):
         code_task_score(Components(tests=1.0), zero)
+
+
+GROUPS = {"manual": CaseGroup(weight=1), "stress": CaseGroup(weight=3)}
+
+
+def _cases(*groups: str | None) -> list[TestCase]:
+    return [TestCase(input=[n], expected=n, group=group) for n, group in enumerate(groups)]
+
+
+def _passed(*flags: bool) -> TestReport:
+    return TestReport(outcomes=[CaseOutcome(passed=flag) for flag in flags])
+
+
+def test_weighted_pass_rate_weighs_groups_not_cases():
+    # Три ручных кейса из трёх и ни одного стресс-кейса: доля кейсов 0.75, но вес
+    # стресс-группы 3 из 4 оставляет за тесты только 0.25.
+    cases = _cases("manual", "manual", "manual", "stress")
+    assert weighted_pass_rate(_passed(True, True, True, False), cases, GROUPS) == pytest.approx(
+        0.25
+    )
+    assert weighted_pass_rate(_passed(False, False, False, True), cases, GROUPS) == pytest.approx(
+        0.75
+    )
+
+
+def test_group_share_inside_group_is_share_of_its_cases():
+    cases = _cases("manual", "manual", "stress", "stress")
+    share = weighted_pass_rate(_passed(True, False, True, False), cases, GROUPS)
+    assert share == pytest.approx((1 * 0.5 + 3 * 0.5) / 4)
+
+
+def test_weighted_pass_rate_without_groups_is_pass_rate():
+    report = _passed(True, False, True)
+    assert weighted_pass_rate(report, _cases(None, None, None), {}) == pytest.approx(
+        report.pass_rate
+    )
+
+
+def test_declared_group_without_cases_leaves_the_denominator():
+    # Группа объявлена, но в этом экземпляре её кейсов нет: её вес не делает балл ниже.
+    cases = _cases("manual", "manual")
+    assert weighted_pass_rate(_passed(True, True), cases, GROUPS) == pytest.approx(1.0)
+
+
+def test_weighted_pass_rate_needs_an_outcome_per_case():
+    with pytest.raises(ValueError):
+        weighted_pass_rate(_passed(True), _cases("manual", "stress"), GROUPS)
 
 
 def _report(walls: list[int | None], passed: list[bool], memory: int | None) -> TestReport:

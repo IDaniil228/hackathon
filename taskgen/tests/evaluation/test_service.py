@@ -96,6 +96,26 @@ async def test_missing_test_report_counts_as_no_tests_passed():
     assert outcome.score == 0.0
 
 
+GROUPED = {
+    "cases": [
+        {"input": [1, 2], "expected": 3, "group": "manual"},
+        {"input": [2, 2], "expected": 4, "group": "manual"},
+        {"input": [10**6, 1], "expected": 10**6 + 1, "group": "stress"},
+    ],
+    "case_groups": {"manual": {"weight": 1}, "stress": {"weight": 3}},
+}
+
+
+async def test_tests_component_is_weighted_by_case_groups():
+    judge, _ = _judge()
+    task = _task(hidden=GROUPED)
+    task.answer.test_report = _report([True, True, False])
+    outcome = await evaluate_task(task, judge=judge, scoring=ScoringSettings())
+    # Две трети кейсов пройдены, но стресс-группа весит 3 из 4.
+    assert outcome.components.tests == pytest.approx(0.25)
+    assert (outcome.tests.passed, outcome.tests.total) == (2, 3)
+
+
 async def test_template_weights_override_applies():
     judge, _ = _judge("no")
     plain = await evaluate_task(_task(), judge=judge, scoring=ScoringSettings())

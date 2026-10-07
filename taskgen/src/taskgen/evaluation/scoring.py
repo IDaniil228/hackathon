@@ -13,7 +13,7 @@ from statistics import fmean
 from pydantic import BaseModel, Field
 
 from taskgen.config import ScoringSettings
-from taskgen.contracts import TaskKind, TestReport
+from taskgen.contracts import CaseGroup, TaskKind, TestCase, TestReport
 
 # Компонент балла и поле ScoringSettings, которое задаёт его вес.
 WEIGHT_OF = {
@@ -41,6 +41,37 @@ def resolve_weights(settings: ScoringSettings, override: Mapping[str, float]) ->
     weights = {name: getattr(settings, name) for name in WEIGHT_OF.values()}
     weights.update({name: value for name, value in override.items() if name in weights})
     return weights
+
+
+def _group_results(report: TestReport, cases: list[TestCase]) -> dict[str | None, tuple[int, int]]:
+    """Пройдено и всего кейсов по группам; исходы и кейсы идут в одном порядке."""
+    if len(report.outcomes) != len(cases):
+        raise ValueError(f"Исходов {len(report.outcomes)}, а кейсов {len(cases)}")
+    results: dict[str | None, tuple[int, int]] = {}
+    for outcome, case in zip(report.outcomes, cases, strict=True):
+        passed, total = results.get(case.group, (0, 0))
+        results[case.group] = (passed + outcome.passed, total + 1)
+    return results
+
+
+def weighted_pass_rate(
+    report: TestReport, cases: list[TestCase], groups: Mapping[str, CaseGroup]
+) -> float:
+    """Компонент tests: доля пройденных кейсов, взвешенная по группам шаблона.
+
+    Вес задаёт долю группы целиком, внутри группы кейсы равноценны. Группа без кейсов в
+    этом экземпляре в знаменатель не входит. Без групп — доля пройденных кейсов.
+    """
+    # Нет исходов — тесты не запускались: доля 0, как у pass_rate.
+    if not groups or not report.outcomes:
+        return report.pass_rate
+    results = _group_results(report, cases)
+    if None in results:
+        raise ValueError("У задания объявлены группы кейсов, но не у всех кейсов есть группа")
+    weighted = sum(
+        groups[name].weight * passed / total for name, (passed, total) in results.items()
+    )
+    return weighted / sum(groups[name].weight for name in results)
 
 
 def code_task_score(components: Components, weights: Mapping[str, float]) -> float:
