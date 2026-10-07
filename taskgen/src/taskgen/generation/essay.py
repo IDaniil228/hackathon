@@ -14,6 +14,10 @@
 - embeddings: ситуация режется на предложения (split_sentences), и для факта или фразы
   берётся наибольшее косинусное сходство с предложением; оно сравнивается с порогом
 - both: решают эмбеддинги, а то, что попало в серую зону около порога, решает LLM
+- nli: факты решает модель NLI (nli.py): факт есть, если его влечёт предложение ситуации
+  и ни одно предложение ему не противоречит. Пересказ запрещённых фраз — не утверждение,
+  которое можно вывести из текста, поэтому его решает LLM, и только для ситуации, которую
+  факты и подстрока ещё не отклонили
 """
 
 from __future__ import annotations
@@ -43,6 +47,7 @@ from taskgen.evaluation.quotes import (
     RelevanceUnavailableError,
     quote_in_answer,
 )
+from taskgen.generation.nli import FactInference, NLIModel, fact_inferences, fact_present
 from taskgen.generation.params import fill_placeholders
 from taskgen.generation.textcheck import text_problems
 from taskgen.markers import markers, new_nonce
@@ -141,6 +146,12 @@ class EssayCheckOptions:
     grey_zone: float
     # Порог сходства цитат проверяльщика с фактом; None — смысл цитат не проверяется.
     quote_threshold: float | None = None
+    # Режим nli: порог entailment, порог вето contradiction (None — без вето), окно посылки
+    # в предложениях и спрашивать ли LLM о пересказе фраз.
+    nli_threshold: float = 0.5
+    nli_contradiction: float | None = None
+    nli_window: int = 1
+    nli_llm_phrases: bool = True
 
 
 @dataclass(frozen=True)
@@ -447,12 +458,13 @@ async def check_essay_scenario(
     options: EssayCheckOptions | None = None,
     embedder: Embedder | None = None,
     cache: EmbeddingCache | None = None,
+    nli: NLIModel | None = None,
 ) -> EssayCheck:
     """Проверка ситуации до выдачи кандидату; options=None — проверка только LLM.
 
     Сетевые ошибки и ошибки провайдера LLM не скрываются. Ответ проверяльщика не по схеме
-    означает отказ: ни один факт, который он решал, не подтверждён. Ошибка эмбеддера не
-    отказ: проверка переходит на LLM и пишет об этом в notes.
+    означает отказ: ни один факт, который он решал, не подтверждён. Ошибка эмбеддера или
+    модели NLI не отказ: проверка переходит на LLM и пишет об этом в notes.
     """
     reasons: list[str] = []
     notes: list[str] = []
@@ -467,7 +479,21 @@ async def check_essay_scenario(
     phrases = [phrase for phrase in spec.forbidden if phrase not in literal]
     method: EssayCheckMethod = options.method if options is not None else "llm"
     scores: EmbeddingScores | None = None
-    if options is not None and method != "llm":
+    inferred: dict[str, FactInference] | None = None
+    if options is not None and method == "nli":
+        if nli is None:
+            notes.append("модель NLI не настроена: ситуацию проверила LLM вместо NLI")
+        else:
+            try:
+                inferred = await fact_inferences(
+                    nli, facts, split_sentences(scenario.situation), options.nli_window
+                )
+            except Exception as error:
+                logger.warning("Ситуацию эссе проверяет LLM: модель NLI вернула ошибку: %s", error)
+                notes.append(f"модель NLI вернула ошибку ({error}): ситуацию проверила LLM")
+        if inferred is None:
+            method = "llm"
+    elif options is not None and method != "llm":
         if embedder is None:
             notes.append("эмбеддер не настроен: ситуацию проверила LLM вместо эмбеддингов")
         else:
@@ -488,7 +514,16 @@ async def check_essay_scenario(
 
     evidence: dict[str, str] = {}
     forbidden_evidence: dict[str, str] = {}
-    if scores is None or options is None:
+    if inferred is not None and options is not None:
+        ask_facts = []
+        for fact in facts:
+            score = inferred[fact.id]
+            if fact_present(score, options.nli_threshold, options.nli_contradiction):
+                evidence[fact.id] = score.unit
+        # Отклонённой ситуации вердикт LLM о фразах уже ничего не меняет.
+        rejected = bool(reasons) or len(evidence) < len(facts)
+        ask_phrases = phrases if options.nli_llm_phrases and not rejected else []
+    elif scores is None or options is None:
         ask_facts, ask_phrases = facts, phrases
     else:
         grey = options.grey_zone if method == "both" else 0.0
@@ -580,6 +615,7 @@ async def generate_essay(
     check_options: EssayCheckOptions | None = None,
     embedder: Embedder | None = None,
     embedding_cache: EmbeddingCache | None = None,
+    nli: NLIModel | None = None,
 ) -> EssayDraft:
     """Проверенное условие эссе за не больше чем attempts попыток написать ситуацию.
 
@@ -623,6 +659,7 @@ async def generate_essay(
             options=check_options,
             embedder=embedder,
             cache=cache,
+            nli=nli,
         )
         if last.ok:
             questions = essay_questions(spec, params)

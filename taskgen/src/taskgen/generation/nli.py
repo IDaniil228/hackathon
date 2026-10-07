@@ -10,8 +10,8 @@ contradiction, а не высокий балл.
 uv nli (uv sync --group nli), поэтому основной сервис и CI их не тянут. Без группы
 OnnxNLI отвечает NLIUnavailableError с командой установки.
 
-Сервис проверку NLI не использует: модуль нужен бенчмарку scripts/essay_check_bench.py nli.
-Почему NLI не стал режимом проверки, сказано в docs/taskgen/validation.md.
+Сервис использует модуль в режиме essay_check_method = nli. Режим выключен по умолчанию:
+на бенчмарке NLI не лучше эмбеддингов, числа — в docs/taskgen/validation.md.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from taskgen.config import GenerationSettings
 from taskgen.contracts import ScenarioFact
 
 
@@ -149,6 +150,22 @@ class OnnxNLI:
         if not pairs:
             return []
         return await asyncio.to_thread(self._infer_sync, pairs)
+
+
+def model_from_settings(options: GenerationSettings) -> OnnxNLI | None:
+    """Модель NLI для режима nli; без группы nli — NLIUnavailableError, а не None.
+
+    Модель скачивается при первой проверке, а зависимости проверяются сразу: сервис с
+    режимом nli без них не стартует, вместо того чтобы молча проверять ситуации LLM.
+    """
+    if options.essay_check_method != "nli":
+        return None
+    import_runtime()
+    return OnnxNLI(
+        options.essay_nli_model,
+        options.essay_nli_onnx_file,
+        revision=options.essay_nli_revision,
+    )
 
 
 def premise_units(sentences: list[str], window: int) -> list[str]:

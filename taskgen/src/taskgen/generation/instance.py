@@ -51,6 +51,7 @@ from taskgen.generation.leaks import (
     mentions_entrypoint,
     public_count,
 )
+from taskgen.generation.nli import NLIModel
 from taskgen.generation.params import draw_params, fill_placeholders
 from taskgen.generation.quiz import (
     QuizCaseError,
@@ -257,6 +258,8 @@ class InstanceDeps:
     # Эмбеддер и кэш векторов шаблонов для проверки ситуации эссе; способ проверки — в options.
     embedder: Embedder | None = None
     embedding_cache: EmbeddingCache | None = None
+    # Модель NLI для проверки фактов эссе в режиме nli.
+    nli: NLIModel | None = None
 
     def solver(self) -> SolverConfig | None:
         """Настройки слепого решателя; None — решатель выключен."""
@@ -369,9 +372,14 @@ async def _essay(
                 forbidden_threshold=deps.options.essay_forbidden_threshold,
                 grey_zone=deps.options.essay_grey_zone,
                 quote_threshold=deps.options.essay_quote_threshold,
+                nli_threshold=deps.options.essay_nli_threshold,
+                nli_contradiction=deps.options.essay_nli_contradiction,
+                nli_window=deps.options.essay_nli_window,
+                nli_llm_phrases=deps.options.essay_nli_llm_phrases,
             ),
             embedder=deps.embedder,
             embedding_cache=deps.embedding_cache,
+            nli=deps.nli,
         )
     except httpx.HTTPError as error:
         raise LLMUnavailableError("Модель генерации недоступна, повторите позже") from error

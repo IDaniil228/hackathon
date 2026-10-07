@@ -400,10 +400,52 @@ class GenerationSettings(BaseModel):
     essay_check_method: EssayCheckMethod = Field(
         default="llm",
         description="Чем проверять ситуацию эссе на факты и пересказ запрещённых фраз: llm, "
-        "embeddings или both, где LLM решает только серую зону вокруг порогов. Без эмбеддера "
-        "режимы с эмбеддингами проверяет LLM. LLM по умолчанию: на бенчмарке "
-        "scripts/essay_check_bench.py эмбеддинги принимают отрицание факта за сам факт и не "
-        "отличают запрещённую фразу от темы ситуации",
+        "embeddings, both, где LLM решает только серую зону вокруг порогов, или nli, где "
+        "факты решает модель NLI, а пересказ фраз — LLM. Без эмбеддера или модели NLI "
+        "ситуацию проверяет LLM. Режиму nli нужна группа зависимостей uv nli, без неё сервис "
+        "не стартует. LLM по умолчанию: на бенчмарке scripts/essay_check_bench.py эмбеддинги "
+        "принимают отрицание факта за сам факт и не отличают запрещённую фразу от темы "
+        "ситуации, а модели NLI не лучше эмбеддингов на фактах. Числа — "
+        "docs/taskgen/validation.md",
+    )
+    essay_nli_model: str = Field(
+        default="cointegrated/rubert-base-cased-nli-threeway",
+        description="Модель NLI с Hugging Face Hub для режима nli: в репозитории нужны "
+        "config.json с метками entailment и contradiction, tokenizer.json и onnx-файл",
+    )
+    essay_nli_onnx_file: str = Field(
+        default="onnx/model.onnx", description="Путь к onnx-файлу внутри репозитория модели"
+    )
+    essay_nli_revision: str | None = Field(
+        default="920cbb52ef830e94461bf141ec2119979b6049e2",
+        description="Коммит репозитория модели NLI, на котором подобраны пороги; null — последний",
+    )
+    essay_nli_threshold: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=1.0,
+        description="Порог вероятности entailment факта хотя бы из одной посылки ситуации, "
+        "подобран бенчмарком scripts/essay_check_bench.py nli по F1 для модели по умолчанию",
+    )
+    essay_nli_contradiction: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Порог вероятности contradiction: если хоть одна посылка противоречит "
+        "факту с такой вероятностью, факта нет. null выключает вето",
+    )
+    essay_nli_window: int = Field(
+        default=1,
+        ge=1,
+        le=2,
+        description="Посылка NLI: 1 — предложение ситуации, 2 — ещё и пары соседних "
+        "предложений для факта, разнесённого по двум",
+    )
+    essay_nli_llm_phrases: bool = Field(
+        default=True,
+        description="Спрашивать ли в режиме nli LLM о пересказе запрещённых фраз. LLM "
+        "зовётся, только если все факты есть и подстрока фраз не нашла; false оставляет "
+        "только поиск подстрокой",
     )
     essay_fact_threshold: float = Field(
         default=0.6,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import random
 import re
@@ -21,6 +22,7 @@ from taskgen.generation.instance import (
     TemplateDefectError,
     generate_instance,
 )
+from taskgen.generation.nli import Inference
 from taskgen.generation.params import draw_params
 from taskgen.sandbox.environment import describe_runtime
 from tests.evaluation.fakes import FakeLLM, http_error
@@ -402,6 +404,33 @@ async def test_essay_quote_threshold_comes_from_generation_settings(threshold, e
     # В режиме llm эмбеддер нужен только проверке смысла цитат.
     assert bool(embedder.calls) is embedded
     assert instance.statement
+
+
+@pytest.mark.parametrize(("threshold", "passes"), [(0.5, True), (0.7, False)])
+async def test_essay_nli_settings_reach_the_check(threshold, passes):
+    class HalfSure:
+        name = "half-sure"
+
+        async def infer(self, pairs):
+            return [Inference(0.6, 0.0) for _ in pairs]
+
+    llm = FakeLLM(essay_reply)
+    settings = {
+        "essay_check_method": "nli",
+        "essay_nli_threshold": threshold,
+        "essay_nli_llm_phrases": False,
+        "legend_attempts": 1,
+    }
+    instance_deps = dataclasses.replace(deps(llm, None, **settings), nli=HalfSure())
+
+    if passes:
+        await generate_instance(essay_spec(), 1, instance_deps)
+    else:
+        with pytest.raises(ModelOutputError, match="нет фактов"):
+            await generate_instance(essay_spec(), 1, instance_deps)
+    # Факты решила модель NLI, а фразы LLM не спрашивали: в LLM ушёл только запрос ситуации.
+    [scenario] = llm.calls
+    assert "situation" in scenario["json_schema"]["properties"]
 
 
 async def test_essay_embeddings_without_embedder_are_checked_by_llm():

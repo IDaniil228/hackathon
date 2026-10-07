@@ -16,6 +16,7 @@ from taskgen.contracts import LLMClient, SandboxRunner
 from taskgen.db import make_sessionmaker
 from taskgen.evaluation.api import router as evaluation_router
 from taskgen.generation.api import router as generation_router
+from taskgen.generation.nli import model_from_settings
 from taskgen.generation.worker import GenerationWorker
 from taskgen.llm import ProviderRouter
 from taskgen.sandbox.piston import PistonRunner
@@ -37,6 +38,8 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.settings = settings
+        # Первым: без зависимостей NLI старт обрывается до того, как открыты клиенты.
+        app.state.nli = model_from_settings(settings.generation)
         app.state.sessionmaker = make_sessionmaker(settings.database_url)
         own_llm = ProviderRouter.from_settings(settings.llm) if llm is None else None
         own_sandbox = PistonRunner(settings.sandbox) if sandbox is None else None

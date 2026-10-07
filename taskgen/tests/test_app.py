@@ -1,7 +1,11 @@
+import sys
+
 import pytest
+from fastapi.testclient import TestClient
 
 from taskgen.app import api_routes, create_app
 from taskgen.auth import Role, route_roles
+from taskgen.generation.nli import NLIUnavailableError
 from tests.conftest import ADMIN_KEY
 
 
@@ -21,6 +25,16 @@ def test_every_keyed_route_documents_auth_errors(settings):
     assert len(keyed) == len(routes) - 1 and not missing, missing
     assert route_roles(next(r for r in routes if r.path == "/health")) is None
     assert route_roles(next(r for r in routes if r.path == "/keys")) == (Role.ADMIN,)
+
+
+def test_nli_mode_without_its_dependencies_stops_the_start(settings, monkeypatch):
+    # None в sys.modules заставляет import поднять ImportError, даже если пакет стоит.
+    monkeypatch.setitem(sys.modules, "onnxruntime", None)
+    generation = settings.generation.model_copy(update={"essay_check_method": "nli"})
+    app = create_app(settings.model_copy(update={"generation": generation}))
+
+    with pytest.raises(NLIUnavailableError, match="uv sync --group nli"), TestClient(app):
+        pass
 
 
 def test_health_answers_without_key(client):

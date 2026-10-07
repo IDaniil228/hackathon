@@ -49,6 +49,7 @@ from taskgen.generation.instance import (
     TemplateDefectError,
     generate_instance,
 )
+from taskgen.generation.nli import NLIModel
 from taskgen.generation.profile import CandidateProfile, profile_hash
 from taskgen.llm import limited_llm, state_embedder
 
@@ -114,6 +115,7 @@ class Generator:
     embedder: Embedder | None
     sandbox: SandboxRunner | None
     embedding_cache: EmbeddingCache
+    nli: NLIModel | None = None
 
     @classmethod
     def from_state(cls, state: Any) -> Generator:
@@ -128,6 +130,7 @@ class Generator:
             embedder=state_embedder(state),
             sandbox=getattr(state, "sandbox", None),
             embedding_cache=state_embedding_cache(state),
+            nli=getattr(state, "nli", None),
         )
 
     def instance_deps(self) -> InstanceDeps:
@@ -143,6 +146,7 @@ class Generator:
             solver_reasoning_effort=self.settings.llm.solver.reasoning_effort,
             embedder=self.embedder,
             embedding_cache=self.embedding_cache,
+            nli=self.nli,
             options=self.options,
             limits=RunLimits(
                 timeout_ms=sandbox.run_timeout_ms, memory_bytes=sandbox.run_memory_limit_bytes

@@ -129,7 +129,7 @@ class ChatMessage(BaseModel):
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
 
 # Способ проверки ситуации эссе; что делает каждый, описано в generation/essay.py.
-EssayCheckMethod = Literal["llm", "embeddings", "both"]
+EssayCheckMethod = Literal["llm", "embeddings", "both", "nli"]
 
 
 class LLMClient(Protocol):
