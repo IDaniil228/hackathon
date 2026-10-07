@@ -198,6 +198,9 @@ class Embedder(Protocol):
 
 # --- Песочница --------------------------------------------------------------------------
 
+# Как вывод решения сверяется с ожидаемым; смысл режимов описан в taskgen/sandbox/checkers.py.
+CheckMode = Literal["tokens", "exact", "float", "json", "checker"]
+
 
 class RunLimits(BaseModel):
     timeout_ms: int

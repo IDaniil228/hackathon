@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from taskgen.contracts import CaseOutcome, RunLimits, TestCase, TestReport
-from taskgen.sandbox.compare import values_match
+from taskgen.sandbox.checkers import values_match
 
 # Пик памяти, начиная с которого убийство процесса приписывается лимиту памяти. Piston
 # переводит байты в килобайты и обратно с округлением, поэтому пик не равен лимиту точно.
