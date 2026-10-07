@@ -412,7 +412,10 @@ def render_libraries() -> str:
     lock = tomllib.loads((PROJECT / "uv.lock").read_text(encoding="utf-8"))
     root, versions = _lock_packages(lock)
     runtime = {d["name"] for d in root.get("dependencies", [])}
-    dev = {d["name"] for group in root.get("dev-dependencies", {}).values() for d in group}
+    groups = {
+        name: {d["name"] for d in group} for name, group in root.get("dev-dependencies", {}).items()
+    }
+    dev = set().union(*groups.values())
     metadata = root.get("metadata", {})
     constraints = _specifiers(metadata.get("requires-dist", []))
     for group in metadata.get("requires-dev", {}).values():
@@ -458,8 +461,20 @@ def render_libraries() -> str:
         "## Прямые зависимости сервиса\n\n"
         + table(["Пакет", "Версия", "Ограничение в pyproject.toml"], direct_rows(runtime)),
         "## Зависимости разработки\n\n"
-        + table(["Пакет", "Версия", "Ограничение в pyproject.toml"], direct_rows(dev - runtime)),
-        "## Транзитивные зависимости\n\nЗависимости пакетов выше, и сервиса, и разработки\n\n"
+        + table(
+            ["Пакет", "Версия", "Ограничение в pyproject.toml"],
+            direct_rows(groups.get("dev", set()) - runtime),
+        ),
+        *(
+            f"## Необязательная группа `{name}`\n\nСтавится только явно: "
+            f"`uv sync --group {name}`\n\n"
+            + table(
+                ["Пакет", "Версия", "Ограничение в pyproject.toml"], direct_rows(names - runtime)
+            )
+            for name, names in sorted(groups.items())
+            if name != "dev"
+        ),
+        "## Транзитивные зависимости\n\nЗависимости всех пакетов выше\n\n"
         + table(
             ["Пакет", "Версия"],
             [[code(n), ", ".join(code(v) for v in versions[n])] for n in transitive],
