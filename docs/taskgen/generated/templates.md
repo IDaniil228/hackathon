@@ -3,7 +3,7 @@
 > [!NOTE]
 > Файл собран командой `uv run python scripts/gen_docs.py` из каталога `taskgen/`. Не правьте его руками: правьте источник и пересоберите файл. Источник — шаблоны [`seed/templates`](../../../taskgen/seed/templates), разобранные `parse_template`, и вакансии [`seed/vacancies`](../../../taskgen/seed/vacancies)
 
-В банке 53 шаблонов. Формат шаблона описан в [`TEMPLATE_FORMAT.md`](../../../taskgen/TEMPLATE_FORMAT.md)
+В банке 59 шаблонов. Формат шаблона описан в [`TEMPLATE_FORMAT.md`](../../../taskgen/TEMPLATE_FORMAT.md)
 
 ## Сводка по ячейкам
 
@@ -12,9 +12,9 @@
 | `algo` | `junior` | 2 | 3 | 2 | 3 | 3–20 |
 | `algo` | `middle` | 2 | 3 | 2 | 5 | 3–30 |
 | `algo` | `senior` | 2 | 3 | 2 | 7 | 4–40 |
-| `backend` | `junior` | 3 | 1 | 2 | 3 | 3–25 |
-| `backend` | `middle` | 3 | 1 | 2 | 4–5 | 4–30 |
-| `backend` | `senior` | 2 | 1 | 2 | 6–7 | 4–40 |
+| `backend` | `junior` | 3 | 3 | 2 | 3 | 3–25 |
+| `backend` | `middle` | 3 | 3 | 2 | 4–5 | 4–30 |
+| `backend` | `senior` | 2 | 3 | 2 | 6–7 | 4–40 |
 | `ml` | `junior` | 2 | 1 | 2 | 3 | 3–20 |
 | `ml` | `middle` | 2 | 1 | 2 | 5 | 4–30 |
 | `ml` | `senior` | 2 | 1 | 2 | 7 | 4–40 |
@@ -51,19 +51,25 @@
 |---|---|---|---|---|---|---|---|---|
 | [`backend-dockerfile-review-essay`](../../../taskgen/seed/templates/backend/junior/backend-dockerfile-review-essay.md) | `junior` | essay |  | 3 | 20 | `docker`, `django`, `security` | 7 | Ревью Dockerfile для Django-приложения: кэш слоёв и порядок COPY, секреты в образе, запуск от root, runserver вместо WSGI-сервера, тег latest и .dockerignore |
 | [`backend-http-status-quiz`](../../../taskgen/seed/templates/backend/junior/backend-http-status-quiz.md) | `junior` | quiz |  | 3 | 3 | `http-api`, `python` | 4 | Выбор кода ответа HTTP по ситуации: нет учётных данных, некорректное тело запроса, нет ресурса, конфликт версий при правке |
+| [`backend-login-security-review-essay`](../../../taskgen/seed/templates/backend/junior/backend-login-security-review-essay.md) | `junior` | essay |  | 3 | 20 | `security`, `sql`, `python` | 6 | Ревью функции входа по логину и паролю: SQL-инъекция, быстрый хэш без соли, пароль в журнале, сравнение хэшей и защита от перебора паролей |
 | [`backend-paginate`](../../../taskgen/seed/templates/backend/junior/backend-paginate.md) | `junior` | code, function | `python` | 3 | 20 | `python`, `http-api` | 6 | Постраничная выдача списка по параметрам запроса: разбор строковых page и per_page, значения по умолчанию, ограничение размера страницы, метаданные страниц |
+| [`backend-rest-api-review-essay`](../../../taskgen/seed/templates/backend/junior/backend-rest-api-review-essay.md) | `junior` | essay |  | 3 | 20 | `http-api` | 8 | Ревью первой версии HTTP API: адреса и методы, побочные эффекты GET, коды ответов и формат ошибок, доступ к чужим данным, постраничная выдача, повторы запросов и совместимость версий |
 | [`backend-sql-clause-quiz`](../../../taskgen/seed/templates/backend/junior/backend-sql-clause-quiz.md) | `junior` | quiz |  | 3 | 3 | `sql` | 4 | Выбор конструкции SQL под задачу отчёта: отбор строк до группировки, отбор групп по агрегату, соединение таблиц, удаление повторов |
 | [`backend-status-counts-bash`](../../../taskgen/seed/templates/backend/junior/backend-status-counts-bash.md) | `junior` | code, stdio | `bash` | 3 | 20 | `bash`, `text-processing`, `observability` | 5 | Скрипт на Bash, который считает запросы по статусам ответа в журнале доступа из stdin: пропуск битых строк, порог числа запросов, числовая сортировка по убыванию и ничьи |
 | [`backend-validate-signup`](../../../taskgen/seed/templates/backend/junior/backend-validate-signup.md) | `junior` | code, function | `python` | 3 | 25 | `python`, `http-api` | 6 | Валидация тела запроса регистрации: обязательные поля, типы JSON с ловушкой bool как int, правила для email, пароля, возраста и логина, сбор всех ошибок в стабильном порядке |
 | [`backend-cache-control-quiz`](../../../taskgen/seed/templates/backend/middle/backend-cache-control-quiz.md) | `middle` | quiz |  | 5 | 4 | `http-api`, `caching` | 4 | Выбор заголовка Cache-Control по требованиям к ответу: неизменяемая статика, чувствительные данные, обязательная проверка свежести, личные данные с допустимым отставанием |
+| [`backend-concurrent-booking-essay`](../../../taskgen/seed/templates/backend/middle/backend-concurrent-booking-essay.md) | `middle` | essay |  | 5 | 25 | `sql`, `django` | 7 | Перепродажа ограниченного остатка при конкурентных запросах в Django: чтение, проверка и запись без защиты, атомарное условное обновление, блокировка строки, уровни изоляции, двойные брони и тест на конкурентность |
 | [`backend-django-orm-performance-essay`](../../../taskgen/seed/templates/backend/middle/backend-django-orm-performance-essay.md) | `middle` | essay |  | 5 | 25 | `django`, `sql` | 8 | Отладка медленного эндпоинта Django: проблема N+1, select_related и prefetch_related, индексы и EXPLAIN, лишние поля и count, кэширование и проверка результата |
 | [`backend-idempotency-keys`](../../../taskgen/seed/templates/backend/middle/backend-idempotency-keys.md) | `middle` | code, function | `python` | 5 | 30 | `python`, `http-api`, `caching` | 6 | Обработка повторных запросов по ключу идемпотентности: повтор с тем же телом, конфликт при другом теле, срок жизни записи, ошибки сервера не сохраняются |
 | [`backend-isolation-level-quiz`](../../../taskgen/seed/templates/backend/middle/backend-isolation-level-quiz.md) | `middle` | quiz |  | 5 | 4 | `sql`, `django` | 3 | Минимальный уровень изоляции транзакций по стандарту SQL, который исключает описанную аномалию чтения |
 | [`backend-orders-csv-report`](../../../taskgen/seed/templates/backend/middle/backend-orders-csv-report.md) | `middle` | code, stdio | `python` | 4 | 25 | `python`, `text-processing` | 5 | Программа на Python, которая строит отчёт по CSV-выгрузке заказов из файла: разбор полей в кавычках, пропуск битых строк, фильтр по статусу из stdin, суммы по клиентам и сортировка |
+| [`backend-read-cache-design-essay`](../../../taskgen/seed/templates/backend/middle/backend-read-cache-design-essay.md) | `middle` | essay |  | 5 | 25 | `caching`, `http-api`, `sql` | 6 | Проектирование кэша перед медленной базой: схема чтения и записи, устаревание и время жизни записей, наплыв промахов на популярный ключ, локальный и общий кэш, метрики и отказ кэша |
 | [`backend-sliding-rate-limiter`](../../../taskgen/seed/templates/backend/middle/backend-sliding-rate-limiter.md) | `middle` | code, function | `python` | 5 | 30 | `python`, `http-api` | 6 | Ограничитель частоты запросов со скользящим окном по журналу принятых запросов: границы окна, одинаковые метки времени, отклонённые запросы не расходуют лимит |
 | [`backend-consistency-pattern-quiz`](../../../taskgen/seed/templates/backend/senior/backend-consistency-pattern-quiz.md) | `senior` | quiz |  | 7 | 5 | `http-api`, `sql` | 3 | Выбор шаблона согласованности для операции, которая затрагивает несколько хранилищ: атомарная запись с событием, долгий бизнес-процесс, короткая атомарная операция над двумя базами |
 | [`backend-django-docker-production-essay`](../../../taskgen/seed/templates/backend/senior/backend-django-docker-production-essay.md) | `senior` | essay |  | 7 | 35 | `django`, `docker`, `security`, `sql` | 8 | Проектирование выката Django в контейнерах: миграции без простоя, секреты и настройки безопасности, проверки готовности, статика, воркеры и наблюдаемость |
+| [`backend-latency-incident-essay`](../../../taskgen/seed/templates/backend/senior/backend-latency-incident-essay.md) | `senior` | essay |  | 7 | 35 | `observability`, `http-api`, `sql` | 7 | Расследование роста задержки в цепочке сервисов и построение наблюдаемости: гипотезы по симптому, метрики сервисов и ресурсов, распределённая трассировка, перцентили, цели по надёжности, оповещения и разбор инцидента |
 | [`backend-latency-report`](../../../taskgen/seed/templates/backend/senior/backend-latency-report.md) | `senior` | code, function | `python` | 6 | 40 | `python`, `observability`, `http-api` | 7 | Отчёт по журналу доступа: строгий разбор строк с пропуском битых, нормализация маршрутов с идентификаторами, доля ошибок 5xx и перцентиль задержки методом ближайшего ранга |
+| [`backend-reliable-integration-essay`](../../../taskgen/seed/templates/backend/senior/backend-reliable-integration-essay.md) | `senior` | essay |  | 7 | 35 | `sql`, `http-api`, `observability` | 6 | Надёжная передача событий внешнему партнёру из транзакции: причины потерь и дублей, таблица исходящих сообщений, гарантии доставки и порядок, идемпотентный приёмник, повторы и отказы партнёра, мониторинг и переход на новую схему |
 | [`backend-telemetry-signal-quiz`](../../../taskgen/seed/templates/backend/senior/backend-telemetry-signal-quiz.md) | `senior` | quiz |  | 6 | 4 | `observability`, `http-api` | 4 | Выбор вида телеметрии под вопрос эксплуатации: перцентили задержки по многим экземплярам, текущее значение, число событий во времени, путь одного запроса |
 | [`backend-ttl-lru-cache`](../../../taskgen/seed/templates/backend/senior/backend-ttl-lru-cache.md) | `senior` | code, function | `python` | 7 | 40 | `python`, `caching` | 7 | Кэш с ограничением ёмкости и сроком жизни записей: вытеснение давно не использованных, ленивое и плановое удаление просроченных, логарифмическая стоимость операций |
 
