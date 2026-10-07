@@ -11,7 +11,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Any
 
-from pydantic import BaseModel, Field, SecretStr, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from taskgen.contracts import EssayCheckMethod, ReasoningEffort, TaskKind
@@ -19,8 +19,8 @@ from taskgen.contracts import EssayCheckMethod, ReasoningEffort, TaskKind
 ENV_PREFIX = "TASKGEN_"
 ENV_DELIMITER = "__"
 
-LOCAL_MODEL = "hf.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF:q4_K_M"
-CLOUD_MODEL = "deepseek-flash"
+LOCAL_MODEL = "ollama/hf.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF:q4_K_M"
+CLOUD_MODEL = "deepseek/deepseek-flash"
 
 
 class ProviderSettings(BaseModel):
@@ -71,11 +71,39 @@ def _merged(default: dict[str, Any], value: Any) -> Any:
     return {**default, **value} if isinstance(value, dict) else value
 
 
-class ModelRole(BaseModel):
-    """Модель роли и провайдер, у которого она запрашивается."""
+def split_model(model: str) -> tuple[str, str]:
+    """Провайдер и имя модели у него из строки провайдер/модель.
 
-    provider: str = Field(description="Имя провайдера из llm.providers")
-    model: str = Field(description="Имя модели у провайдера")
+    Провайдер — часть до первого /: в именах моделей Ollama бывают свои /.
+    """
+    provider, _, name = model.partition("/")
+    if not provider or not name:
+        raise ValueError(f"модель {model!r} не в форме провайдер/модель, например ollama/bge-m3")
+    return provider, name
+
+
+class ModelRole(BaseModel):
+    """Модель роли вместе с провайдером, у которого она запрашивается."""
+
+    model: str = Field(
+        description="Модель в форме провайдер/модель: часть до первого / — имя провайдера из "
+        "llm.providers, остальное — имя модели у провайдера, и в нём бывают свои /"
+    )
+
+    @field_validator("model")
+    @classmethod
+    def _has_provider(cls, value: str) -> str:
+        split_model(value)
+        return value
+
+    @property
+    def provider(self) -> str:
+        return split_model(self.model)[0]
+
+    @property
+    def provider_model(self) -> str:
+        """Имя модели у провайдера, без префикса."""
+        return split_model(self.model)[1]
 
 
 class ChatRole(ModelRole):
@@ -92,8 +120,7 @@ class ChatRole(ModelRole):
 class LLMSettings(BaseModel):
     """Провайдеры моделей и роли, которые их используют.
 
-    Роль ссылается на провайдера по имени. Вызов модели уходит провайдеру той роли, которая
-    назвала эту модель, поэтому одно имя модели не может стоять у двух провайдеров.
+    Роль называет модель строкой провайдер/модель, и вызов уходит провайдеру из префикса.
     """
 
     providers: dict[str, ProviderSettings] = Field(
@@ -105,32 +132,34 @@ class LLMSettings(BaseModel):
         "умолчанию, а новое имя добавляет провайдера, и тогда base_url обязателен",
     )
     generator: ChatRole = Field(
-        default=ChatRole(provider="ollama", model=LOCAL_MODEL),
+        default=ChatRole(model=LOCAL_MODEL),
         description="Пишет легенды, ситуации эссе, кейсы задачек и текст machine summary",
     )
     checker: ChatRole = Field(
-        default=ChatRole(provider="deepseek", model=CLOUD_MODEL),
+        default=ChatRole(model=CLOUD_MODEL),
         description="Проверяльщик ситуации эссе и кейса задачки: ищет в тексте факты шаблона "
         "и цитирует их",
     )
     solver: ChatRole = Field(
-        default=ChatRole(provider="ollama", model=LOCAL_MODEL),
+        default=ChatRole(model=LOCAL_MODEL),
         description="Слепой решатель: решает экземпляр по тому, что увидит кандидат, до "
         "выдачи. Работает при generation.solver_enabled. Слабая модель решателя чаще "
         "отклоняет годные экземпляры",
     )
     judge: ChatRole = Field(
-        default=ChatRole(provider="deepseek", model=CLOUD_MODEL),
+        default=ChatRole(model=CLOUD_MODEL),
         description="Судья по рубрике. Судья другой модели снижает завышение оценок "
         "собственного текста генератора",
     )
     detector: ChatRole = Field(
-        default=ChatRole(provider="deepseek", model=CLOUD_MODEL),
+        default=ChatRole(model=CLOUD_MODEL),
         description="Детектор ИИ; работает при ai_detector_enabled",
     )
     embedding: ModelRole = Field(
-        default=ModelRole(provider="ollama", model="bge-m3"),
-        description="Модель эмбеддингов описаний шаблонов, навыков кандидата и ситуаций эссе",
+        default=ModelRole(model="ollama/bge-m3"),
+        description="Модель эмбеддингов описаний шаблонов, навыков кандидата и ситуаций эссе. "
+        "Векторы в БД помечены именем модели без провайдера: векторы задаёт модель, и смена "
+        "провайдера той же модели не требует пересчёта",
     )
 
     @model_validator(mode="before")
@@ -138,7 +167,7 @@ class LLMSettings(BaseModel):
     def _merge_defaults(cls, data: Any) -> Any:
         # pydantic-settings собирает из TASKGEN_LLM__PROVIDERS__DEEPSEEK__API_KEY словарь только
         # с этим полем и заменяет им провайдера по умолчанию целиком. То же с ролью и
-        # TASKGEN_LLM__GENERATOR__PROVIDER. Поэтому частичный словарь дополняется умолчанием.
+        # TASKGEN_LLM__GENERATOR__MODEL. Поэтому частичный словарь дополняется умолчанием.
         if not isinstance(data, dict):
             return data
         data = dict(data)
@@ -173,25 +202,13 @@ class LLMSettings(BaseModel):
         }
         return self.model_copy(update={"providers": providers})
 
-    def model_providers(self) -> dict[str, str]:
-        """Провайдер каждой модели чата, которую назвала роль."""
-        return {role.model: role.provider for role in self.chat_roles().values()}
-
     @model_validator(mode="after")
     def _roles_reach_their_providers(self) -> LLMSettings:
         for name, role in self.roles().items():
             if role.provider not in self.providers:
                 raise ValueError(
-                    f"роль {name} ссылается на провайдера {role.provider}, а в llm.providers "
-                    f"есть только {', '.join(sorted(self.providers))}"
-                )
-        seen: dict[str, tuple[str, str]] = {}
-        for name, role in self.chat_roles().items():
-            other = seen.setdefault(role.model, (name, role.provider))
-            if other[1] != role.provider:
-                raise ValueError(
-                    f"модель {role.model} у роли {other[0]} стоит на провайдере {other[1]}, а у "
-                    f"роли {name} — на {role.provider}; вызов идёт провайдеру по имени модели"
+                    f"модель {role.model} роли {name} ссылается на провайдера {role.provider}, "
+                    f"а в llm.providers есть только {', '.join(sorted(self.providers))}"
                 )
         return self
 

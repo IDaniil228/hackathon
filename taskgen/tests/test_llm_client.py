@@ -74,8 +74,8 @@ async def test_limiter_passes_reasoning_effort_through():
 
 async def test_roles_take_their_own_reasoning_effort():
     llm = LLMSettings(
-        generator=ChatRole(provider="ollama", model="writer", reasoning_effort="none"),
-        judge=ChatRole(provider="deepseek", model="judge", reasoning_effort="high"),
+        generator=ChatRole(model="ollama/writer", reasoning_effort="none"),
+        judge=ChatRole(model="deepseek/judge", reasoning_effort="high"),
     )
     state = SimpleNamespace(settings=Settings(llm=llm), sessionmaker=None, llm=FakeLLM([]))
     assert Generator.from_state(state).instance_deps().reasoning_effort == "none"

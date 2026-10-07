@@ -1,8 +1,8 @@
 """Клиент OpenAI-совместимого API (/v1/chat/completions и /v1/embeddings) и маршрут по ролям.
 
 Такой протокол отдают Ollama, vLLM и облачные API, поэтому провайдер меняется настройками
-llm.providers, а модель роли — настройками самой роли, без кода. Каждый вызов уже называет
-модель своей роли, и ProviderRouter отправляет его провайдеру этой роли.
+llm.providers, а модель роли — настройками самой роли, без кода. Каждый вызов называет модель
+строкой провайдер/модель, и ProviderRouter отправляет его провайдеру из префикса.
 """
 
 from __future__ import annotations
@@ -14,7 +14,13 @@ from typing import Any
 
 import httpx
 
-from taskgen.config import LLMSettings, ProviderSettings, Settings, provider_key_variable
+from taskgen.config import (
+    LLMSettings,
+    ProviderSettings,
+    Settings,
+    provider_key_variable,
+    split_model,
+)
 from taskgen.contracts import ChatMessage, Embedder, LLMClient, ReasoningEffort
 
 logger = logging.getLogger(__name__)
@@ -61,10 +67,11 @@ class LimitedLLM:
 class ProviderRouter:
     """LLMClient и Embedder над провайдерами ролей.
 
-    Вызов чата уходит провайдеру роли, которая назвала модель вызова; без модели — провайдеру
-    генератора. У каждого провайдера свой лимит одновременных вызовов: облако и локальная
-    модель — разные ресурсы. Эмбеддинги идут провайдеру роли embedding без лимита, как и до
-    разделения провайдеров.
+    Модель вызова — строка провайдер/модель: вызов уходит провайдеру из префикса, а сам
+    провайдер получает имя модели без префикса. Без модели вызов идёт модели генератора. У
+    каждого провайдера свой лимит одновременных вызовов: облако и локальная модель — разные
+    ресурсы. Эмбеддинги идут провайдеру роли embedding без лимита, как и до разделения
+    провайдеров.
     """
 
     def __init__(
@@ -76,9 +83,9 @@ class ProviderRouter:
             name: LimitedLLM(client, limit=settings.providers[name].concurrency)
             for name, client in self._clients.items()
         }
-        self._model_providers = settings.model_providers()
         self._owned = owned
-        self.model_name = settings.embedding.model
+        # Векторы в БД помечены именем модели без провайдера: см. описание llm.embedding.
+        self.model_name = settings.embedding.provider_model
 
     @classmethod
     def from_settings(
@@ -94,7 +101,7 @@ class ProviderRouter:
         }
         used = sorted({role.provider for role in chosen.values()})
         for name, role in chosen.items():
-            logger.info("Роль %s: модель %s у провайдера %s", name, role.model, role.provider)
+            logger.info("Роль %s: модель %s", name, role.model)
         for name in used:
             provider = settings.providers[name]
             if provider.requires_key and provider.api_key is None:
@@ -121,24 +128,27 @@ class ProviderRouter:
         json_schema: dict[str, Any] | None = None,
         reasoning_effort: ReasoningEffort | None = None,
     ) -> str:
-        model = model or self._settings.generator.model
-        provider = self._model_providers.get(model)
-        if provider is None:
-            raise ValueError(
-                f"модель {model} не назначена ни одной роли в настройках llm, и неизвестно, "
-                "какому провайдеру её отправить"
-            )
+        provider, name = self._route(model or self._settings.generator.model)
         return await self._limited[provider].complete(
             messages,
-            model=model,
+            model=name,
             temperature=temperature,
             json_schema=json_schema,
             reasoning_effort=reasoning_effort,
         )
 
+    def _route(self, model: str) -> tuple[str, str]:
+        provider, name = split_model(model)
+        if provider not in self._limited:
+            raise ValueError(
+                f"модель {model}: провайдер {provider} не настроен, есть только "
+                f"{', '.join(sorted(self._limited))}"
+            )
+        return provider, name
+
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        client = self._clients[self._settings.embedding.provider]
-        return await client.embed(texts, model=self.model_name)
+        provider, name = self._route(self._settings.embedding.model)
+        return await self._clients[provider].embed(texts, model=name)
 
     async def aclose(self) -> None:
         if self._owned:
@@ -158,8 +168,7 @@ def limited_llm(state: Any) -> ProviderRouter:
     router = getattr(state, "limited_llm", None)
     if router is None or getattr(state, "limited_llm_inner", None) is not state.llm:
         settings: Settings = state.settings
-        providers = {role.provider for role in settings.llm.roles().values()}
-        router = ProviderRouter(settings.llm, dict.fromkeys(providers, state.llm))
+        router = ProviderRouter(settings.llm, dict.fromkeys(settings.llm.providers, state.llm))
         state.limited_llm = router
         state.limited_llm_inner = state.llm
     return router

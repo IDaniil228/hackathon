@@ -8,12 +8,13 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from taskgen.config import LOCAL_MODEL, ChatRole, LLMSettings, ProviderSettings, Settings
+from taskgen.config import ChatRole, LLMSettings, ProviderSettings, Settings
 from taskgen.contracts import ChatMessage
 from taskgen.llm import MissingAPIKeyError, OpenAICompatibleClient, ProviderRouter
 
 MESSAGES = [ChatMessage(role="user", content="Привет")]
 SECRET = "sk-test-secret-value"
+GIGACHAT = "hf.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF:q4_K_M"
 
 
 def _settings(**env: str) -> Settings:
@@ -30,10 +31,22 @@ def test_defaults_put_generation_local_and_evaluation_in_cloud(monkeypatch):
     assert len(local) == 1 and len(cloud) == 1 and local != cloud
     assert llm.providers[local.pop()].base_url.startswith("http://localhost:11434")
     assert llm.providers[cloud.pop()].base_url == "https://api.deepseek.com"
-    assert llm.generator.model == llm.solver.model == LOCAL_MODEL
-    assert llm.judge.model == llm.checker.model == llm.detector.model == "deepseek-flash"
-    assert llm.embedding.model == "bge-m3"
+    assert llm.generator.model == llm.solver.model == f"ollama/{GIGACHAT}"
+    assert llm.judge.model == llm.checker.model == llm.detector.model == "deepseek/deepseek-flash"
+    assert llm.embedding.model == "ollama/bge-m3"
     assert {role.reasoning_effort for role in llm.chat_roles().values()} == {"none"}
+
+
+def test_provider_is_the_part_before_the_first_slash():
+    # В именах моделей Ollama бывают свои косые черты.
+    role = ChatRole(model=f"ollama/{GIGACHAT}")
+    assert (role.provider, role.provider_model) == ("ollama", GIGACHAT)
+
+
+@pytest.mark.parametrize("model", ["deepseek-flash", "/m", "ollama/", ""])
+def test_model_without_provider_prefix_is_rejected(model):
+    with pytest.raises(ValidationError, match="провайдер/модель"):
+        ChatRole(model=model)
 
 
 def test_key_from_env_keeps_the_rest_of_the_default_provider(monkeypatch):
@@ -45,34 +58,28 @@ def test_key_from_env_keeps_the_rest_of_the_default_provider(monkeypatch):
     assert SECRET not in repr(llm) and SECRET not in llm.model_dump_json()
 
 
-def test_env_moves_a_role_to_another_provider(monkeypatch):
-    monkeypatch.setenv("TASKGEN_LLM__JUDGE__PROVIDER", "ollama")
-    monkeypatch.setenv("TASKGEN_LLM__JUDGE__MODEL", "qwen3.5:4b")
+def test_env_moves_a_role_to_another_provider_and_keeps_its_effort(monkeypatch):
+    monkeypatch.setenv("TASKGEN_LLM__JUDGE__MODEL", "ollama/qwen3.5:4b")
     llm = _settings().llm
-    assert (llm.judge.provider, llm.judge.model) == ("ollama", "qwen3.5:4b")
+    assert (llm.judge.provider, llm.judge.provider_model) == ("ollama", "qwen3.5:4b")
+    assert llm.judge.reasoning_effort == "none"
     assert llm.checker.provider == "deepseek"
 
 
-def test_env_adds_a_new_provider(monkeypatch):
+def test_env_adds_a_new_provider_for_one_role(monkeypatch):
     monkeypatch.setenv("TASKGEN_LLM__PROVIDERS__VLLM__BASE_URL", "http://gpu:8000/v1")
-    # Генератор и решатель по умолчанию называют одну модель, поэтому переезжают вместе.
-    monkeypatch.setenv("TASKGEN_LLM__GENERATOR__PROVIDER", "vllm")
-    monkeypatch.setenv("TASKGEN_LLM__SOLVER__PROVIDER", "vllm")
+    monkeypatch.setenv("TASKGEN_LLM__GENERATOR__MODEL", f"vllm/{GIGACHAT}")
     llm = _settings().llm
-    assert llm.generator.model == LOCAL_MODEL and llm.generator.provider == "vllm"
+    # Та же модель у двух провайдеров законна: решатель остаётся в Ollama.
+    assert llm.generator.provider == "vllm" and llm.solver.provider == "ollama"
+    assert llm.generator.provider_model == llm.solver.provider_model == GIGACHAT
     assert llm.providers["vllm"].base_url == "http://gpu:8000/v1"
     assert {"ollama", "deepseek", "vllm"} <= llm.providers.keys()
 
 
-def test_role_on_unknown_provider_is_rejected():
-    with pytest.raises(ValidationError, match="nowhere"):
-        LLMSettings(judge=ChatRole(provider="nowhere", model="m"))
-
-
-def test_one_model_name_on_two_providers_is_rejected():
-    # Вызов идёт провайдеру по имени модели, и одно имя не может вести к двум провайдерам.
-    with pytest.raises(ValidationError, match="deepseek-flash"):
-        LLMSettings(generator=ChatRole(provider="ollama", model="deepseek-flash"))
+def test_role_on_unknown_provider_is_rejected_with_the_known_ones():
+    with pytest.raises(ValidationError, match="nowhere.*deepseek, ollama"):
+        LLMSettings(judge=ChatRole(model="nowhere/m"))
 
 
 class SlowLLM:
@@ -101,15 +108,16 @@ def _two_providers(local_limit: int = 1, cloud_limit: int = 1) -> LLMSettings:
     )
 
 
-async def test_router_sends_each_role_to_its_provider():
+async def test_router_sends_the_call_to_the_prefix_provider_without_the_prefix():
     settings = _two_providers()
     local, cloud = SlowLLM(), SlowLLM()
     router = ProviderRouter(settings, {"ollama": local, "deepseek": cloud})
     await router.complete(MESSAGES, model=settings.generator.model)
-    await router.complete(MESSAGES, model=settings.judge.model)
+    await router.complete(MESSAGES, model="deepseek/any-model")
+    await router.complete(MESSAGES, model=f"deepseek/{GIGACHAT}")
     await router.complete(MESSAGES)
-    assert local.models == [settings.generator.model, settings.generator.model]
-    assert cloud.models == [settings.judge.model]
+    assert local.models == [GIGACHAT, GIGACHAT]
+    assert cloud.models == ["any-model", GIGACHAT]
 
 
 async def test_router_limits_each_provider_separately():
@@ -122,10 +130,11 @@ async def test_router_limits_each_provider_separately():
     assert (local.peak, cloud.peak) == (1, 3)
 
 
-async def test_router_rejects_a_model_no_role_names():
+@pytest.mark.parametrize("model", ["unknown-model", "nowhere/m"])
+async def test_router_rejects_a_model_without_a_known_provider(model):
     router = ProviderRouter(_two_providers(), {"ollama": SlowLLM(), "deepseek": SlowLLM()})
-    with pytest.raises(ValueError, match="unknown-model"):
-        await router.complete(MESSAGES, model="unknown-model")
+    with pytest.raises(ValueError, match=model):
+        await router.complete(MESSAGES, model=model)
 
 
 def _recording_client(provider: ProviderSettings, status: int = 200):
@@ -189,9 +198,9 @@ async def test_router_from_settings_warns_about_a_missing_key_and_still_starts(c
 async def test_router_from_settings_builds_clients_only_for_used_providers():
     settings = LLMSettings(
         providers={"spare": ProviderSettings(base_url="http://spare")},
-        judge=ChatRole(provider="ollama", model="qwen3.5:4b"),
-        checker=ChatRole(provider="ollama", model="qwen3.5:4b"),
-        detector=ChatRole(provider="ollama", model="qwen3.5:4b"),
+        judge=ChatRole(model="ollama/qwen3.5:4b"),
+        checker=ChatRole(model="ollama/qwen3.5:4b"),
+        detector=ChatRole(model="ollama/qwen3.5:4b"),
     )
     router = ProviderRouter.from_settings(settings)
     try:

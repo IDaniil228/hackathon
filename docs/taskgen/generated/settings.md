@@ -15,7 +15,7 @@
 
 ## llm
 
-Провайдеры моделей и роли, которые их используют. Роль ссылается на провайдера по имени. Вызов модели уходит провайдеру той роли, которая назвала эту модель, поэтому одно имя модели не может стоять у двух провайдеров
+Провайдеры моделей и роли, которые их используют. Роль называет модель строкой провайдер/модель, и вызов уходит провайдеру из префикса
 
 | Поле | Переменная окружения | Тип | По умолчанию | Описание |
 |---|---|---|---|---|
@@ -31,28 +31,22 @@
 | `llm.providers.deepseek.timeout_seconds` | `TASKGEN_LLM__PROVIDERS__DEEPSEEK__TIMEOUT_SECONDS` | number, > 0 | `120.0` | Таймаут одного HTTP-запроса к провайдеру, секунды |
 | `llm.providers.deepseek.concurrency` | `TASKGEN_LLM__PROVIDERS__DEEPSEEK__CONCURRENCY` | integer, ≥ 1 | `4` | Сколько запросов к провайдеру идут одновременно, общий лимит генерации и оценки на этом провайдере. Локальная модель отвечает по очереди; облачному провайдеру можно больше |
 | `llm.generator` | `TASKGEN_LLM__GENERATOR` | `ChatRole` |  | Пишет легенды, ситуации эссе, кейсы задачек и текст machine summary |
-| `llm.generator.provider` | `TASKGEN_LLM__GENERATOR__PROVIDER` | string | `"ollama"` | Имя провайдера из llm.providers |
-| `llm.generator.model` | `TASKGEN_LLM__GENERATOR__MODEL` | string | `"hf.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF:q4_K_M"` | Имя модели у провайдера |
+| `llm.generator.model` | `TASKGEN_LLM__GENERATOR__MODEL` | string | `"ollama/hf.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF:q4_K_M"` | Модель в форме провайдер/модель: часть до первого / — имя провайдера из llm.providers, остальное — имя модели у провайдера, и в нём бывают свои / |
 | `llm.generator.reasoning_effort` | `TASKGEN_LLM__GENERATOR__REASONING_EFFORT` | одно из `"none"`, `"minimal"`, `"low"`, `"medium"`, `"high"` или null | `"none"` | Поле reasoning_effort запроса к модели роли; null — поле не передаётся, и модель рассуждает как обычно. "none" сокращает ответ в разы: рассуждение qwen3.5:4b на простой запрос занимало тысячи токенов и иногда не оставляло места самому ответу. Модель без рассуждений, как GigaChat 3.1 в Ollama, принимает только "none", а на другое значение отвечает HTTP 400 "does not support thinking" |
 | `llm.checker` | `TASKGEN_LLM__CHECKER` | `ChatRole` |  | Проверяльщик ситуации эссе и кейса задачки: ищет в тексте факты шаблона и цитирует их |
-| `llm.checker.provider` | `TASKGEN_LLM__CHECKER__PROVIDER` | string | `"deepseek"` | Имя провайдера из llm.providers |
-| `llm.checker.model` | `TASKGEN_LLM__CHECKER__MODEL` | string | `"deepseek-flash"` | Имя модели у провайдера |
+| `llm.checker.model` | `TASKGEN_LLM__CHECKER__MODEL` | string | `"deepseek/deepseek-flash"` | Модель в форме провайдер/модель: часть до первого / — имя провайдера из llm.providers, остальное — имя модели у провайдера, и в нём бывают свои / |
 | `llm.checker.reasoning_effort` | `TASKGEN_LLM__CHECKER__REASONING_EFFORT` | одно из `"none"`, `"minimal"`, `"low"`, `"medium"`, `"high"` или null | `"none"` | Поле reasoning_effort запроса к модели роли; null — поле не передаётся, и модель рассуждает как обычно. "none" сокращает ответ в разы: рассуждение qwen3.5:4b на простой запрос занимало тысячи токенов и иногда не оставляло места самому ответу. Модель без рассуждений, как GigaChat 3.1 в Ollama, принимает только "none", а на другое значение отвечает HTTP 400 "does not support thinking" |
 | `llm.solver` | `TASKGEN_LLM__SOLVER` | `ChatRole` |  | Слепой решатель: решает экземпляр по тому, что увидит кандидат, до выдачи. Работает при generation.solver_enabled. Слабая модель решателя чаще отклоняет годные экземпляры |
-| `llm.solver.provider` | `TASKGEN_LLM__SOLVER__PROVIDER` | string | `"ollama"` | Имя провайдера из llm.providers |
-| `llm.solver.model` | `TASKGEN_LLM__SOLVER__MODEL` | string | `"hf.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF:q4_K_M"` | Имя модели у провайдера |
+| `llm.solver.model` | `TASKGEN_LLM__SOLVER__MODEL` | string | `"ollama/hf.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF:q4_K_M"` | Модель в форме провайдер/модель: часть до первого / — имя провайдера из llm.providers, остальное — имя модели у провайдера, и в нём бывают свои / |
 | `llm.solver.reasoning_effort` | `TASKGEN_LLM__SOLVER__REASONING_EFFORT` | одно из `"none"`, `"minimal"`, `"low"`, `"medium"`, `"high"` или null | `"none"` | Поле reasoning_effort запроса к модели роли; null — поле не передаётся, и модель рассуждает как обычно. "none" сокращает ответ в разы: рассуждение qwen3.5:4b на простой запрос занимало тысячи токенов и иногда не оставляло места самому ответу. Модель без рассуждений, как GigaChat 3.1 в Ollama, принимает только "none", а на другое значение отвечает HTTP 400 "does not support thinking" |
 | `llm.judge` | `TASKGEN_LLM__JUDGE` | `ChatRole` |  | Судья по рубрике. Судья другой модели снижает завышение оценок собственного текста генератора |
-| `llm.judge.provider` | `TASKGEN_LLM__JUDGE__PROVIDER` | string | `"deepseek"` | Имя провайдера из llm.providers |
-| `llm.judge.model` | `TASKGEN_LLM__JUDGE__MODEL` | string | `"deepseek-flash"` | Имя модели у провайдера |
+| `llm.judge.model` | `TASKGEN_LLM__JUDGE__MODEL` | string | `"deepseek/deepseek-flash"` | Модель в форме провайдер/модель: часть до первого / — имя провайдера из llm.providers, остальное — имя модели у провайдера, и в нём бывают свои / |
 | `llm.judge.reasoning_effort` | `TASKGEN_LLM__JUDGE__REASONING_EFFORT` | одно из `"none"`, `"minimal"`, `"low"`, `"medium"`, `"high"` или null | `"none"` | Поле reasoning_effort запроса к модели роли; null — поле не передаётся, и модель рассуждает как обычно. "none" сокращает ответ в разы: рассуждение qwen3.5:4b на простой запрос занимало тысячи токенов и иногда не оставляло места самому ответу. Модель без рассуждений, как GigaChat 3.1 в Ollama, принимает только "none", а на другое значение отвечает HTTP 400 "does not support thinking" |
 | `llm.detector` | `TASKGEN_LLM__DETECTOR` | `ChatRole` |  | Детектор ИИ; работает при ai_detector_enabled |
-| `llm.detector.provider` | `TASKGEN_LLM__DETECTOR__PROVIDER` | string | `"deepseek"` | Имя провайдера из llm.providers |
-| `llm.detector.model` | `TASKGEN_LLM__DETECTOR__MODEL` | string | `"deepseek-flash"` | Имя модели у провайдера |
+| `llm.detector.model` | `TASKGEN_LLM__DETECTOR__MODEL` | string | `"deepseek/deepseek-flash"` | Модель в форме провайдер/модель: часть до первого / — имя провайдера из llm.providers, остальное — имя модели у провайдера, и в нём бывают свои / |
 | `llm.detector.reasoning_effort` | `TASKGEN_LLM__DETECTOR__REASONING_EFFORT` | одно из `"none"`, `"minimal"`, `"low"`, `"medium"`, `"high"` или null | `"none"` | Поле reasoning_effort запроса к модели роли; null — поле не передаётся, и модель рассуждает как обычно. "none" сокращает ответ в разы: рассуждение qwen3.5:4b на простой запрос занимало тысячи токенов и иногда не оставляло места самому ответу. Модель без рассуждений, как GigaChat 3.1 в Ollama, принимает только "none", а на другое значение отвечает HTTP 400 "does not support thinking" |
-| `llm.embedding` | `TASKGEN_LLM__EMBEDDING` | `ModelRole` |  | Модель эмбеддингов описаний шаблонов, навыков кандидата и ситуаций эссе |
-| `llm.embedding.provider` | `TASKGEN_LLM__EMBEDDING__PROVIDER` | string | `"ollama"` | Имя провайдера из llm.providers |
-| `llm.embedding.model` | `TASKGEN_LLM__EMBEDDING__MODEL` | string | `"bge-m3"` | Имя модели у провайдера |
+| `llm.embedding` | `TASKGEN_LLM__EMBEDDING` | `ModelRole` |  | Модель эмбеддингов описаний шаблонов, навыков кандидата и ситуаций эссе. Векторы в БД помечены именем модели без провайдера: векторы задаёт модель, и смена провайдера той же модели не требует пересчёта |
+| `llm.embedding.model` | `TASKGEN_LLM__EMBEDDING__MODEL` | string | `"ollama/bge-m3"` | Модель в форме провайдер/модель: часть до первого / — имя провайдера из llm.providers, остальное — имя модели у провайдера, и в нём бывают свои / |
 
 ## selection
 

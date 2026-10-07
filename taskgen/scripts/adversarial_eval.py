@@ -1,12 +1,13 @@
 """Прогон набора ответов tests/evaluation/adversarial через настоящую оценку.
 
     uv run python scripts/adversarial_eval.py --out results.json [--instances cache.json]
-        [--only SET[:ANSWER,...]] [--judge-model NAME --judge-reasoning-effort none]
+        [--only SET[:ANSWER,...]] [--judge-model PROVIDER/NAME --judge-reasoning-effort none]
 
 Экземпляр каждого шаблона собирается generate_instance с моделью генерации из настроек и
 песочницей Piston, ответ с кодом проходит тот же check_code, что в API, а балл считает
-evaluate_task с LLM-судьёй. Провайдер судьи — из настроек роли llm.judge, например
-TASKGEN_LLM__JUDGE__PROVIDER; флаги --judge-* меняют только модель и рассуждения судьи.
+evaluate_task с LLM-судьёй. Судья — роль llm.judge из настроек, например
+TASKGEN_LLM__JUDGE__MODEL=deepseek/deepseek-flash; флаги --judge-* заменяют её модель вместе с
+провайдером и рассуждения.
 Экземпляры кэшируются в --instances: повторный прогон и прогон другим судьёй оценивают те
 же условия.
 """
