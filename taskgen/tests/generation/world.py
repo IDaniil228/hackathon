@@ -180,10 +180,14 @@ class World:
 
         return {t.name.removeprefix(f"{self.prefix}-"): t for t in self._run(load)}
 
-    def tasks(self, session_id) -> list[Task]:
+    def tasks(self, session_id, *where) -> list[Task]:
         async def load():
             async with self.state.sessionmaker() as db:
-                query = select(Task).where(Task.session_id == session_id).order_by(Task.position)
+                query = (
+                    select(Task)
+                    .where(Task.session_id == session_id, *where)
+                    .order_by(Task.position)
+                )
                 return list(await db.scalars(query))
 
         return self._run(load)
@@ -201,10 +205,12 @@ class World:
 
         return self._run(load)
 
-    def sessions(self) -> list[TestSession]:
+    def sessions(self, *where) -> list[TestSession]:
         async def load():
             async with self.state.sessionmaker() as db:
-                query = select(TestSession).where(TestSession.candidate_ref == self.candidate)
+                query = select(TestSession).where(
+                    TestSession.candidate_ref == self.candidate, *where
+                )
                 return list(await db.scalars(query))
 
         return self._run(load)

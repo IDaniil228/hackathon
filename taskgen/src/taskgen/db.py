@@ -36,6 +36,10 @@ from taskgen.contracts import SessionStatus, TaskStatus
 
 SCHEMA = "taskgen"
 
+# None в необязательном поле JSONB пишется как SQL NULL, а не как JSON null. Иначе проверка
+# IS NULL не видит удалённый снимок профиля и пустые поля, а ORM читает оба варианта как None.
+OPTIONAL_JSONB = JSONB(none_as_null=True)
+
 
 class Base(DeclarativeBase):
     metadata = MetaData(schema=SCHEMA)
@@ -172,15 +176,15 @@ class TestSession(Base):
     # Снимок профиля кандидата (CandidateProfile) — персональные данные. Нужен только
     # генерации и удаляется, когда сгенерировано последнее задание; хэш остаётся, чтобы
     # отметить в profile_changed, что основной бэкенд прислал другой профиль.
-    profile: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    profile: Mapped[dict[str, Any] | None] = mapped_column(OPTIONAL_JSONB)
     profile_hash: Mapped[str | None] = mapped_column(String(64))
     profile_changed: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false")
     )
     # Как отбирались шаблоны: режим, параметры, расстояния и вероятности. Пишет генерация при
     # создании сессии; это основа объяснимости выдачи, а result пишет оценка позже.
-    selection: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    selection: Mapped[dict[str, Any] | None] = mapped_column(OPTIONAL_JSONB)
+    result: Mapped[dict[str, Any] | None] = mapped_column(OPTIONAL_JSONB)
     created_at: Mapped[datetime] = _now()
     scored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -225,16 +229,16 @@ class Task(Base):
     failure: Mapped[str | None] = mapped_column(Text)
     kind: Mapped[str] = mapped_column(String(16))
     statement: Mapped[str | None] = mapped_column(Text)
-    params: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    params: Mapped[dict[str, Any] | None] = mapped_column(OPTIONAL_JSONB)
     seed: Mapped[int] = mapped_column(BigInteger)
     # То, что видит кандидат: сигнатура, примеры. Скрытая часть кандидату не отдаётся никогда.
-    public_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    hidden_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    public_payload: Mapped[dict[str, Any] | None] = mapped_column(OPTIONAL_JSONB)
+    hidden_payload: Mapped[dict[str, Any] | None] = mapped_column(OPTIONAL_JSONB)
     generated_by: Mapped[str | None] = mapped_column(String(100))
     validated: Mapped[bool] = mapped_column(Boolean, default=False)
     # Что из профиля кандидата повлияло на легенду: {profile, adjacent_skill,
     # adjacent_skill_dropped}; NULL — задание стандартное, например из пула.
-    personalization: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    personalization: Mapped[dict[str, Any] | None] = mapped_column(OPTIONAL_JSONB)
     # Шаблоны, которые стояли в задании раньше: [{template_id, name, reason}].
     replacements: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, default=list, server_default=text("'[]'::jsonb")
@@ -278,11 +282,11 @@ class Answer(Base):
     language: Mapped[str | None] = mapped_column(String(32))
     # Поведенческие сигналы фронтенда: вставки, потери фокуса, время.
     behavior: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
-    test_report: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    analysis: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    judge: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    ai_signal: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
-    components: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    test_report: Mapped[dict[str, Any] | None] = mapped_column(OPTIONAL_JSONB)
+    analysis: Mapped[dict[str, Any] | None] = mapped_column(OPTIONAL_JSONB)
+    judge: Mapped[dict[str, Any] | None] = mapped_column(OPTIONAL_JSONB)
+    ai_signal: Mapped[dict[str, Any] | None] = mapped_column(OPTIONAL_JSONB)
+    components: Mapped[dict[str, Any] | None] = mapped_column(OPTIONAL_JSONB)
     score: Mapped[float | None] = mapped_column(Float)
     created_at: Mapped[datetime] = _now()
 

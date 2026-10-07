@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from taskgen.db import Task, TestSession
 from taskgen.generation.profile import CandidateProfile, profile_hash
 from tests.generation.world import ADMIN
 
@@ -14,6 +15,10 @@ PROFILE = {
     "skills": ["python", "pytorch"],
     "extra": {"experience_years": 5, "roles": ["backend"], "links": ["https://example.org"]},
 }
+
+
+def ids(rows):
+    return [row.id for row in rows]
 
 
 def check(world, session_id, **body):
@@ -53,6 +58,8 @@ def test_snapshot_lives_until_last_task_then_only_hash_stays(world):
     [session] = world.sessions()
     assert session.status == "ready"
     assert session.profile is None
+    # ORM читает и SQL NULL, и JSON null как None; аудит удаления ищет снимки запросом SQL.
+    assert ids(world.sessions(TestSession.profile.is_(None))) == [session.id]
     assert session.profile_hash == expected
     view = world.view(session_id)
     assert view["profile_hash"] == expected
@@ -86,7 +93,18 @@ def test_snapshot_is_deleted_when_session_fails(world):
     [session] = world.sessions()
     assert session.status == "failed"
     assert session.profile is None
+    assert ids(world.sessions(TestSession.profile.is_(None))) == [session.id]
     assert session.profile_hash
+
+
+def test_standard_task_and_session_without_profile_store_sql_null(world):
+    world.add_templates(world.code())
+    view = world.create_ready()
+    [session] = world.sessions()
+    assert ids(world.sessions(TestSession.profile.is_(None))) == [session.id]
+    [task] = world.tasks(view["id"])
+    assert task.personalization is None
+    assert ids(world.tasks(view["id"], Task.personalization.is_(None))) == [task.id]
 
 
 def test_profile_check_marks_change_only(world):
