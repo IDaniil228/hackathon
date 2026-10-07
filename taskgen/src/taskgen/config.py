@@ -341,6 +341,24 @@ class GenerationSettings(BaseModel):
         description="Полуширина серой зоны вокруг порогов в режиме both: такие факты и фразы "
         "решает LLM",
     )
+    essay_check_evidence: EvidenceMode = Field(
+        default="quotes",
+        description="Чем LLM-проверяльщик ситуации эссе и кейса задачки подтверждает найденный "
+        "факт или запрещённое понятие: quotes — дословные цитаты ситуации, spans — номера её "
+        "предложений, которые ему показаны с номерами",
+    )
+    essay_check_repairs: int = Field(
+        default=2,
+        ge=0,
+        description="Сколько раз переспросить проверяльщика с перечнем ошибок, если его ответ "
+        "не по схеме или ссылается на текст, которого в ситуации нет. 0 выключает повторы",
+    )
+    essay_check_max_spans: int | None = Field(
+        default=None,
+        ge=1,
+        description="Сколько предложений ситуации самое большее подтверждают один факт в "
+        "режиме spans; факт с большим числом предложений не засчитывается. null — без предела",
+    )
 
 
 class SandboxSettings(BaseModel):

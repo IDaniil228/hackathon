@@ -22,13 +22,14 @@ from taskgen.contracts import CaseOutcome, RunRequest, RunResult, TestReport, Te
 
 _FACTS_HEADER = "Факты, которые обязаны быть в ситуации:\n"
 _CHECKER_FACT = re.compile(r"^- (?P<id>[^:\n]+): (?P<text>.+)$", re.MULTILINE)
+_NUMBERED_SPAN = re.compile(r"^\[(\d+)\] (.+)$", re.MULTILINE)
 
 
 def essay_reply(messages, schema, *, keep_facts: bool = True) -> str | None:
     """Ответ модели на запрос ситуации эссе или её проверки; None — запрос не про эссе.
 
     Писатель складывает ситуацию из фактов запроса (или пишет её без фактов), проверяльщик
-    честно ищет каждый факт в ситуации и цитирует его.
+    честно ищет каждый факт в ситуации и цитирует его или называет номера его участков.
     """
     properties = (schema or {}).get("properties", {})
     user = messages[1].content
@@ -39,11 +40,18 @@ def essay_reply(messages, schema, *, keep_facts: bool = True) -> str | None:
         return json.dumps({"title": "Ситуация", "situation": situation}, ensure_ascii=False)
     if "facts" in properties:
         listing, situation = user.split("<<<СИТУАЦИЯ-", 1)
+        numbered = dict((int(found[1]), found[2]) for found in _NUMBERED_SPAN.finditer(situation))
+        by_spans = "spans" in properties["facts"]["items"]["properties"]
         items = []
         for match in _CHECKER_FACT.finditer(listing):
-            present = match["text"] in situation
-            quotes = [match["text"]] if present else []
-            items.append({"fact_id": match["id"], "present": present, "quotes": quotes})
+            text = match["text"]
+            if by_spans:
+                spans = [n for n, span in numbered.items() if span in text or text in span]
+                items.append({"fact_id": match["id"], "present": bool(spans), "spans": spans})
+            else:
+                present = text in situation
+                quotes = [text] if present else []
+                items.append({"fact_id": match["id"], "present": present, "quotes": quotes})
         return json.dumps({"facts": items}, ensure_ascii=False)
     return None
 

@@ -404,6 +404,20 @@ async def test_essay_quote_threshold_comes_from_generation_settings(threshold, e
     assert instance.statement
 
 
+@pytest.mark.parametrize("mode", ["quotes", "spans"])
+async def test_essay_checker_evidence_comes_from_generation_settings(mode):
+    llm = FakeLLM(essay_reply)
+
+    instance = await generate_instance(
+        essay_spec(), 1, deps(llm, None, essay_check_evidence=mode, essay_check_repairs=0)
+    )
+
+    _scenario, check = llm.calls
+    item = check["json_schema"]["properties"]["facts"]["items"]["properties"]
+    assert mode in item and {"quotes", "spans"} - {mode} - set(item)
+    assert instance.statement
+
+
 async def test_essay_embeddings_without_embedder_are_checked_by_llm():
     llm = FakeLLM(essay_reply)
 

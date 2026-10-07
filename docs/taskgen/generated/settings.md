@@ -92,6 +92,9 @@ OpenAI-совместимый провайдер: Ollama, vLLM или облач
 | `generation.essay_forbidden_threshold` | `TASKGEN_GENERATION__ESSAY_FORBIDDEN_THRESHOLD` | number, ≥ -1.0, ≤ 1.0 | `0.425` | Порог косинусного сходства запрещённой фразы с предложением ситуации для bge-m3, подобран тем же бенчмарком |
 | `generation.essay_quote_threshold` | `TASKGEN_GENERATION__ESSAY_QUOTE_THRESHOLD` | number, ≥ -1.0, ≤ 1.0 или null | `null` | Порог косинусного сходства цитат LLM-проверяльщика с фактом: ниже него факт не засчитан. Без эмбеддера проверка пропускается с замечанием. null выключает проверку, и по умолчанию она выключена: бенчмарк scripts/essay_check_bench.py quotes с bge-m3 не нашёл порога, который не отсекает предложения с фактом и отсекает предложения о другом. Числа замера — docs/taskgen/security.md |
 | `generation.essay_grey_zone` | `TASKGEN_GENERATION__ESSAY_GREY_ZONE` | number, ≥ 0.0, ≤ 1.0 | `0.05` | Полуширина серой зоны вокруг порогов в режиме both: такие факты и фразы решает LLM |
+| `generation.essay_check_evidence` | `TASKGEN_GENERATION__ESSAY_CHECK_EVIDENCE` | одно из `"quotes"`, `"spans"` | `"quotes"` | Чем LLM-проверяльщик ситуации эссе и кейса задачки подтверждает найденный факт или запрещённое понятие: quotes — дословные цитаты ситуации, spans — номера её предложений, которые ему показаны с номерами |
+| `generation.essay_check_repairs` | `TASKGEN_GENERATION__ESSAY_CHECK_REPAIRS` | integer, ≥ 0 | `2` | Сколько раз переспросить проверяльщика с перечнем ошибок, если его ответ не по схеме или ссылается на текст, которого в ситуации нет. 0 выключает повторы |
+| `generation.essay_check_max_spans` | `TASKGEN_GENERATION__ESSAY_CHECK_MAX_SPANS` | integer, ≥ 1 или null | `null` | Сколько предложений ситуации самое большее подтверждают один факт в режиме spans; факт с большим числом предложений не засчитывается. null — без предела |
 
 ## sandbox
 

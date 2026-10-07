@@ -33,6 +33,7 @@ from taskgen.contracts import (
     TestReport,
     TestRunRequest,
 )
+from taskgen.evaluation.evidence import EvidenceOptions
 from taskgen.evaluation.jsonout import (
     EmptyReplyError,
     StructuredOutputError,
@@ -299,6 +300,15 @@ async def generate_instance(
     return await _code(spec, seed, deps, context)
 
 
+def checker_evidence(options: GenerationSettings) -> EvidenceOptions:
+    """Способ доказательства LLM-проверяльщика ситуации и его пределы из настроек."""
+    return EvidenceOptions(
+        mode=options.essay_check_evidence,
+        repairs=options.essay_check_repairs,
+        max_spans=options.essay_check_max_spans,
+    )
+
+
 async def _quiz(
     spec: TemplateSpec, seed: int, deps: InstanceDeps, context: _LegendContext
 ) -> TaskInstance:
@@ -324,6 +334,7 @@ async def _quiz(
             solver=deps.solver(),
             system_suffix=system_suffix,
             request_suffix=request_suffix,
+            evidence_options=checker_evidence(deps.options),
         )
     except httpx.HTTPError as error:
         raise LLMUnavailableError("Модель генерации недоступна, повторите позже") from error
@@ -372,6 +383,7 @@ async def _essay(
             ),
             embedder=deps.embedder,
             embedding_cache=deps.embedding_cache,
+            evidence_options=checker_evidence(deps.options),
         )
     except httpx.HTTPError as error:
         raise LLMUnavailableError("Модель генерации недоступна, повторите позже") from error
