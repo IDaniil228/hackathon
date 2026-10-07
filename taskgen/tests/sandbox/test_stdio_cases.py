@@ -183,3 +183,12 @@ def test_every_runtime_names_its_program_file():
     registry = RuntimeRegistry.load()
     for name in registry.names():
         assert registry.get(name).source_file
+
+
+async def test_service_tool_runtime_does_not_run_solutions():
+    sent: list[dict] = []
+    runner = fake_runner(summing, sent)
+
+    with pytest.raises(SandboxError, match="служебное"):
+        await runner.run_tests(request(runtime="analyzers"))
+    assert sent == []

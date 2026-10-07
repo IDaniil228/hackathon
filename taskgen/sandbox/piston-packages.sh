@@ -32,7 +32,8 @@ piston-packages.sh — собирает и ставит в Piston пакеты �
   -f             собрать локальный пакет заново, даже если архив уже есть
 
 Локальный пакет — каталог sandbox/packages/NAME/VERSION в формате пакетов Piston.
-Сборка python-ml скачивает около 1 ГБ и занимает несколько минут.
+Сборка python-ml скачивает около 1 ГБ и занимает несколько минут, сборка analyzers —
+около 60 МБ.
 
 Примеры:
   piston-packages.sh install -c tg-sandbox-piston-1
@@ -107,6 +108,8 @@ build_local() {
   rm -rf "$work"
   mkdir -p "$work"
   cp -R "$recipe/." "$work/"
+  # Общая часть рецептов на Python; build.sh подключает её из своего каталога.
+  cp "$HERE/packages/python-base.sh" "$work/"
   say "собираю $name $version в $work"
   # Пользователь хоста, а не root контейнера: иначе каталог сборки не удалить без sudo.
   docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \

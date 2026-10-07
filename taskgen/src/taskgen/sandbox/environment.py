@@ -23,7 +23,9 @@ def describe_runtime(name: str, registry: RuntimeRegistry | None = None) -> str:
     spec = registry.get(name)
     title = spec.description.format(version=spec.version, standard=spec.standard or "")
     libraries = registry.libraries(name)
-    if libraries:
+    if spec.extras is not None:
+        extra = spec.extras
+    elif libraries:
         extra = "библиотеки " + ", ".join(f"{lib} {version}" for lib, version in libraries)
     else:
         extra = STANDARD_LIBRARY_ONLY
@@ -31,6 +33,10 @@ def describe_runtime(name: str, registry: RuntimeRegistry | None = None) -> str:
 
 
 def describe_all(registry: RuntimeRegistry | None = None) -> dict[str, str]:
-    """Описания всех окружений реестра: для автодокументации API."""
+    """Описания окружений решений: для автодокументации API. Служебные окружения не входят."""
     registry = registry or _default_registry()
-    return {name: describe_runtime(name, registry) for name in registry.names()}
+    return {
+        name: describe_runtime(name, registry)
+        for name in registry.names()
+        if registry.get(name).kind == "language"
+    }

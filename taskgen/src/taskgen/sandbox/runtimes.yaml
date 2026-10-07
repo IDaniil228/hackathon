@@ -39,3 +39,27 @@ cpp:
   standard: C++17
   # Без лимита Piston не ограничивает память компилятора, а шаблонный код раздувает её легко.
   compile_memory_bytes: 1073741824
+
+bash:
+  language: bash
+  version: 5.2.0
+  # Драйвера задач-функций нет: на Bash пишутся только задачи stdio.
+  source_file: solution.sh
+  description: Bash {version}
+  # Утилиты берутся из образа Piston (Debian 10), а не из пакета bash; версии сверяет живой
+  # тест tests/sandbox/test_bash_live.py.
+  extras: утилиты GNU coreutils 8.30, grep 3.3, sed 4.7 и mawk 1.3.3 (команда awk)
+
+# Служебное окружение: статические анализаторы кода кандидата, которые сервис запускает
+# драйвером taskgen/sandbox/drivers/taskgen_analyze.py. Задания в нём не решаются.
+analyzers:
+  language: analyzers
+  version: 1.0.0
+  kind: tool
+  source_file: taskgen_analyze.py
+  description: анализаторы кода кандидата
+  # Пакет собирается из taskgen/sandbox/packages/analyzers.
+  source: local
+  # clang-tidy разбирает заголовки стандартной библиотеки целиком: файл с <bits/stdc++.h>
+  # занял 88 МБ и 1,9 с на все три инструмента C++. Пол взят с запасом на длинный код.
+  min_memory_bytes: 536870912

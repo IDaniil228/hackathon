@@ -76,6 +76,8 @@ async def run_tests(
     concurrency — сколько запусков кейсов stdio идёт одновременно.
     """
     spec = registry.get(request.runtime)
+    if spec.kind != "language":
+        raise SandboxError(f"окружение {request.runtime} служебное, решения в нём не запускаются")
     checker = _checker_spec(registry, request)
     if request.io is IOKind.FUNCTION:
         execution = await _function(run, spec, request)

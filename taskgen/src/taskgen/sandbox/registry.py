@@ -27,6 +27,9 @@ REQUIREMENTS_FILE = "requirements.txt"
 class RuntimeSpec(BaseModel):
     language: str
     version: str
+    # language — язык решений кандидата; tool — служебное окружение сервиса, например
+    # анализаторы кода: в нём не решают задания, и кандидату оно не описывается.
+    kind: Literal["language", "tool"] = "language"
     # Драйвер задач-функций из taskgen/sandbox/drivers; None — окружению доступны только
     # задачи io=stdio.
     driver: Literal["python", "cpp"] | None = None
@@ -35,6 +38,9 @@ class RuntimeSpec(BaseModel):
     # Можно ли положить рядом с программой файлы кейса. Скрипт compile пакета gcc собирает
     # каждый файл запуска как исходник, поэтому C++ файлов данных не принимает.
     data_files: bool = True
+    # Что есть в окружении сверх языка, если это не библиотеки локального пакета, например
+    # утилиты командной строки; без поля описание называет библиотеки пакета.
+    extras: str | None = None
     # Описание для человека; {version} и {standard} подставляются из полей ниже, чтобы
     # версия была записана один раз.
     description: str
