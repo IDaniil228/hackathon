@@ -66,7 +66,7 @@ uv run python scripts/gate_stats.py
 | `ml/senior/ml-batchnorm-backward.md` | `python-ml` | 12 | 3 из 3 | 12 из 12 |
 | `ml/senior/ml-softmax-cross-entropy.md` | `python-ml` | 13 | 3 из 3 | 12 из 12 |
 
-- Шаблонов с кодом и эссе в банке 29: 20 с кодом и 9 эссе. Два шаблона с кодом — задачи stdio: `backend-status-counts-bash` на Bash и `backend-orders-csv-report` на Python
+- Состав банка — [generated/templates.md](generated/templates.md). Два шаблона с кодом — задачи stdio: `backend-status-counts-bash` на Bash и `backend-orders-csv-report` на Python
 - Экземпляров проверено 60: 20 шаблонов на 3 seed, кейсов в них 1059
 - Верные решения прошли все кейсы в 60 прогонах из 60: в каждом шаблоне банка пока одно верное решение
 - Неверных решений поймано 231 из 231: 123 прогона неверных решений из шаблонов (41 решение на 3 seed) и 108 прогонов решений-констант. Доля пойманных — 100 %. Решения-константы задачи stdio — пустой вывод и вывод первого кейса
