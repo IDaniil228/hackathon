@@ -13,6 +13,8 @@ Python сервиса — `3.12` (`.python-version`), проект требуе�
 | `asyncpg` | `0.31.0` | любая |
 | `fastapi` | `0.142.2` | любая |
 | `httpx` | `0.28.1` | любая |
+| `markdown-it-py` | `4.2.0` | `>=4.2.0` |
+| `mdit-py-plugins` | `0.6.1` | `>=0.6.1` |
 | `pgvector` | `0.5.0` | любая |
 | `pydantic-settings` | `2.15.0` | любая |
 | `python-multipart` | `0.0.32` | `>=0.0.32` |
@@ -66,6 +68,7 @@ Python сервиса — `3.12` (`.python-version`), проект требуе�
 | `mako` | `1.4.3` |
 | `mando` | `0.7.1` |
 | `markupsafe` | `3.0.4` |
+| `mdurl` | `0.1.2` |
 | `opentelemetry-api` | `1.45.0` |
 | `packaging` | `26.3` |
 | `pathspec` | `1.1.1` |

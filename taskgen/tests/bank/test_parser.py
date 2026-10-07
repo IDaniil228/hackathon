@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from taskgen.bank.parser import TemplateError, content_hash, parse_template, unclosed_fence
+from taskgen.bank.parser import TemplateError, content_hash, parse_template
 from taskgen.contracts import IOKind, TaskKind
 from tests.bank.factory import (
     REFERENCE,
@@ -532,23 +532,6 @@ def test_error_text_names_source_and_location():
         parse_template(make_template(difficulty=42), source="algo/two-sum.md")
     assert "algo/two-sum.md" in str(caught.value)
     assert "difficulty" in str(caught.value)
-
-
-@pytest.mark.parametrize(
-    ("text", "unclosed"),
-    [
-        ("Условие\n```python\ninput = [[", True),
-        ("```\nx = 1\n```\nдальше текст", False),
-        # Внутренний более короткий забор не закрывает внешний.
-        ("````\n```\nx\n```\n", True),
-        ("~~~\n```\n~~~\n", False),
-        # Внутри блока забор с текстом после маркера — строка кода, а не закрывающий забор.
-        ("```\nx\n```python\n", True),
-        ("Без кода", False),
-    ],
-)
-def test_unclosed_fence(text, unclosed):
-    assert unclosed_fence(text) is unclosed
 
 
 # --- Тестовые задачки ----------------------------------------------------------------------

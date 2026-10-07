@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-from taskgen.bank.parser import FENCE, closes_fence, unclosed_fence
+from taskgen.markdown import code_rows, fences, lines, unclosed_fence
 from taskgen.markers import has_marker
 
 # Управляющие символы, кроме табуляции и переводов строк. В Markdown им не место, а \b и \f
@@ -40,18 +40,12 @@ SPOILED_ESCAPES = (
 
 def _prose(text: str) -> str:
     """Текст без блоков и фрагментов кода: в коде $, табуляция и переводы строк честные."""
-    lines: list[str] = []
-    fence: str | None = None
-    for line in text.splitlines(keepends=True):
-        match = FENCE.match(line)
-        if fence is not None:
-            if match is not None and closes_fence(fence, match):
-                fence = None
-        elif match is not None:
-            fence = match.group(1)
-        else:
-            lines.append(_INLINE_CODE.sub(" ", line))
-    return "".join(lines)
+    inside = code_rows(text)
+    return "".join(
+        _INLINE_CODE.sub(" ", row)
+        for i, row in enumerate(lines(text, keepends=True))
+        if i not in inside
+    )
 
 
 def spoiled_escapes(text: str) -> bool:
@@ -72,10 +66,14 @@ def cut_off_line(text: str) -> bool:
     Лишние закрывающие скобки, как в пункте "1)", не обрыв. Скобки внутри фрагмента кода
     в обратных кавычках не считаются: "символ `[`" честный.
     """
-    lines = [line for line in text.splitlines() if line.strip()]
-    if not lines or FENCE.match(lines[-1]):
+    rows = lines(text)
+    filled = [i for i, row in enumerate(rows) if row.strip()]
+    if not filled:
         return False
-    last = lines[-1]
+    markers = {row for fence in fences(text) for row in (fence.start, fence.end - 1)}
+    if filled[-1] in markers:
+        return False
+    last = rows[filled[-1]]
     if last.count("`") % 2:
         return True
     plain = _INLINE_CODE.sub(" ", last)

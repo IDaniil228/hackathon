@@ -22,9 +22,11 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 from taskgen.contracts import ChatMessage, LLMClient, ReasoningEffort, StructuredOutput
+from taskgen.markdown import fences
 
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
-_FENCE = re.compile(r"```(?:json)?\s*\n(.*?)```", re.DOTALL)
+# Блок кода без языка или с языком json; блок на другом языке — пример, а не ответ.
+_JSON_INFO = frozenset({"", "json"})
 _DECODER = json.JSONDecoder()
 
 
@@ -58,8 +60,8 @@ def extract_json_object(text: str) -> dict[str, Any]:
     Рассуждения в <think> пропускаются: в них модель часто пишет черновые объекты.
     """
     text = _THINK.sub("", text)
-    for block in _FENCE.findall(text):
-        if (value := _first_object(block)) is not None:
+    for block in fences(text):
+        if block.info in _JSON_INFO and (value := _first_object(block.content)) is not None:
             return value
     if (value := _first_object(text)) is not None:
         return value

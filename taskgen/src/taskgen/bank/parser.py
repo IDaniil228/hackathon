@@ -19,6 +19,7 @@ from pydantic import ValidationError
 from taskgen.contracts import CheckMode, IOKind, RubricItem, TaskKind, TemplateSpec
 from taskgen.db import Template
 from taskgen.evaluation.scoring import WEIGHT_OF
+from taskgen.markdown import Fence, code_rows, fences, headings, lines, split_frontmatter
 
 SECTION_GENERATION = "Генерация"
 SECTION_QUESTIONS = "Вопросы"
@@ -76,33 +77,8 @@ SCORING_WEIGHTS = frozenset(WEIGHT_OF.values())
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # {{n}} — экранированная скобка, а не подстановка, поэтому двойные скобки не считаются.
 PLACEHOLDER = re.compile(r"(?<!\{)\{([A-Za-z_][A-Za-z0-9_]*)\}(?!\})")
-FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})(.*)$")
-
-
-def closes_fence(fence: str, match: re.Match[str]) -> bool:
-    """Закрывает ли забор match блок, открытый забором fence (правила CommonMark).
-
-    Закрывает только забор того же символа, не короче открывающего и без текста после него.
-    """
-    marker = match.group(1)
-    return marker[0] == fence[0] and len(marker) >= len(fence) and not match.group(2).strip()
-
-
-def unclosed_fence(text: str) -> bool:
-    """Остался ли в тексте открытый блок кода: признак текста, оборванного посреди кода."""
-    fence: str | None = None
-    for line in text.splitlines():
-        if (match := FENCE.match(line)) is None:
-            continue
-        if fence is None:
-            fence = match.group(1)
-        elif closes_fence(fence, match):
-            fence = None
-    return fence is not None
-
-
-SECTION_HEADING = re.compile(r"^##\s+(.+?)\s*#*\s*$")
-TITLE_HEADING = re.compile(r"^#\s+\S")
+# Уровни заголовков: # — название шаблона, ## — раздел, ### — решение или вариант кейса.
+TITLE_LEVEL, SECTION_LEVEL, ENTRY_LEVEL = 1, 2, 3
 RUBRIC_ITEM = re.compile(r"^-\s+([A-Za-z0-9_.-]+):\s+(\S.*)$")
 RUBRIC_EXAMPLE = re.compile(r"^\s+([+-])\s+(\S.*)$")
 FORBIDDEN_ITEM = re.compile(r"^-\s+(\S.*)$")
@@ -161,12 +137,6 @@ class _Collector:
         self.issues.append(TemplateIssue(location, message, self.source))
 
 
-@dataclass
-class _CodeBlock:
-    info: str
-    content: str
-
-
 def parse_template(text: str, *, source: str) -> TemplateSpec:
     """Разбирает md-шаблон; при любой проблеме бросает TemplateError со списком всех причин."""
     out = _Collector(source)
@@ -210,17 +180,16 @@ def parse_template(text: str, *, source: str) -> TemplateSpec:
 
 
 def _split_frontmatter(text: str, out: _Collector) -> tuple[dict[str, Any], str] | None:
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
+    if lines(text)[0].strip() != "---":
         out.add("frontmatter", "файл должен начинаться со строки --- и YAML-заголовка")
         return None
-    try:
-        end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
-    except StopIteration:
+    split = split_frontmatter(text)
+    if split is None:
         out.add("frontmatter", "нет закрывающей строки --- после YAML-заголовка")
         return None
+    header, body = split
     try:
-        meta = yaml.safe_load("\n".join(lines[1:end]))
+        meta = yaml.safe_load(header)
     except yaml.YAMLError as error:
         mark = getattr(error, "problem_mark", None)
         where = f" (строка {mark.line + 2})" if mark is not None else ""
@@ -229,40 +198,32 @@ def _split_frontmatter(text: str, out: _Collector) -> tuple[dict[str, Any], str]
     if not isinstance(meta, dict):
         out.add("frontmatter", "YAML-заголовок должен быть словарём поле: значение")
         return None
-    return meta, "\n".join(lines[end + 1 :])
+    return meta, body
 
 
 def _split_sections(body: str, out: _Collector) -> dict[str, str]:
-    """Режет тело по заголовкам ##, пропуская заголовки внутри блоков кода."""
-    sections: dict[str, list[str]] = {}
-    current: list[str] | None = None
-    fence: str | None = None
-    stray = False
-    for line in body.splitlines():
-        match = FENCE.match(line)
-        if match:
-            if fence is None:
-                fence = match.group(1)
-            elif closes_fence(fence, match):
-                fence = None
-        elif fence is None and (heading := SECTION_HEADING.match(line)):
-            name = heading.group(1)
-            if name not in KNOWN_SECTIONS:
-                known = ", ".join(KNOWN_SECTIONS)
-                out.add(section_label(name), f"неизвестный раздел; допустимы: {known}")
-            elif name in sections:
-                out.add(section_label(name), "раздел встречается больше одного раза")
-            current = sections.setdefault(name, [])
-            continue
-        if current is not None:
-            current.append(line)
-        elif line.strip() and not TITLE_HEADING.match(line):
-            stray = True
-    if stray:
+    """Режет тело по заголовкам ##; до первого раздела допустимо только название #."""
+    rows = lines(body)
+    outline = headings(body)
+    starts = [h for h in outline if h.level == SECTION_LEVEL]
+    titles = {h.line for h in outline if h.level == TITLE_LEVEL}
+    first = starts[0].line if starts else len(rows)
+    if any(row.strip() for i, row in enumerate(rows[:first]) if i not in titles):
         out.add("тело", "текст до первого раздела ## не относится ни к одному разделу")
-    if fence is not None:
+    if any(not fence.closed for fence in fences(body)):
         out.add("тело", "блок кода не закрыт")
-    return {name: "\n".join(lines).strip() for name, lines in sections.items()}
+
+    sections: dict[str, str] = {}
+    for heading, end in zip(starts, [h.line for h in starts[1:]] + [len(rows)], strict=True):
+        name = heading.title
+        if name not in KNOWN_SECTIONS:
+            known = ", ".join(KNOWN_SECTIONS)
+            out.add(section_label(name), f"неизвестный раздел; допустимы: {known}")
+        elif name in sections:
+            out.add(section_label(name), "раздел встречается больше одного раза")
+        text = "\n".join(rows[heading.line + 1 : end]).strip()
+        sections[name] = f"{sections[name]}\n{text}".strip() if name in sections else text
+    return sections
 
 
 def _check_frontmatter(meta: dict[str, Any], *, is_code: bool, out: _Collector) -> None:
@@ -439,7 +400,7 @@ def _quiz_sections(
     return {"question": question, "variants": variants, "forbidden": forbidden}
 
 
-VARIANT_HEADING = re.compile(r"^###\s+([A-Za-z0-9_.-]+)\s*$")
+VARIANT_ID = re.compile(r"^[A-Za-z0-9_.-]+$")
 _FACTS_LABEL = "Факты:"
 _ANSWERS_LABEL = "Ответ:"
 ANSWER_ITEM = re.compile(r"^([+-])\s+(\S.*)$")
@@ -456,32 +417,30 @@ def _variants(
         out.add(label, "раздел обязателен для заданий kind=quiz")
         return []
     variants: list[dict[str, Any]] = []
-    block: str | None = None
-    for number, line in enumerate(text.splitlines(), start=1):
-        if not line.strip():
+    for heading_number, title, body in _entries(text, label, "первого варианта '### id'", out):
+        if VARIANT_ID.match(title) is None:
+            out.add(label, f"строка {heading_number}: заголовок варианта — '### id'")
             continue
-        if heading := VARIANT_HEADING.match(line):
-            variants.append({"id": heading.group(1), "facts": [], "correct": [], "wrong": []})
-            block = None
-            continue
-        if not variants:
-            out.add(label, f"строка {number}: текст до первого варианта '### id'")
-            continue
-        variant = variants[-1]
-        stripped = line.strip()
-        if stripped in (_FACTS_LABEL, _ANSWERS_LABEL):
-            block = stripped
-        elif block == _FACTS_LABEL and (fact := RUBRIC_ITEM.match(stripped)):
-            variant["facts"].append({"id": fact.group(1), "text": fact.group(2).strip()})
-        elif block == _ANSWERS_LABEL and (answer := ANSWER_ITEM.match(stripped)):
-            key = "correct" if answer.group(1) == "+" else "wrong"
-            variant[key].append(answer.group(2).strip())
-        else:
-            out.add(
-                label,
-                f"строка {number}: ожидается '### id', '{_FACTS_LABEL}', факт '- id: текст' "
-                f"или после '{_ANSWERS_LABEL}' ответ '+ верный' / '- неверный'",
-            )
+        variant: dict[str, Any] = {"id": title, "facts": [], "correct": [], "wrong": []}
+        variants.append(variant)
+        block: str | None = None
+        for number, line in enumerate(lines(body), start=heading_number + 1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped in (_FACTS_LABEL, _ANSWERS_LABEL):
+                block = stripped
+            elif block == _FACTS_LABEL and (fact := RUBRIC_ITEM.match(stripped)):
+                variant["facts"].append({"id": fact.group(1), "text": fact.group(2).strip()})
+            elif block == _ANSWERS_LABEL and (answer := ANSWER_ITEM.match(stripped)):
+                key = "correct" if answer.group(1) == "+" else "wrong"
+                variant[key].append(answer.group(2).strip())
+            else:
+                out.add(
+                    label,
+                    f"строка {number}: ожидается '### id', '{_FACTS_LABEL}', факт '- id: текст' "
+                    f"или после '{_ANSWERS_LABEL}' ответ '+ верный' / '- неверный'",
+                )
     _check_placeholders(label, text, params, out)
     for variant in variants:
         _check_variant(variant, label, out)
@@ -698,7 +657,6 @@ def _check(sections: dict[str, str], meta: dict[str, Any], out: _Collector) -> A
     return {"mode": mode, "checker": checker}
 
 
-SOLUTION_HEADING = re.compile(r"^###\s+(.*?)\s*$")
 SOLUTION_TITLE = re.compile(r"^([A-Za-z0-9_.-]+)\s+([+-])$")
 
 
@@ -707,35 +665,21 @@ def _solutions(
 ) -> list[dict[str, Any]]:
     """Размеченные решения: '### id +' — верное, '### id -' — заведомо неверное.
 
-    Под заголовком — необязательное описание текстом и ровно один блок кода. Заголовки
-    внутри блоков кода не считаются: решение на Python может содержать строку '### '.
+    Под заголовком — необязательное описание текстом и ровно один блок кода.
     """
     text = sections.get(SECTION_SOLUTIONS)
     label = section_label(SECTION_SOLUTIONS)
     if text is None:
         out.add(label, "раздел обязателен для заданий kind=code")
         return []
-    entries: list[tuple[str, bool, list[str]]] = []
-    fence: str | None = None
-    for number, line in enumerate(text.splitlines(), start=1):
-        match = FENCE.match(line)
-        if fence is None and (heading := SOLUTION_HEADING.match(line)):
-            title = SOLUTION_TITLE.match(heading.group(1))
-            if title is None:
-                out.add(label, f"строка {number}: заголовок решения — '### id +' или '### id -'")
-                entries.append(("", True, []))
-            else:
-                entries.append((title.group(1), title.group(2) == "+", []))
-            continue
-        if match:
-            if fence is None:
-                fence = match.group(1)
-            elif closes_fence(fence, match):
-                fence = None
-        if entries:
-            entries[-1][2].append(line)
-        elif line.strip():
-            out.add(label, f"строка {number}: текст до первого решения '### id +'")
+    entries: list[tuple[str, bool, str]] = []
+    for number, title, body in _entries(text, label, "первого решения '### id +'", out):
+        parsed = SOLUTION_TITLE.match(title)
+        if parsed is None:
+            out.add(label, f"строка {number}: заголовок решения — '### id +' или '### id -'")
+            entries.append(("", True, body))
+        else:
+            entries.append((parsed.group(1), parsed.group(2) == "+", body))
 
     ids = [solution_id for solution_id, _, _ in entries if solution_id]
     for duplicate in sorted({i for i in ids if ids.count(i) > 1}):
@@ -750,10 +694,9 @@ def _solutions(
         )
 
     solutions = []
-    for solution_id, correct, lines in entries:
+    for solution_id, correct, body in entries:
         if not solution_id:
             continue
-        body = "\n".join(lines)
         blocks = _code_blocks(body)
         if len(blocks) != 1 or not blocks[0].content.strip():
             found = len(blocks) if len(blocks) != 1 else "пустой"
@@ -780,24 +723,36 @@ def _solutions(
     return solutions
 
 
+def _entries(
+    text: str, label: str, first_entry: str, out: _Collector
+) -> list[tuple[int, str, str]]:
+    """Записи раздела под заголовками ###: (номер строки заголовка, заголовок, тело).
+
+    Номера строк считаются с 1 от начала раздела. Текст до первой записи — ошибка, и
+    first_entry называет эту запись в сообщении.
+    """
+    rows = lines(text)
+    starts = [h for h in headings(text) if h.level == ENTRY_LEVEL]
+    first = starts[0].line if starts else len(rows)
+    for number, row in enumerate(rows[:first], start=1):
+        if row.strip():
+            out.add(label, f"строка {number}: текст до {first_entry}")
+    ends = [h.line for h in starts[1:]] + [len(rows)]
+    return [
+        (h.line + 1, h.title, "\n".join(rows[h.line + 1 : end]))
+        for h, end in zip(starts, ends, strict=True)
+    ]
+
+
 def _outside_blocks(text: str) -> str:
     """Текст без блоков кода и их заборов."""
-    kept: list[str] = []
-    fence: str | None = None
-    for line in text.splitlines():
-        match = FENCE.match(line)
-        if fence is None and match:
-            fence = match.group(1)
-        elif fence is not None and match and closes_fence(fence, match):
-            fence = None
-        elif fence is None:
-            kept.append(line)
-    return "\n".join(kept)
+    inside = code_rows(text)
+    return "\n".join(row for i, row in enumerate(lines(text)) if i not in inside)
 
 
 def _single_block(
     sections: dict[str, str], name: str, out: _Collector, required_by: str = "kind=code"
-) -> _CodeBlock | None:
+) -> Fence | None:
     label = section_label(name)
     text = sections.get(name)
     if text is None:
@@ -813,21 +768,9 @@ def _single_block(
     return blocks[0]
 
 
-def _code_blocks(text: str) -> list[_CodeBlock]:
-    blocks: list[_CodeBlock] = []
-    fence: str | None = None
-    info = ""
-    lines: list[str] = []
-    for line in text.splitlines():
-        match = FENCE.match(line)
-        if fence is None and match:
-            fence, info, lines = match.group(1), match.group(2).strip(), []
-        elif fence is not None and match and closes_fence(fence, match):
-            blocks.append(_CodeBlock(info, "\n".join(lines)))
-            fence = None
-        elif fence is not None:
-            lines.append(line)
-    return blocks
+def _code_blocks(text: str) -> list[Fence]:
+    # Незакрытый блок уже отклонён разбором тела на разделы.
+    return [fence for fence in fences(text) if fence.closed]
 
 
 def _parse_python(code: str, label: str, out: _Collector) -> ast.Module | None:

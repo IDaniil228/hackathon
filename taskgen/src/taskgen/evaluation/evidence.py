@@ -17,9 +17,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from taskgen.bank.parser import FENCE, closes_fence
 from taskgen.contracts import EvidenceMode
 from taskgen.evaluation.quotes import quote_in_answer
+from taskgen.markdown import fences, lines
 
 _SENTENCE_END = re.compile(r"(?<=[.!?…])\s+")
 _SHOWN_QUOTE = 80
@@ -33,22 +33,22 @@ def split_sentences(text: str) -> list[str]:
     букв, например номер пункта "1.", присоединяется к следующему куску. Сокращения вроде
     "т. е." режут предложение, а числа вроде "0.99" — нет: после точки нет пробела.
     """
-    units: list[str] = []
-    block: list[str] = []
-    fence: str | None = None
-    for line in text.splitlines():
-        match = FENCE.match(line)
-        if fence is not None:
-            block.append(line)
-            if match is not None and closes_fence(fence, match):
-                units.append("\n".join(block))
-                block, fence = [], None
-        elif match is not None:
-            block, fence = [line], match.group(1)
-        else:
-            units.extend(_line_sentences(line))
-    if block:
-        units.append("\n".join(block))
+    return [unit for unit, _ in _units(text)]
+
+
+def _units(text: str) -> list[tuple[str, bool]]:
+    """Единицы split_sentences с признаком блока кода."""
+    rows = lines(text)
+    blocks = {fence.start: fence.end for fence in fences(text)}
+    units: list[tuple[str, bool]] = []
+    row = 0
+    while row < len(rows):
+        if row in blocks:
+            units.append(("\n".join(rows[row : blocks[row]]), True))
+            row = blocks[row]
+            continue
+        units.extend((sentence, False) for sentence in _line_sentences(rows[row]))
+        row += 1
     return units
 
 
@@ -82,9 +82,9 @@ def split_spans(text: str, *, code: bool) -> list[str]:
     if code:
         return [line.rstrip() for line in text.splitlines() if line.strip()]
     spans: list[str] = []
-    for unit in split_sentences(text):
-        if "\n" in unit or FENCE.match(unit):
-            spans.extend(line.rstrip() for line in unit.splitlines() if line.strip())
+    for unit, code_block in _units(text):
+        if code_block:
+            spans.extend(line.rstrip() for line in lines(unit) if line.strip())
         else:
             spans.append(unit)
     return spans
