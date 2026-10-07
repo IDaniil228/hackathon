@@ -18,10 +18,78 @@ import check_contrast  # noqa: E402
 
 DIST = HERE / "dist"
 COLOR_LITERAL = re.compile(r"#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)|\bhsla?\([^)]*\)")
+BRANDBOOK_PAGE = re.compile(r"^Брендбук ФСП\.pdf, стр\. \d+")
+FONT_FACE = re.compile(r"@font-face\s*\{([^}]*)\}")
+# Брендбук называет эти серые цветами "для фона и шрифта", поэтому нейтральные роли тем берут их
+# прямой ссылкой, а не смесью
+OFFICIAL_NEUTRALS = {
+    "light": ("bg", "surface-hover", "border", "text", "neutral-soft"),
+    "dark": ("bg", "surface", "surface-hover", "border", "border-strong", "text", "text-muted", "neutral-soft"),
+}
 
 
 def load_tokens():
     return json.loads((HERE / "tokens.json").read_text(encoding="utf-8"))
+
+
+def palette_ref(value):
+    """Имя цвета палитры, если значение - прямая ссылка {palette.X}, иначе None."""
+    match = isinstance(value, str) and re.fullmatch(r"\{palette\.([a-z0-9-]+)\}", value)
+    return match.group(1) if match else None
+
+
+class PaletteTest(unittest.TestCase):
+    def test_every_palette_color_cites_a_brandbook_page_or_is_derived(self):
+        for name, node in load_tokens()["palette"].items():
+            if name.startswith("$"):
+                continue
+            with self.subTest(color=name):
+                if "$derived" in node:
+                    self.assertNotIn("$source", node)
+                else:
+                    self.assertRegex(node.get("$source", ""), BRANDBOOK_PAGE)
+
+    def test_neutral_roles_use_official_grays(self):
+        tokens = load_tokens()
+        palette = tokens["palette"]
+        for theme, keys in OFFICIAL_NEUTRALS.items():
+            for key in keys:
+                with self.subTest(theme=theme, key=key):
+                    name = palette_ref(tokens["theme"][theme][key]["$value"])
+                    self.assertIsNotNone(name, "ожидалась прямая ссылка на палитру, а не смесь")
+                    self.assertNotIn("$derived", palette[name], f"palette.{name} не из брендбука")
+
+
+class FontTest(unittest.TestCase):
+    def font_faces(self):
+        css = (DIST / "base.css").read_text(encoding="utf-8")
+        for body in FONT_FACE.findall(css):
+            family = re.search(r'font-family:\s*"([^"]+)"', body).group(1)
+            yield family, re.findall(r'url\("([^"]+)"\)', body)
+
+    def test_brandbook_fonts_cite_a_page(self):
+        families = load_tokens()["font"]["family"]
+        # Основной и акцентный шрифты со стр. 21 и 22 брендбука
+        for key in ("brand", "accent"):
+            with self.subTest(family=key):
+                self.assertRegex(families[key].get("$source", ""), BRANDBOOK_PAGE)
+
+    def test_every_font_token_family_has_a_font_face(self):
+        faces = {family for family, _ in self.font_faces()}
+        for key, node in load_tokens()["font"]["family"].items():
+            first = re.match(r'"([^"]+)"', node["$value"])
+            if first:
+                with self.subTest(family=key):
+                    self.assertIn(first.group(1), faces)
+
+    def test_font_files_exist_beside_their_license(self):
+        for family, urls in self.font_faces():
+            with self.subTest(family=family):
+                self.assertTrue(urls)
+                license_file = DIST / "fonts" / f"{family.replace(' ', '')}-OFL.txt"
+                self.assertTrue(license_file.is_file(), f"нет текста лицензии {license_file.name}")
+                for url in urls:
+                    self.assertTrue((DIST / url).is_file(), f"нет файла {url}")
 
 
 class BuildTest(unittest.TestCase):
@@ -53,6 +121,14 @@ class BuildTest(unittest.TestCase):
         for path in (DIST / "base.css", HERE / "preview.html"):
             with self.subTest(file=path.name):
                 self.assertEqual(COLOR_LITERAL.findall(path.read_text(encoding="utf-8")), [])
+
+    def test_preview_references_only_files_in_repository(self):
+        html = (HERE / "preview.html").read_text(encoding="utf-8")
+        paths = [m.group(1) for m in re.finditer(r'(?:src|href)="(?!https?:|#|data:)([^"]+)"', html)]
+        self.assertTrue(any(p.startswith("assets/logo/") for p in paths), "витрина не показывает логотипы")
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertTrue((HERE / path).is_file(), f"нет файла {path}")
 
     def test_media_query_widths_are_breakpoint_tokens(self):
         # CSS-переменная не работает внутри @media, поэтому ширина повторена литералом

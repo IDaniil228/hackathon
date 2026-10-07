@@ -23,12 +23,12 @@
     .pv-type-row > :last-child { margin: 0; }
     .pv-logo-stage { display: flex; flex-wrap: wrap; gap: var(--fsp-space-6); }
     .pv-logo-box { display: flex; align-items: center; justify-content: center; max-width: 100%; overflow-x: auto; padding: var(--fsp-space-6); border: 1px solid var(--fsp-color-border); border-radius: var(--fsp-radius-md); }
-    .pv-logo-box--light { background-color: var(--fsp-palette-light); }
-    .pv-logo-box--dark { background-color: var(--fsp-palette-dark); }
+    /* Плашки как на стр. 13 брендбука: белая для светлого фона, Gray/bright для тёмного */
+    .pv-logo-box--light { background-color: var(--fsp-palette-white); }
+    .pv-logo-box--dark { background-color: var(--fsp-palette-gray-bright); }
     .pv-logo-box .fsp-logo { outline: 1px dashed var(--fsp-color-accent); }
-    .pv-missing { display: none; padding: var(--fsp-space-4); border: 1px dashed var(--fsp-color-border-strong); border-radius: var(--fsp-radius-sm); font-size: var(--fsp-text-sm-size); }
-    .pv-logos-missing .pv-missing { display: block; }
-    .pv-logos-missing .pv-logo-stage { display: none; }
+    .pv-logo-tall { height: var(--fsp-space-16); }
+    .pv-logo-line { height: var(--fsp-space-8); }
     .pv-mock { border: 1px solid var(--fsp-color-border); border-radius: var(--fsp-radius-lg); overflow: hidden; background-color: var(--fsp-color-bg); }
     .pv-mock__body { padding: var(--fsp-space-6); }
     .pv-candidate { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--fsp-space-4); }
@@ -51,7 +51,7 @@
   <header class="fsp-topbar">
     <a href="#top" aria-label="ФСП, на главную">
       <span class="fsp-logo fsp-logo--short" style="--fsp-logo-clearspace: 0">
-        <img class="fsp-only-light" src="assets/logo/logo-short-on-light.svg" alt="ФСП" onerror="document.body.classList.add('pv-logos-missing')">
+        <img class="fsp-only-light" src="assets/logo/logo-short-on-light.svg" alt="ФСП">
         <img class="fsp-only-dark" src="assets/logo/logo-short-on-dark.svg" alt="ФСП">
       </span>
     </a>
@@ -72,15 +72,18 @@
         <circle cx="370" cy="10" r="4" fill="currentColor"/>
       </svg>
       <span class="fsp-overline">Брендбук ФСП · визуальная основа платформы</span>
-      <h1 class="fsp-display">Витрина стилей</h1>
+      <h1 class="fsp-display fsp-accent">Витрина стилей</h1>
       <p class="fsp-muted">Токены, базовые стили и два экрана платформы подбора ИТ-кандидатов. Все цвета на странице читаются из <code>dist/tokens.css</code>; переключите тему в шапке</p>
     </section>
 
     <section class="pv-section" aria-labelledby="palette">
       <h2 id="palette">Палитра</h2>
       <h3>Фирменные цвета</h3>
-      <p class="fsp-muted">Из брендбука ФСП. Белый не входит в фирменную палитру и используется как нейтральная поверхность</p>
-      <div class="pv-swatches" data-swatches="palette" data-names="blue red light gray dark white"></div>
+      <p class="fsp-muted">Цвета логотипа со стр. 8 брендбука ФСП</p>
+      <div class="pv-swatches" data-swatches="palette" data-names="blue red light gray dark"></div>
+      <h3 style="margin-top: var(--fsp-space-8)">Градации серого и Digital-акцент</h3>
+      <p class="fsp-muted">Серые брендбук отводит под фон и шрифт, Digital-акцент под цифровую среду. Белый не входит в цветовую схему и служит поверхностью карточек светлой темы</p>
+      <div class="pv-swatches" data-swatches="palette" data-names="dark gray-bright gray-middle gray-light-2 gray-light light digital white"></div>
       <h3 style="margin-top: var(--fsp-space-8)">Семантические цвета текущей темы</h3>
       <p class="fsp-muted">Производные от фирменных: правило вывода каждого цвета в <code>tokens.json</code></p>
       <div class="pv-swatches" data-swatches="color" data-names="bg surface surface-muted surface-hover border border-strong text text-muted primary primary-hover primary-soft link accent danger danger-soft danger-text neutral-soft control focus selection"></div>
@@ -88,7 +91,7 @@
 
     <section class="pv-section" aria-labelledby="type">
       <h2 id="type">Типографика</h2>
-      <p class="fsp-muted">JetBrains Mono, единственный шрифт брендбука ФСП</p>
+      <p class="fsp-muted">Основной шрифт брендбука ФСП JetBrains Mono набирает весь текст. Акцентный пиксельный TDAText идёт только на крупные цифры и короткие метки: класс <code>.fsp-figure</code> или <code>.fsp-accent</code></p>
       <div class="pv-type-row"><span class="fsp-caption fsp-muted">display 48</span><p class="fsp-display">Подбор ИТ</p></div>
       <div class="pv-type-row"><span class="fsp-caption fsp-muted">h1 36</span><h1>Банк кандидатов</h1></div>
       <div class="pv-type-row"><span class="fsp-caption fsp-muted">h2 28</span><h2>Приглашения</h2></div>
@@ -97,6 +100,8 @@
       <div class="pv-type-row"><span class="fsp-caption fsp-muted">текст 16</span><p>Работодатель сам находит кандидата в нужной категории и отправляет приглашение с зарплатной вилкой. Кандидат видит условия до начала общения</p></div>
       <div class="pv-type-row"><span class="fsp-caption fsp-muted">подпись 14</span><p class="fsp-caption fsp-muted">Обновлено 3 дня назад · категория подтверждена тестом</p></div>
       <div class="pv-type-row"><span class="fsp-caption fsp-muted">надстрочник 12</span><span class="fsp-overline">Категория и грейд</span></div>
+      <div class="pv-type-row"><span class="fsp-caption fsp-muted">акцент 48</span><p class="fsp-display fsp-accent">0123456789</p></div>
+      <div class="pv-type-row"><span class="fsp-caption fsp-muted">акцент, алфавит</span><p class="fsp-accent">АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ<br>абвгдеёжзийклмнопрстуфхцчшщъыьэюя</p></div>
       <div class="pv-type-row"><span class="fsp-caption fsp-muted">цифры</span><span class="fsp-figure">180&nbsp;000 –&nbsp;240&nbsp;000&nbsp;₽</span></div>
       <div class="pv-type-row"><span class="fsp-caption fsp-muted">ссылка, код</span><p><a href="#type">Открыть профиль</a> · <code>invitation.status = 'sent'</code></p></div>
       <hr class="fsp-rule">
@@ -104,8 +109,7 @@
 
     <section class="pv-section" aria-labelledby="logo">
       <h2 id="logo">Логотип</h2>
-      <p class="fsp-muted">Пунктир показывает охранное поле, размеры минимальные. Версия для светлого фона и версия для тёмного фона из брендбука. Полная версия в минимальном размере шире телефона: на узком экране ставьте короткую</p>
-      <div class="pv-missing">Логотипы не скачаны: выполните <code>python3 brand/fetch_logos.py</code>. Брендбук не разрешает явно распространять логотипы, поэтому их нет в репозитории</div>
+      <p class="fsp-muted">Официальные файлы из <code>assets/logo/</code>. Пунктир показывает охранное поле, размеры минимальные. Полная версия в минимальном размере шире телефона: на узком экране ставьте короткую</p>
       <div class="pv-logo-stage">
         <div class="pv-logo-box pv-logo-box--light">
           <span class="fsp-logo"><img src="assets/logo/logo-full-on-light.svg" alt="Федерация спортивного программирования России"></span>
@@ -125,6 +129,20 @@
         <div class="pv-logo-box pv-logo-box--dark">
           <span class="fsp-logo fsp-logo--short"><img src="assets/logo/logo-sign-on-dark.svg" alt="Знак ФСП"></span>
         </div>
+      </div>
+      <h3 style="margin-top: var(--fsp-space-8)">Вертикальные и монохромные версии</h3>
+      <p class="fsp-muted">Вертикальная компоновка подходит для квадратных мест: аватара, плитки. Монохромная нужна там, где цвет недоступен</p>
+      <div class="pv-logo-stage">
+        <div class="pv-logo-box pv-logo-box--light"><img src="assets/logo/logo-full-stacked-on-light.svg" alt="Федерация спортивного программирования" class="pv-logo-tall"></div>
+        <div class="pv-logo-box pv-logo-box--dark"><img src="assets/logo/logo-full-stacked-on-dark.svg" alt="Федерация спортивного программирования" class="pv-logo-tall"></div>
+        <div class="pv-logo-box pv-logo-box--light"><img src="assets/logo/logo-short-stacked-on-light.svg" alt="ФСП" class="pv-logo-tall"></div>
+        <div class="pv-logo-box pv-logo-box--dark"><img src="assets/logo/logo-short-stacked-on-dark.svg" alt="ФСП" class="pv-logo-tall"></div>
+        <div class="pv-logo-box pv-logo-box--light"><img src="assets/logo/logo-full-mono-on-light.svg" alt="Федерация спортивного программирования России" class="pv-logo-line"></div>
+        <div class="pv-logo-box pv-logo-box--dark"><img src="assets/logo/logo-full-mono-on-dark.svg" alt="Федерация спортивного программирования России" class="pv-logo-line"></div>
+        <div class="pv-logo-box pv-logo-box--light"><img src="assets/logo/logo-short-mono-on-light.svg" alt="ФСП" class="pv-logo-line"></div>
+        <div class="pv-logo-box pv-logo-box--dark"><img src="assets/logo/logo-short-mono-on-dark.svg" alt="ФСП" class="pv-logo-line"></div>
+        <div class="pv-logo-box pv-logo-box--light"><img src="assets/logo/logo-sign-mono-on-light.svg" alt="Знак ФСП" class="pv-logo-line"></div>
+        <div class="pv-logo-box pv-logo-box--dark"><img src="assets/logo/logo-sign-mono-on-dark.svg" alt="Знак ФСП" class="pv-logo-line"></div>
       </div>
     </section>
 

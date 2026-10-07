@@ -4,7 +4,7 @@
  * Подключение: сначала tokens.css, затем base.css.
  */
 
-/* Шрифт JetBrains Mono из архива брендбука, лицензия в fonts/OFL.txt */
+/* Основной шрифт JetBrains Mono, лицензия в fonts/JetBrainsMono-OFL.txt */
 @font-face {
   font-family: "JetBrains Mono";
   font-style: normal;
@@ -32,6 +32,15 @@
   font-weight: 700;
   font-display: swap;
   src: url("fonts/JetBrainsMono-Bold.woff2") format("woff2");
+}
+
+/* Акцентный шрифт TDAText, лицензия в fonts/TDAText-OFL.txt. Начертание у него одно */
+@font-face {
+  font-family: "TDAText";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/TDAText-Regular.woff2") format("woff2");
 }
 
 /* ---------- Основа ---------- */
@@ -129,12 +138,21 @@ small,
   color: var(--fsp-color-text-muted);
 }
 
-/* Крупные цифры: зарплатная вилка, счётчики */
+/*
+ * Акцентный шрифт: крупные цифры и короткие метки, не основной текст. Жирного начертания
+ * у TDAText нет, а синтезированное размывает пиксельный рисунок
+ */
+.fsp-accent,
 .fsp-figure {
-  font-family: var(--fsp-font-family-brand);
+  font-family: var(--fsp-font-family-accent);
+  font-weight: var(--fsp-font-weight-regular);
+  font-synthesis: none;
+}
+
+/* Крупные цифры: зарплатная вилка, итоги теста */
+.fsp-figure {
   font-size: var(--fsp-text-xl-size);
   line-height: var(--fsp-text-xl-leading);
-  font-weight: var(--fsp-font-weight-bold);
   font-variant-numeric: tabular-nums;
   color: var(--fsp-color-text);
 }
