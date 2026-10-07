@@ -19,6 +19,7 @@ import check_contrast  # noqa: E402
 DIST = HERE / "dist"
 COLOR_LITERAL = re.compile(r"#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)|\bhsla?\([^)]*\)")
 BRANDBOOK_PAGE = re.compile(r"^Брендбук ФСП\.pdf, стр\. \d+")
+FONT_FACE = re.compile(r"@font-face\s*\{([^}]*)\}")
 # Брендбук называет эти серые цветами "для фона и шрифта", поэтому нейтральные роли тем берут их
 # прямой ссылкой, а не смесью
 OFFICIAL_NEUTRALS = {
@@ -57,6 +58,38 @@ class PaletteTest(unittest.TestCase):
                     name = palette_ref(tokens["theme"][theme][key]["$value"])
                     self.assertIsNotNone(name, "ожидалась прямая ссылка на палитру, а не смесь")
                     self.assertNotIn("$derived", palette[name], f"palette.{name} не из брендбука")
+
+
+class FontTest(unittest.TestCase):
+    def font_faces(self):
+        css = (DIST / "base.css").read_text(encoding="utf-8")
+        for body in FONT_FACE.findall(css):
+            family = re.search(r'font-family:\s*"([^"]+)"', body).group(1)
+            yield family, re.findall(r'url\("([^"]+)"\)', body)
+
+    def test_brandbook_fonts_cite_a_page(self):
+        families = load_tokens()["font"]["family"]
+        # Основной и акцентный шрифты со стр. 21 и 22 брендбука
+        for key in ("brand", "accent"):
+            with self.subTest(family=key):
+                self.assertRegex(families[key].get("$source", ""), BRANDBOOK_PAGE)
+
+    def test_every_font_token_family_has_a_font_face(self):
+        faces = {family for family, _ in self.font_faces()}
+        for key, node in load_tokens()["font"]["family"].items():
+            first = re.match(r'"([^"]+)"', node["$value"])
+            if first:
+                with self.subTest(family=key):
+                    self.assertIn(first.group(1), faces)
+
+    def test_font_files_exist_beside_their_license(self):
+        for family, urls in self.font_faces():
+            with self.subTest(family=family):
+                self.assertTrue(urls)
+                license_file = DIST / "fonts" / f"{family.replace(' ', '')}-OFL.txt"
+                self.assertTrue(license_file.is_file(), f"нет текста лицензии {license_file.name}")
+                for url in urls:
+                    self.assertTrue((DIST / url).is_file(), f"нет файла {url}")
 
 
 class BuildTest(unittest.TestCase):

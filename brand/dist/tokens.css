@@ -41,6 +41,7 @@
   --fsp-color-overlay: rgb(27 28 33 / 0.6);
   --fsp-color-selection: #d5d1ff;
   --fsp-font-family-brand: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --fsp-font-family-accent: "TDAText", var(--fsp-font-family-brand);
   --fsp-font-family-text: var(--fsp-font-family-brand);
   --fsp-font-weight-regular: 400;
   --fsp-font-weight-medium: 500;

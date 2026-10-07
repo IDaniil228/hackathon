@@ -56,6 +56,7 @@ module.exports = {
       },
       "fontFamily": {
         "brand": "var(--fsp-font-family-brand)",
+        "accent": "var(--fsp-font-family-accent)",
         "text": "var(--fsp-font-family-text)"
       },
       "fontWeight": {
