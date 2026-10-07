@@ -48,9 +48,13 @@ from taskgen.evaluation.jsonout import (
 )
 from taskgen.evaluation.quotes import EmbeddingCache
 from taskgen.generation.essay import (
+    EssayCheck,
     EssayCheckOptions,
+    EssayScenario,
     EssayScenarioError,
+    check_essay_scenario,
     generate_essay,
+    theme_lost,
 )
 from taskgen.generation.examples import render_examples
 from taskgen.generation.harness import GeneratorError
@@ -103,6 +107,10 @@ class LLMUnavailableError(GenerationError):
 
 class ModelOutputError(GenerationError):
     """Модель отвечала, но ни один её вариант условия не прошёл проверки."""
+
+
+class AdjacentTopicError(ModelOutputError):
+    """Последний вариант условия отклонён в том числе потому, что в нём нет темы легенды."""
 
 
 # --- Публичная часть ------------------------------------------------------------------------
@@ -225,12 +233,27 @@ def adjacent_skill(
 class _LegendContext:
     personalization: Personalization | None
     adjacent: tuple[str, str] | None
+    # Тема, которую проверка не нашла в сюжете и которую режим drop снял.
+    dropped: tuple[str, str] | None = None
+
+    @property
+    def theme(self) -> str | None:
+        """Название темы легенды из справочника навыков; None — легенда без темы."""
+        return self.adjacent[1] if self.adjacent else None
 
     def record(self) -> dict[str, Any] | None:
-        """Что из профиля повлияло на легенду; хранится в tasks.personalization."""
+        """Что из профиля повлияло на легенду; хранится в tasks.personalization.
+
+        Экземпляр создаётся только из проверенного текста, поэтому adjacent_skill стоит лишь
+        у темы, которую проверка нашла в сюжете.
+        """
         if self.personalization is None:
             return None
-        return {"profile": True, "adjacent_skill": self.adjacent[0] if self.adjacent else None}
+        return {
+            "profile": True,
+            "adjacent_skill": self.adjacent[0] if self.adjacent else None,
+            "adjacent_skill_dropped": self.dropped[0] if self.dropped else None,
+        }
 
 
 @dataclass(frozen=True)
@@ -317,6 +340,17 @@ async def generate_instance(
             spec, seed, personalization.skills, deps.options.adjacent_topic_probability
         )
     context = _LegendContext(personalization, adjacent)
+    try:
+        return await _generate(spec, seed, deps, context)
+    except AdjacentTopicError:
+        if deps.options.adjacent_topic_failure == "error":
+            raise
+    return await _generate(spec, seed, deps, _LegendContext(personalization, None, adjacent))
+
+
+async def _generate(
+    spec: TemplateSpec, seed: int, deps: InstanceDeps, context: _LegendContext
+) -> TaskInstance:
     if spec.kind == TaskKind.ESSAY:
         return await _essay(spec, seed, deps, context)
     if spec.kind == TaskKind.QUIZ:
@@ -359,11 +393,13 @@ async def _quiz(
             system_suffix=system_suffix,
             request_suffix=request_suffix,
             evidence_options=checker_evidence(deps.options),
+            theme=context.theme,
         )
     except httpx.HTTPError as error:
         raise LLMUnavailableError("Модель генерации недоступна, повторите позже") from error
     except QuizCaseError as error:
-        raise ModelOutputError(str(error)) from error
+        failure = AdjacentTopicError if error.theme_missing else ModelOutputError
+        raise failure(str(error)) from error
     return TaskInstance(
         kind=TaskKind.QUIZ,
         statement=draft.statement,
@@ -408,11 +444,13 @@ async def _essay(
             embedder=deps.embedder,
             embedding_cache=deps.embedding_cache,
             evidence_options=checker_evidence(deps.options),
+            theme=context.theme,
         )
     except httpx.HTTPError as error:
         raise LLMUnavailableError("Модель генерации недоступна, повторите позже") from error
     except EssayScenarioError as error:
-        raise ModelOutputError(str(error)) from error
+        failure = AdjacentTopicError if theme_lost(error.check) else ModelOutputError
+        raise failure(str(error)) from error
     return TaskInstance(
         kind=TaskKind.ESSAY,
         statement=draft.statement,
@@ -608,15 +646,18 @@ async def _write_legend(
     context: _LegendContext,
     solve: Callable[[Legend], Awaitable[SolverVerdict]] | None = None,
 ) -> tuple[Legend, SolverRecord | None]:
-    """Легенда от LLM, прошедшая check и решатель solve, и итог решателя.
+    """Легенда от LLM, прошедшая check, проверку темы и решатель solve, и итог решателя.
 
-    check возвращает причину отказа или None. solve вызывается только для легенды, которая
-    прошла check; None — решатель выключен.
+    check возвращает причину отказа или None. Тему легенды, если она выбрана, после check
+    ищет проверяльщик фактов эссе: это один вызов модели проверяльщика на вариант. solve
+    вызывается только для легенды, которая прошла обе проверки; None — решатель выключен.
     """
     messages = _legend_messages(request, context)
     reason = ""
+    theme_missing = False
     solver_calls = rejected = 0
     for _ in range(deps.options.legend_attempts):
+        theme_missing = False
         try:
             legend = await complete_structured(
                 deps.llm,
@@ -636,6 +677,15 @@ async def _write_legend(
             reason = "ответ модели не соответствует формату"
             continue
         reason = check(legend) or ""
+        if not reason and context.theme is not None:
+            try:
+                themed = await _check_theme(spec, legend, context.theme, deps)
+            except httpx.HTTPError as error:
+                raise LLMUnavailableError(
+                    "Модель проверяльщика недоступна, повторите позже"
+                ) from error
+            theme_missing = theme_lost(themed)
+            reason = "; ".join(themed.reasons)
         if not reason and solve is None:
             return legend, None
         if not reason and solve is not None:
@@ -655,7 +705,28 @@ async def _write_legend(
             *messages[:2],
             ChatMessage(role="user", content=f"Предыдущий вариант отклонён: {reason}. Перепиши."),
         ]
-    raise ModelOutputError(
+    failure = AdjacentTopicError if theme_missing else ModelOutputError
+    raise failure(
         f"Шаблон {spec.name}: модель не написала корректное условие за "
         f"{deps.options.legend_attempts} попыток; последняя причина — {reason}"
+    )
+
+
+async def _check_theme(
+    spec: TemplateSpec, legend: Legend, theme: str, deps: InstanceDeps
+) -> EssayCheck:
+    """Тема в легенде задания с кодом по проверке ситуации эссе, где фактов шаблона нет.
+
+    Остальные проверки легенды делает check в _code; здесь — только факт темы.
+    """
+    bare = spec.model_copy(update={"scenario_facts": [], "forbidden": []})
+    return await check_essay_scenario(
+        deps.llm,
+        bare,
+        EssayScenario(title=legend.title, situation=legend.statement),
+        {},
+        model=deps.checker_model or deps.model,
+        reasoning_effort=deps.checker_reasoning_effort,
+        evidence_options=checker_evidence(deps.options),
+        theme=theme,
     )

@@ -26,7 +26,12 @@ from pydantic import BaseModel, Field
 
 from taskgen.contracts import LLMClient, QuizVariant, ReasoningEffort, SolverRecord, TemplateSpec
 from taskgen.evaluation.evidence import VERBATIM_QUOTES, EvidenceOptions
-from taskgen.generation.essay import EssayScenarioError, filled_facts, generate_essay
+from taskgen.generation.essay import (
+    EssayScenarioError,
+    filled_facts,
+    generate_essay,
+    theme_lost,
+)
 from taskgen.generation.params import fill_placeholders
 from taskgen.generation.solver import SolverConfig, solve_quiz
 from taskgen.generation.textcheck import foreign_numbers
@@ -81,7 +86,14 @@ def case_sources(derived: TemplateSpec, params: dict[str, Any]) -> list[str]:
 
 
 class QuizCaseError(Exception):
-    """Ни один кейс не прошёл проверку фактов, запрещённых фраз, чисел или решателя."""
+    """Ни один кейс не прошёл проверку фактов, запрещённых фраз, чисел или решателя.
+
+    theme_missing — в последней попытке проверяльщик не нашёл в кейсе темы легенды.
+    """
+
+    def __init__(self, message: str, *, theme_missing: bool = False) -> None:
+        super().__init__(message)
+        self.theme_missing = theme_missing
 
 
 @dataclass(frozen=True)
@@ -109,18 +121,24 @@ async def write_case(
     system_suffix: str = "",
     request_suffix: str = "",
     evidence_options: EvidenceOptions = VERBATIM_QUOTES,
+    theme: str | None = None,
 ) -> QuizDraft:
     """Проверенный кейс за не больше чем attempts попыток.
 
-    Каждая попытка — один проход generate_essay: кейс и проверка фактов. Решатель, если он
-    задан, решает принятый кейс; его отказ, как и отказ проверки, уходит писателю в
-    следующей попытке. httpx.HTTPError от любой модели не перехватывается.
+    Каждая попытка — один проход generate_essay: кейс и проверка фактов, включая тему
+    легенды theme. Решатель, если он задан, решает принятый кейс; его отказ, как и отказ
+    проверки, уходит писателю в следующей попытке. httpx.HTTPError от любой модели не
+    перехватывается.
     """
     derived = case_spec(spec, variant)
     choices = [(option.id, option.text) for option in options]
+    # Название темы может содержать число, например Python 3.12: такое число не выдумано.
+    sources = case_sources(derived, params) + ([theme] if theme is not None else [])
     reason = ""
+    theme_missing = False
     solver_calls = rejected = 0
     for _ in range(attempts):
+        theme_missing = False
         retry = (
             f"\n\nПредыдущий вариант отклонён: {reason}. Перепиши ситуацию целиком."
             if reason
@@ -140,11 +158,13 @@ async def write_case(
                 system_suffix=QUIZ_WRITER_RULES + system_suffix,
                 request_suffix=request_suffix + retry,
                 evidence_options=evidence_options,
+                theme=theme,
             )
         except EssayScenarioError as error:
             reason = "; ".join(error.check.reasons) if error.check else str(error)
+            theme_missing = theme_lost(error.check)
             continue
-        invented = foreign_numbers(draft.situation, case_sources(derived, params))
+        invented = foreign_numbers(draft.situation, sources)
         if invented:
             reason = (
                 f"в кейсе есть числа, которых нет в фактах: {', '.join(invented)}; "
@@ -162,5 +182,6 @@ async def write_case(
         reason = verdict.reason
     raise QuizCaseError(
         f"Шаблон {spec.name}: кейс задачки не прошёл проверку за {attempts} попыток; "
-        f"последняя причина — {reason}"
+        f"последняя причина — {reason}",
+        theme_missing=theme_missing,
     )

@@ -84,6 +84,23 @@ SCENARIO_SYSTEM = (
 )
 
 
+# Кириллица не проходит RUBRIC_ITEM парсера шаблонов, поэтому id не совпадёт с фактом автора.
+THEME_FACT_ID = "тема"
+
+
+def theme_fact(theme: str) -> ScenarioFact:
+    """Тема легенды как факт для проверяльщика: тема есть в сюжете, знать её не нужно."""
+    return ScenarioFact(
+        id=THEME_FACT_ID,
+        text=f"в сюжете фигурирует «{theme}» — по имени или как предметная область, "
+        "инструмент или материал героев",
+    )
+
+
+def theme_missing_reason(theme: str) -> str:
+    return f"в сюжете нет темы «{theme}»; встрои её в сюжет, не меняя фактов"
+
+
 def filled_facts(spec: TemplateSpec, params: dict[str, Any]) -> list[ScenarioFact]:
     return [
         ScenarioFact(id=fact.id, text=fill_placeholders(fact.text, params))
@@ -436,6 +453,7 @@ async def check_essay_scenario(
     embedder: Embedder | None = None,
     cache: EmbeddingCache | None = None,
     evidence_options: EvidenceOptions = VERBATIM_QUOTES,
+    theme: str | None = None,
 ) -> EssayCheck:
     """Проверка ситуации до выдачи кандидату; options=None — проверка только LLM.
 
@@ -443,6 +461,10 @@ async def check_essay_scenario(
     Сетевые ошибки и ошибки провайдера LLM не скрываются. Ответ проверяльщика не по схеме
     означает отказ: ни один факт, который он решал, не подтверждён. Ошибка эмбеддера не
     отказ: проверка переходит на LLM и пишет об этом в notes.
+
+    theme — тема легенды: её факт (theme_fact) всегда решает LLM. Эмбеддинги на замере не
+    отличают короткий термин от темы текста, поэтому ни сходство с предложениями, ни смысл
+    цитат для темы не проверяются. Нет темы — в missing_facts стоит THEME_FACT_ID.
     """
     reasons: list[str] = []
     notes: list[str] = []
@@ -497,6 +519,8 @@ async def check_essay_scenario(
                 ask_phrases.append(phrase)
             elif decided:
                 forbidden_evidence[phrase] = match.unit
+    themed = [theme_fact(theme)] if theme is not None else []
+    ask_facts = [*ask_facts, *themed]
 
     if ask_facts or ask_phrases:
         verdicts = await _llm_verdicts(
@@ -511,7 +535,8 @@ async def check_essay_scenario(
         if verdicts is None:
             reasons.append("проверяльщик фактов не ответил по схеме")
         else:
-            confirmed = verdicts.facts
+            confirmed = dict(verdicts.facts)
+            theme_quotes = confirmed.pop(THEME_FACT_ID, None)
             if options is not None and options.quote_threshold is not None and confirmed:
                 relevance = QuoteRelevance(
                     threshold=options.quote_threshold,
@@ -519,6 +544,8 @@ async def check_essay_scenario(
                     cache=cache if cache is not None else EmbeddingCache(),
                 )
                 confirmed = await _relevant_facts(confirmed, facts, relevance, notes)
+            if theme_quotes is not None:
+                confirmed[THEME_FACT_ID] = theme_quotes
             evidence |= {fid: " … ".join(quotes) for fid, quotes in confirmed.items()}
             forbidden_evidence |= {p: " … ".join(q) for p, q in verdicts.phrases.items()}
 
@@ -529,6 +556,9 @@ async def check_essay_scenario(
     if missing:
         listed = "; ".join(f"{fact.id}: {fact.text}" for fact in missing)
         reasons.append(f"в ситуации нет фактов — {listed}")
+    if theme is not None and THEME_FACT_ID not in evidence:
+        missing += themed
+        reasons.append(theme_missing_reason(theme))
     return EssayCheck(
         ok=not reasons,
         missing_facts=[fact.id for fact in missing],
@@ -550,6 +580,11 @@ class EssayDraft:
     situation: str
     statement: str
     check: EssayCheck
+
+
+def theme_lost(check: EssayCheck | None) -> bool:
+    """Проверка отклонила текст, в том числе потому, что в нём нет темы легенды."""
+    return check is not None and THEME_FACT_ID in check.missing_facts
 
 
 class EssayScenarioError(Exception):
@@ -577,12 +612,14 @@ async def generate_essay(
     embedder: Embedder | None = None,
     embedding_cache: EmbeddingCache | None = None,
     evidence_options: EvidenceOptions = VERBATIM_QUOTES,
+    theme: str | None = None,
 ) -> EssayDraft:
     """Проверенное условие эссе за не больше чем attempts попыток написать ситуацию.
 
     После отказа писатель получает причины, включая пропущенные факты и найденные фразы:
-    он писатель, а не кандидат, и ответов из рубрики в причинах нет.
-    httpx.HTTPError от любой из моделей не перехватывается.
+    он писатель, а не кандидат, и ответов из рубрики в причинах нет. theme — тема легенды,
+    которую ситуация обязана содержать (check_essay_scenario); в запрос писателю её кладёт
+    request_suffix. httpx.HTTPError от любой из моделей не перехватывается.
     """
     base = scenario_messages(
         spec, params, system_suffix=system_suffix, request_suffix=request_suffix
@@ -621,6 +658,7 @@ async def generate_essay(
             embedder=embedder,
             cache=cache,
             evidence_options=evidence_options,
+            theme=theme,
         )
         if last.ok:
             questions = essay_questions(spec, params)

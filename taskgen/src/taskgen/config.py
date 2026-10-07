@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -434,6 +434,13 @@ class GenerationSettings(BaseModel):
         description="Доля персональных заданий, чья легенда тематически опирается на навык "
         "профиля, которого нет в шаблоне. Выбор воспроизводим по seed задания; окружение "
         "задачи не меняется",
+    )
+    adjacent_topic_failure: Literal["error", "drop"] = Field(
+        default="error",
+        description="Что делать, если LLM-проверяльщик не нашёл тему легенды в сюжете за "
+        "legend_attempts попыток. error — обычная ошибка генерации экземпляра: дальше "
+        "работает замена шаблона. drop — экземпляр генерируется заново без темы, а в "
+        "tasks.personalization тема записывается в adjacent_skill_dropped",
     )
     instance_attempts: int = Field(
         default=5,
