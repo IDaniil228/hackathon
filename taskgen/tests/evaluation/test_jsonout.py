@@ -125,11 +125,37 @@ async def test_reply_rejected_by_check_is_asked_again_with_the_problem():
     assert point == Point(x=2, y=0)
     assert len(llm.calls) == 2
     second = llm.calls[1]["messages"]
-    # Модель видит свой прошлый ответ и что в нём не так.
-    assert second[-2].role == "assistant" and '"x": -1' in second[-2].content
+    # Повтор — тот же запрос и то, что в прошлом ответе не так; сам ответ запрос не удлиняет.
+    assert second[:-1] == MESSAGES
     assert second[-1].role == "user" and "x = -1" in second[-1].content
-    assert second[: len(MESSAGES)] == MESSAGES
     assert log == ["x = -1, а нужно положительное"]
+
+
+async def test_repair_rejected_by_provider_returns_the_last_parsed_reply():
+    # Ollama отвечает 400, когда запрос не влезает в окно контекста.
+    def respond(messages, _schema):
+        if len(messages) > len(MESSAGES):
+            raise http_error(400)
+        return '{"x": -1, "y": 0}'
+
+    llm = FakeLLM(respond)
+    point = await complete_structured(
+        llm, MESSAGES, Point, SCHEMA, model="m", check=positive, repairs=2
+    )
+    assert point == Point(x=-1, y=0)
+    assert len(llm.calls) == 2
+
+
+async def test_repair_does_not_hide_server_errors():
+    def respond(messages, _schema):
+        if len(messages) > len(MESSAGES):
+            raise http_error(503)
+        return '{"x": -1, "y": 0}'
+
+    with pytest.raises(Exception, match="ошибка провайдера"):
+        await complete_structured(
+            FakeLLM(respond), MESSAGES, Point, SCHEMA, model="m", check=positive, repairs=1
+        )
 
 
 async def test_repairs_stop_after_the_limit_and_return_the_last_reply():
@@ -157,7 +183,8 @@ async def test_reply_out_of_schema_is_asked_again_with_the_error():
     assert point == Point(x=1, y=1)
     assert len(llm.calls) == 3
     repair = llm.calls[2]["messages"]
-    assert repair[-2].role == "assistant" and "не число" in repair[-2].content
+    # Повтор идёт в разговор без схемы, где модели уже показана схема в тексте.
+    assert repair[:-1] == llm.calls[1]["messages"]
     assert repair[-1].role == "user" and "x" in repair[-1].content
 
 

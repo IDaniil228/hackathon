@@ -93,9 +93,9 @@ def _repair_instruction(problems: list[str]) -> ChatMessage:
     return ChatMessage(
         role="user",
         content=(
-            "Твой ответ не принят: "
+            "Твой предыдущий ответ на этот запрос не принят: "
             + "; ".join(problems)
-            + ". Исправь это и верни JSON-объект целиком заново по той же схеме."
+            + ". Ответь заново целиком, по той же схеме, и исправь это."
         ),
     )
 
@@ -115,10 +115,12 @@ async def complete_structured[ModelT: BaseModel](
 ) -> ModelT:
     """Ответ модели как экземпляр model_cls или StructuredOutputError.
 
-    check возвращает претензии к разобранному ответу. Ответ с претензиями или не по схеме
-    модель получает обратно с перечнем ошибок, и так не больше repairs раз. Причина каждого
-    повтора дописывается в repair_log. Если претензии остались после всех повторов, функция
-    возвращает последний разобранный ответ: что с ним делать, решает вызывающий.
+    check возвращает претензии к разобранному ответу. Если ответ с претензиями или не по
+    схеме, запрос повторяется с перечнем ошибок, и так не больше repairs раз. Прошлый ответ
+    в повтор не входит: запрос не растёт, а окно контекста Ollama 4096 токенов его не
+    вмещало. Причина каждого повтора дописывается в repair_log. Если претензии остались
+    после всех повторов или повтор отклонён ошибкой 4xx, функция возвращает последний
+    разобранный ответ: что с ним делать, решает вызывающий.
 
     Ошибка провайдера 5xx и сетевые ошибки не скрываются: повтор без схемы их не исправит.
     """
@@ -164,18 +166,18 @@ async def complete_structured[ModelT: BaseModel](
             break
         if repair_log is not None:
             repair_log.append("; ".join(problems))
-        conversation = [
-            *conversation,
-            ChatMessage(role="assistant", content=reply or ""),
-            _repair_instruction(problems),
-        ]
-        reply = await llm.complete(
-            conversation,
-            model=model,
-            temperature=temperature,
-            json_schema=json_schema,
-            reasoning_effort=reasoning_effort,
-        )
+        try:
+            reply = await llm.complete(
+                [*conversation, _repair_instruction(problems)],
+                model=model,
+                temperature=temperature,
+                json_schema=json_schema,
+                reasoning_effort=reasoning_effort,
+            )
+        except httpx.HTTPStatusError as error:
+            if not error.response.is_client_error:
+                raise
+            break
         parsed = _parse(reply, model_cls)
         if not isinstance(parsed, str):
             last_valid = parsed
