@@ -57,7 +57,13 @@ def _render(value: Any) -> str:
 
 
 def _fingerprints(case: TestCase) -> set[str]:
-    values: list[Any] = [case.input, case.expected]
+    if case.stdin is not None:
+        # Вход и вывод программы, каждая их строка и каждый файл кейса: длинный вывод
+        # модель скорее процитирует кусками, чем целиком.
+        texts = [case.stdin, str(case.expected), *case.files.values()]
+        values: list[Any] = [*texts, *(line for text in texts for line in text.splitlines())]
+        return {_normalize(value) for value in values}
+    values = [case.input, case.expected]
     if isinstance(case.input, list):
         values += case.input
     elif isinstance(case.input, dict):

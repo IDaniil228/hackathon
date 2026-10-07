@@ -30,6 +30,7 @@ from taskgen.contracts import (
     ChatMessage,
     Embedder,
     HiddenPayload,
+    IOKind,
     LLMClient,
     ReasoningEffort,
     RunLimits,
@@ -50,6 +51,7 @@ from taskgen.generation.essay import (
     EssayScenarioError,
     generate_essay,
 )
+from taskgen.generation.examples import render_examples
 from taskgen.generation.harness import GeneratorError
 from taskgen.generation.leaks import (
     defines_entrypoint,
@@ -106,13 +108,29 @@ class ModelOutputError(GenerationError):
 
 
 class Signature(BaseModel):
-    entrypoint: str = Field(description="Имя функции, которую пишет кандидат")
+    io: IOKind = Field(
+        description="function — кандидат пишет функцию entrypoint; stdio — программу, которая "
+        "читает stdin и печатает ответ в stdout"
+    )
+    entrypoint: str | None = Field(
+        default=None, description="Только для io=function: имя функции, которую пишет кандидат"
+    )
     runtime: str = Field(description="Окружение песочницы, в котором решение проверяется")
 
 
 class Example(BaseModel):
-    input: Any = Field(description="Аргументы функции: массив позиционных или объект именованных")
-    expected: Any = Field(description="Ожидаемый результат")
+    input: Any = Field(
+        default=None,
+        description="Только для io=function: аргументы функции, массив позиционных или объект "
+        "именованных",
+    )
+    stdin: str | None = Field(default=None, description="Только для io=stdio: вход программы")
+    files: dict[str, str] = Field(
+        default={}, description="Только для io=stdio: файлы рядом с программой, имя → текст"
+    )
+    expected: Any = Field(
+        description="Ожидаемый результат функции или ожидаемый вывод программы строкой"
+    )
 
 
 class PublicPayload(BaseModel):
@@ -434,19 +452,23 @@ async def _code(
 
     shown = public_count(len(cases), deps.options.public_examples)
     public_cases, hidden_cases = cases[:shown], cases[shown:]
+    io = spec.io
+    if io is None:
+        raise TemplateDefectError(f"Шаблон {spec.name}: у задания с кодом нет вида io")
     entrypoint = spec.entrypoint or ""
     try:
         environment = describe_runtime(spec.runtime or "")
     except SandboxError as error:
         raise TemplateDefectError(f"Шаблон {spec.name}: {error}") from error
-    request = _code_request(spec, params, public_cases, environment)
+    request = _code_request(spec, io, params, public_cases, environment)
 
     def check(legend: Legend) -> str | None:
-        if not mentions_entrypoint(legend.statement, entrypoint):
+        is_function = io is IOKind.FUNCTION
+        if is_function and not mentions_entrypoint(legend.statement, entrypoint):
             return f"в условии нет имени функции {entrypoint}"
         if hidden_leaks(legend.statement, public_cases, hidden_cases):
             return "условие содержит данные скрытых тестов; приводи только данные из примеров"
-        if defines_entrypoint(legend.statement, entrypoint):
+        if is_function and defines_entrypoint(legend.statement, entrypoint):
             return "условие содержит код решения; опиши задачу словами, без реализации функции"
         return "; ".join(text_problems(f"{legend.title}\n\n{legend.statement}")) or None
 
@@ -460,7 +482,8 @@ async def _code(
                     solver,
                     sandbox,
                     statement=legend.statement,
-                    entrypoint=entrypoint,
+                    io=io,
+                    entrypoint=spec.entrypoint,
                     runtime=spec.runtime or "",
                     environment=environment,
                     examples=public_cases,
@@ -478,8 +501,11 @@ async def _code(
         seed=attempt_seed,
         public=PublicPayload(
             title=legend.title,
-            signature=Signature(entrypoint=entrypoint, runtime=spec.runtime or ""),
-            examples=[Example(input=c.input, expected=c.expected) for c in public_cases],
+            signature=Signature(io=io, entrypoint=spec.entrypoint, runtime=spec.runtime or ""),
+            examples=[
+                Example(input=c.input, stdin=c.stdin, files=c.files, expected=c.expected)
+                for c in public_cases
+            ],
             expected_minutes=spec.expected_minutes,
             environment=environment,
         ),
@@ -502,20 +528,29 @@ async def _code(
 
 
 def _code_request(
-    spec: TemplateSpec, params: dict[str, Any], public: list[TestCase], environment: str
+    spec: TemplateSpec,
+    io: IOKind,
+    params: dict[str, Any],
+    public: list[TestCase],
+    environment: str,
 ) -> str:
-    examples = "\n".join(
-        f"- input: {json.dumps(c.input, ensure_ascii=False)}; "
-        f"expected: {json.dumps(c.expected, ensure_ascii=False)}"
-        for c in public
-    )
+    if io is IOKind.FUNCTION:
+        task = (
+            f"Кандидат пишет функцию `{spec.entrypoint}`. {environment}. Не требуй библиотек "
+            "сверх этих. Назови функцию в условии ровно так и опиши аргументы и возвращаемое "
+            "значение. Аргументы передаются в том порядке, в каком они перечислены в input "
+            "примеров."
+        )
+    else:
+        task = (
+            f"Кандидат пишет программу, которая читает вход из stdin и печатает ответ в "
+            f"stdout. {environment}. Не требуй библиотек сверх этих. Опиши в условии формат "
+            "входа и формат вывода так точно, чтобы по ним можно было написать программу; "
+            "если у примера есть файлы, назови их имена и формат."
+        )
     return (
         f"Инструкция автора задания:\n{fill_placeholders(spec.generator_prompt, params)}\n\n"
-        f"Кандидат пишет функцию `{spec.entrypoint}`. {environment}. Не требуй библиотек "
-        "сверх этих. Назови функцию в условии ровно так и опиши аргументы и возвращаемое "
-        "значение. Аргументы передаются в том порядке, в каком они перечислены в input "
-        "примеров.\n\n"
-        f"Примеры (input — аргументы функции, expected — результат):\n{examples}\n\n"
+        f"{task}\n\n{render_examples(io, public)}\n\n"
         "Других тестовых данных в условии не приводи."
     )
 

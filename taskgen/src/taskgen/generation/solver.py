@@ -12,7 +12,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -22,6 +21,7 @@ from pydantic import BaseModel
 
 from taskgen.contracts import (
     ChatMessage,
+    IOKind,
     LLMClient,
     ReasoningEffort,
     SandboxRunner,
@@ -29,6 +29,7 @@ from taskgen.contracts import (
     TestRunRequest,
 )
 from taskgen.evaluation.jsonout import StructuredOutputError, complete_structured
+from taskgen.generation.examples import render_examples
 from taskgen.sandbox.errors import SandboxServiceError
 
 # Немного случайности: при solver_attempts > 1 повторная попытка не повторяет первую.
@@ -131,11 +132,19 @@ async def solve_quiz(
 
 # --- Задание с кодом -----------------------------------------------------------------------
 
-CODE_SYSTEM = (
-    "Ты кандидат на техническом тесте. Реши задание только по его условию и примерам. "
-    "Напиши функцию с указанным именем целиком, без кода вне функций, кроме импортов и "
-    "вспомогательных определений. Верни JSON с полем solution — исходный код решения."
-)
+CODE_SYSTEM = {
+    IOKind.FUNCTION: (
+        "Ты кандидат на техническом тесте. Реши задание только по его условию и примерам. "
+        "Напиши функцию с указанным именем целиком, без кода вне функций, кроме импортов и "
+        "вспомогательных определений. Верни JSON с полем solution — исходный код решения."
+    ),
+    IOKind.STDIO: (
+        "Ты кандидат на техническом тесте. Реши задание только по его условию и примерам. "
+        "Напиши программу целиком: она читает вход из stdin и из файлов, если условие их "
+        "называет, и печатает ответ в stdout. Верни JSON с полем solution — исходный код "
+        "программы."
+    ),
+}
 
 
 class _CodeReply(BaseModel):
@@ -151,19 +160,20 @@ CODE_SCHEMA: dict[str, Any] = {
 
 
 def _code_messages(
-    statement: str, entrypoint: str, runtime: str, environment: str, examples: list[TestCase]
+    statement: str,
+    io: IOKind,
+    entrypoint: str | None,
+    runtime: str,
+    environment: str,
+    examples: list[TestCase],
 ) -> list[ChatMessage]:
-    shown = "\n".join(
-        f"- input: {json.dumps(case.input, ensure_ascii=False)}; "
-        f"expected: {json.dumps(case.expected, ensure_ascii=False)}"
-        for case in examples
-    )
+    task = f"Функция: `{entrypoint}`" if io is IOKind.FUNCTION else "Программа"
     user = (
-        f"{statement}\n\nФункция: `{entrypoint}`, окружение {runtime}. {environment}.\n\n"
-        f"Примеры (input — аргументы функции, expected — результат):\n{shown}"
+        f"{statement}\n\n{task}, окружение {runtime}. {environment}.\n\n"
+        f"{render_examples(io, examples)}"
     )
     return [
-        ChatMessage(role="system", content=CODE_SYSTEM),
+        ChatMessage(role="system", content=CODE_SYSTEM[io]),
         ChatMessage(role="user", content=user),
     ]
 
@@ -173,7 +183,8 @@ async def solve_code(
     sandbox: SandboxRunner,
     *,
     statement: str,
-    entrypoint: str,
+    io: IOKind,
+    entrypoint: str | None,
     runtime: str,
     environment: str,
     examples: list[TestCase],
@@ -191,7 +202,7 @@ async def solve_code(
         try:
             reply = await complete_structured(
                 config.llm,
-                _code_messages(statement, entrypoint, runtime, environment, examples),
+                _code_messages(statement, io, entrypoint, runtime, environment, examples),
                 _CodeReply,
                 CODE_SCHEMA,
                 model=config.model,
