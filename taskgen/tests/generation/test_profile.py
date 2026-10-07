@@ -35,14 +35,17 @@ def test_hash_is_stable_and_order_independent_for_extra():
 def test_snapshot_lives_until_last_task_then_only_hash_stays(world):
     world.add_templates(world.code("a"), world.code("b"))
     gated = world.gate(free=1)
-    created = world.create(profile=PROFILE)
+    # Без навыка вне шаблона: смежная тема по seed сессии добавила бы первому заданию вызов
+    # проверяльщика, и шлюз на один вызов задержал бы его.
+    profile = PROFILE | {"skills": ["python"]}
+    created = world.create(profile=profile)
     assert created.status_code == 201, created.text
     session_id = created.json()["id"]
-    expected = profile_hash(CandidateProfile.model_validate(PROFILE))
+    expected = profile_hash(CandidateProfile.model_validate(profile))
 
     [session] = world.sessions()
     # Пока второе задание не готово, снимок нужен генерации.
-    assert session.profile == CandidateProfile.model_validate(PROFILE).model_dump(mode="json")
+    assert session.profile == CandidateProfile.model_validate(profile).model_dump(mode="json")
     assert session.profile_hash == expected
 
     world.open(gated)

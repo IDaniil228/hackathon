@@ -25,7 +25,7 @@ from taskgen.db import (
 from tests.bank.factory import Unchecked
 from tests.conftest import ADMIN_KEY
 from tests.evaluation.fakes import FakeLLM, http_error
-from tests.generation.fakes import GatedLLM, LocalSandbox, essay_reply
+from tests.generation.fakes import GatedLLM, LocalSandbox, essay_reply, theme_text
 from tests.generation.templates import (
     code_template_md,
     essay_template_md,
@@ -67,6 +67,9 @@ class ModelStub:
         prompt = messages[1].content
         match = ENTRYPOINT_IN_PROMPT.search(prompt)
         statement = f"Напишите функцию {match.group(1)}." if match else "Расскажите про GIL."
+        # Честный писатель встраивает тему легенды, которую потом ищет проверяльщик.
+        if theme := theme_text(prompt):
+            statement += f" {theme}"
         return json.dumps({"title": "Задание", "statement": statement}, ensure_ascii=False)
 
 

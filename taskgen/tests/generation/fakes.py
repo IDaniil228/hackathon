@@ -26,25 +26,39 @@ from taskgen.contracts import (
     TestReport,
     TestRunRequest,
 )
+from taskgen.generation.essay import theme_fact
 from taskgen.sandbox import cases
 from taskgen.sandbox.registry import RuntimeRegistry
 
 _FACTS_HEADER = "Факты, которые обязаны быть в ситуации:\n"
 _CHECKER_FACT = re.compile(r"^- (?P<id>[^:\n]+): (?P<text>.+)$", re.MULTILINE)
 _NUMBERED_SPAN = re.compile(r"^\[(\d+)\] (.+)$", re.MULTILINE)
+_THEME_LINE = re.compile(r"Тематика легенды: (.+?)\. ")
 
 
-def essay_reply(messages, schema, *, keep_facts: bool = True) -> str | None:
+def theme_text(request: str) -> str | None:
+    """Текст факта темы, если в запросе писателю есть строка «Тематика легенды»."""
+    found = _THEME_LINE.search(request)
+    return theme_fact(found[1]).text if found else None
+
+
+def essay_reply(
+    messages, schema, *, keep_facts: bool = True, keep_theme: bool = True
+) -> str | None:
     """Ответ модели на запрос ситуации эссе или её проверки; None — запрос не про эссе.
 
-    Писатель складывает ситуацию из фактов запроса (или пишет её без фактов), проверяльщик
-    честно ищет каждый факт в ситуации и цитирует его или называет номера его участков.
+    Писатель складывает ситуацию из фактов запроса (или пишет её без фактов) и, если keep_theme,
+    добавляет текст факта темы из строки «Тематика легенды». Проверяльщик честно ищет каждый
+    факт в ситуации и цитирует его или называет номера его участков.
     """
     properties = (schema or {}).get("properties", {})
     user = messages[1].content
     if "situation" in properties:
         listing = user.split(_FACTS_HEADER, 1)[1].split("\n\n", 1)[0]
         facts = [line.removeprefix("- ") for line in listing.splitlines()]
+        theme = theme_text(user)
+        if keep_theme and theme:
+            facts.append(theme)
         situation = " ".join(facts) if keep_facts else "В команде что-то происходит."
         return json.dumps({"title": "Ситуация", "situation": situation}, ensure_ascii=False)
     if "facts" in properties:
