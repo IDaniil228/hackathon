@@ -1,10 +1,13 @@
-"""Драйверы языков: адаптер задач-функций к ядру песочницы.
+"""Драйверы: программы, которые исполняются в песочнице вокруг кода кандидата.
 
-Драйвер — программа, которая читает из stdin входы кейсов JSON, вызывает функцию кандидата
-на каждом и печатает ответы JSON (протокол — taskgen/sandbox/protocol.py). Ответы сверяет
-ядро, как вывод любой программы (taskgen/sandbox/cases.py). Исходники драйверов лежат рядом
-с этим модулем и исполняются только внутри песочницы. Языку без драйвера доступны только
-задачи stdio.
+Драйвер языка — адаптер задач-функций к ядру песочницы: читает из stdin входы кейсов JSON,
+вызывает функцию кандидата на каждом и печатает ответы JSON (протокол —
+taskgen/sandbox/protocol.py). Ответы сверяет ядро, как вывод любой программы
+(taskgen/sandbox/cases.py). Языку без драйвера доступны только задачи stdio.
+
+Драйвер анализа (taskgen_analyze.py) запускает статические анализаторы на коде кандидата в
+окружении analyzers. Исходники драйверов лежат рядом с этим модулем и исполняются только
+внутри песочницы.
 """
 
 from __future__ import annotations
@@ -43,3 +46,13 @@ def driver_files(kind: str, entrypoint: str, solution: str) -> tuple[dict[str, s
         )
         return {"main.cpp": source}, []
     raise SandboxError(f"нет драйвера задач-функций для языка {kind}")
+
+
+ANALYZE_DRIVER = "taskgen_analyze.py"
+
+
+def analysis_files(source_file: str, code: str) -> dict[str, str]:
+    """Файлы запуска анализа: драйвер исполняется, код кандидата лежит рядом."""
+    if source_file == ANALYZE_DRIVER:
+        raise SandboxError(f"файл решения {source_file} совпал с драйвером анализа")
+    return {ANALYZE_DRIVER: _source(ANALYZE_DRIVER), source_file: code}

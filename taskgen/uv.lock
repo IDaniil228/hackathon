@@ -839,21 +839,20 @@ dependencies = [
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
-    { name = "lizard" },
     { name = "pgvector" },
     { name = "pydantic-settings" },
     { name = "python-multipart" },
     { name = "pyyaml" },
-    { name = "radon" },
-    { name = "ruff" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "lizard" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "radon" },
     { name = "ruff" },
 ]
 
@@ -863,22 +862,21 @@ requires-dist = [
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
-    { name = "lizard", specifier = ">=1.24.1" },
     { name = "pgvector" },
     { name = "pydantic-settings" },
     { name = "python-multipart", specifier = ">=0.0.32" },
     { name = "pyyaml" },
-    { name = "radon", specifier = ">=6.0.1" },
-    { name = "ruff", specifier = ">=0.16.10" },
     { name = "sqlalchemy", extras = ["asyncio"] },
     { name = "uvicorn", extras = ["standard"] },
 ]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "lizard", specifier = ">=1.24.1" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
-    { name = "ruff" },
+    { name = "radon", specifier = ">=6.0.1" },
+    { name = "ruff", specifier = ">=0.16.10" },
 ]
 
 [[package]]

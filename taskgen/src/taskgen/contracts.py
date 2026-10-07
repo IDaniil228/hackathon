@@ -363,10 +363,10 @@ class AnalysisReport(BaseModel):
     findings: list[dict[str, Any]] = []
 
 
-class Analyzer(Protocol):
-    languages: frozenset[str]
-
-    def analyze(self, code: str, language: str) -> AnalysisReport: ...
+class CodeAnalyzer(Protocol):
+    async def analyze(self, code: str, language: str) -> list[AnalysisReport]:
+        """Отчёты всех анализаторов языка; язык без анализаторов — пустой список."""
+        ...
 
 
 class RubricVerdict(BaseModel):

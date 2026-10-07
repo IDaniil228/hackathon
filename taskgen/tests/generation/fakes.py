@@ -159,7 +159,8 @@ class LocalSandbox:
         self.runs.append(request)
         if self.down:
             raise connect_error()
-        assert request.runtime == "python"
+        # Окружение analyzers — тот же Python; инструменты анализа стоят в группе dev проекта.
+        assert request.runtime in ("python", "analyzers")
         with tempfile.TemporaryDirectory() as directory:
             # Как в Piston: исполняется первый файл, остальные лежат рядом.
             paths = []

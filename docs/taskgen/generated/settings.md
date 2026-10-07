@@ -82,7 +82,7 @@
 | `scoring.judge_samples` | `TASKGEN_SCORING__JUDGE_SAMPLES` | integer, ≥ 1 | `3` | Сколько раз судья оценивает ответ; итог — нижняя медиана |
 | `scoring.judge_temperature` | `TASKGEN_SCORING__JUDGE_TEMPERATURE` | number, ≥ 0.0, ≤ 2.0 | `0.7` | Температура судьи. Ненулевая нужна, чтобы сэмплы различались и разброс что-то значил |
 | `scoring.judge_quote_threshold` | `TASKGEN_SCORING__JUDGE_QUOTE_THRESHOLD` | number, ≥ -1.0, ≤ 1.0 или null | `null` | Порог косинусного сходства цитат судьи с текстом пункта рубрики: ниже него вердикт пункта становится no. Без эмбеддера проверка пропускается с замечанием. null выключает проверку, и по умолчанию она выключена: бенчмарк scripts/essay_check_bench.py quotes с bge-m3 не нашёл порога, который отделяет честные цитаты от самоутверждений кандидата. Числа замера — docs/taskgen/security.md |
-| `scoring.analyzer_timeout_seconds` | `TASKGEN_SCORING__ANALYZER_TIMEOUT_SECONDS` | number, > 0.0 | `30.0` | Лимит времени одного статического анализатора, секунды |
+| `scoring.analyzer_timeout_seconds` | `TASKGEN_SCORING__ANALYZER_TIMEOUT_SECONDS` | number, > 0.0 | `30.0` | Бюджет времени на все статические анализаторы одного ответа, секунды. Анализаторы работают в песочнице одним запуском; инструмент, которому не хватило бюджета, отдаёт пустой отчёт |
 
 ## generation
 

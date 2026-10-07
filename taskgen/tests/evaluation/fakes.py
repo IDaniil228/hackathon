@@ -82,14 +82,20 @@ class TableEmbedder:
 
 
 class FakeSandbox:
-    """SandboxRunner, который отдаёт заранее заданный отчёт и запоминает запросы."""
+    """SandboxRunner, который отдаёт заранее заданный отчёт и запоминает запросы.
+
+    Запуск анализа исполняет настоящий драйвер анализаторов локально, как LocalSandbox.
+    """
 
     def __init__(self, report: TestReport) -> None:
         self.report = report
         self.requests: list[TestRunRequest] = []
 
     async def run(self, request: Any) -> Any:
-        raise NotImplementedError
+        from tests.generation.fakes import LocalSandbox
+
+        assert request.runtime == "analyzers", request.runtime
+        return await LocalSandbox().run(request)
 
     async def run_tests(self, request: TestRunRequest) -> TestReport:
         self.requests.append(request)
