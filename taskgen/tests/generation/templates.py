@@ -6,11 +6,22 @@ from typing import Any
 
 from taskgen.bank.parser import parse_template
 from taskgen.contracts import TemplateSpec
-from tests.bank.factory import make_essay, make_quiz, make_template
+from tests.bank.factory import make_essay, make_quiz, make_template, solution
 
 ENTRYPOINT = "top_sum"
 
-REFERENCE = "```python\ndef top_sum(nums, k):\n    return sum(sorted(nums, reverse=True)[:k])\n```"
+REFERENCE = "def top_sum(nums, k):\n    return sum(sorted(nums, reverse=True)[:k])\n"
+SMALLEST = "def top_sum(nums, k):\n    return sum(sorted(nums)[:k])\n"
+
+
+def solutions_section(reference: str = REFERENCE) -> str:
+    """Раздел «Решения»: reference — первое верное, к нему одно заведомо неверное."""
+    return (
+        solution("reference", "+", reference)
+        + "\n\n"
+        + solution("smallest", "-", SMALLEST, "Сумма k наименьших чисел вместо наибольших")
+    )
+
 
 GENERATOR = (
     "```python\n"
@@ -19,7 +30,7 @@ GENERATOR = (
     "    for _ in range(params['count']):\n"
     "        nums = [rng.randint(-10**6, 10**6) for _ in range(params['n'])]\n"
     "        k = rng.randint(1, params['n'])\n"
-    "        cases.append({'input': [nums, k],\n"
+    "        cases.append({'input': [nums, k], 'group': 'main',\n"
     "                      'expected': sum(sorted(nums, reverse=True)[:k])})\n"
     "    return cases\n"
     "```"
@@ -27,7 +38,7 @@ GENERATOR = (
 
 PARAMS: dict[str, Any] = {
     "n": {"type": "int", "min": 5, "max": 9},
-    "count": {"type": "int", "min": 4, "max": 6},
+    "count": {"type": "int", "min": 6, "max": 8},
     "topic": {"type": "choice", "choices": ["склад", "банк", "космопорт"]},
 }
 
@@ -38,7 +49,7 @@ def code_template_md(**frontmatter: Any) -> str:
     frontmatter.setdefault("params", PARAMS)
     sections = {
         "Генерация": GENERATION,
-        "Эталон": REFERENCE,
+        "Решения": solutions_section(),
         "Сигнатура": f"```\n{ENTRYPOINT}\n```",
         "Тесты": GENERATOR,
     }

@@ -1,7 +1,9 @@
 """Импорт шаблонов в БД: проверка набора целиком и upsert по имени с версиями.
 
-Набор пишется только если все файлы прошли проверку: частично загруженный банк хуже
-незагруженного, потому что ошибку в нём никто не заметит.
+Проверка — разбор, прогон в песочнице (bank/validation.py) и справочники БД. Набор пишется
+только если все файлы прошли проверку: частично загруженный банк хуже незагруженного,
+потому что ошибку в нём никто не заметит. Ошибка одного файла не прерывает проверку
+остальных: ответ перечисляет проблемы всех файлов сразу.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from collections import Counter
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Protocol
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,14 +59,23 @@ def read_directory(path: Path) -> list[TemplateDocument]:
     ]
 
 
+class TemplateCheck(Protocol):
+    """Проверка разобранных шаблонов сверх формата; в сервисе — TemplateValidator."""
+
+    async def check(self, templates: list[tuple[str, TemplateSpec]]) -> list[TemplateIssue]: ...
+
+
 async def import_documents(
-    session: AsyncSession, docs: list[TemplateDocument]
+    session: AsyncSession, docs: list[TemplateDocument], *, check: TemplateCheck
 ) -> list[ImportOutcome]:
     """Проверяет все документы и пишет их в сессию; фиксирует транзакцию вызывающий.
 
     При любой ошибке бросает TemplateError со всеми проблемами всех файлов и ничего не пишет.
+    Отказ песочницы — SandboxServiceError: проверка не состоялась, и тоже ничего не пишется.
     """
     parsed, issues = _parse_all(docs)
+    # Песочница работает до первого запроса к БД: долгая проверка не держит соединение.
+    issues += await check.check([(doc.source, spec) for doc, spec in parsed])
     issues += await _check_references(session, parsed)
     if issues:
         raise TemplateError(issues)

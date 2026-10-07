@@ -39,7 +39,9 @@ case_groups:
 
 Объясни в легенде, почему статистики нельзя считать по тестовой выборке.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 import numpy as np
@@ -54,6 +56,45 @@ def standardize(train, test, ddof):
     constant = std < 1e-12
     scaled = (test - mean) / np.where(constant, 1.0, std)
     scaled[:, constant] = 0.0
+    return scaled.tolist()
+```
+
+### ddof-ignored -
+
+`ddof` проигнорирован
+
+```python
+import numpy as np
+
+
+def standardize(train, test, ddof):
+    train = np.asarray(train, dtype=np.float64)
+    # reshape нужен для пустого test: np.asarray([]) даёт одномерный массив.
+    test = np.asarray(test, dtype=np.float64).reshape(-1, train.shape[1])
+    mean = train.mean(axis=0)
+    std = train.std(axis=0, ddof=0)
+    constant = std < 1e-12
+    scaled = (test - mean) / np.where(constant, 1.0, std)
+    scaled[:, constant] = 0.0
+    return scaled.tolist()
+```
+
+### constant-column -
+
+Постоянный столбец не обнулён
+
+```python
+import numpy as np
+
+
+def standardize(train, test, ddof):
+    train = np.asarray(train, dtype=np.float64)
+    # reshape нужен для пустого test: np.asarray([]) даёт одномерный массив.
+    test = np.asarray(test, dtype=np.float64).reshape(-1, train.shape[1])
+    mean = train.mean(axis=0)
+    std = train.std(axis=0, ddof=ddof)
+    constant = std < 1e-12
+    scaled = (test - mean) / np.where(constant, 1.0, std)
     return scaled.tolist()
 ```
 

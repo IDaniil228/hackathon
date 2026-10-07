@@ -37,7 +37,9 @@ case_groups:
 - длина списка — от 0 до {n_max}; ожидается решение быстрее перебора всех пар;
 - входной список изменять нельзя.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 def count_pairs(values, limit):
@@ -47,6 +49,42 @@ def count_pairs(values, limit):
         if values[left] + values[right] <= limit:
             # С values[left] подходит любой элемент между left и right включительно.
             count += right - left
+            left += 1
+        else:
+            right -= 1
+    return count
+```
+
+### strict-limit -
+
+Строгое сравнение с порогом
+
+```python
+def count_pairs(values, limit):
+    left, right = 0, len(values) - 1
+    count = 0
+    while left < right:
+        if values[left] + values[right] < limit:
+            # С values[left] подходит любой элемент между left и right включительно.
+            count += right - left
+            left += 1
+        else:
+            right -= 1
+    return count
+```
+
+### count-one-pair -
+
+Пары считаются по одной
+
+```python
+def count_pairs(values, limit):
+    left, right = 0, len(values) - 1
+    count = 0
+    while left < right:
+        if values[left] + values[right] <= limit:
+            # С values[left] подходит любой элемент между left и right включительно.
+            count += 1
             left += 1
         else:
             right -= 1

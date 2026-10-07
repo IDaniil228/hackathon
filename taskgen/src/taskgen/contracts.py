@@ -85,6 +85,19 @@ class QuizVariant(BaseModel):
     wrong: list[str]
 
 
+class Solution(BaseModel):
+    """Размеченное решение шаблона с кодом; кандидат и LLM решений не видят.
+
+    correct=True — решение проходит все кейсы, correct=False — заведомо неверное: тесты
+    шаблона обязаны его поймать. description — необязательное пояснение автора к ошибке.
+    """
+
+    id: str
+    correct: bool
+    code: str
+    description: str = ""
+
+
 class CaseGroup(BaseModel):
     """Группа тестовых кейсов задания с кодом: её доля в балле за тесты и гейт решённости.
 
@@ -118,13 +131,14 @@ class TemplateSpec(BaseModel):
     # Переопределение весов балла из ScoringSettings, ключи совпадают с именами полей.
     scoring: dict[str, float] = {}
     generator_prompt: str
-    # Только для kind=code: эталон, генератор тестов и имя функции, которую пишет кандидат.
+    # Только для kind=code: генератор тестов и имя функции, которую пишет кандидат.
     entrypoint: str | None = None
-    reference_solution: str | None = None
     test_generator: str | None = None
     # Только для kind=code: группы, которые генератор тестов ставит кейсам в поле group.
     # Пусто — все кейсы равноценны.
     case_groups: dict[CaseGroupName, CaseGroup] = {}
+    # Только для kind=code: верные и заведомо неверные решения в порядке шаблона.
+    solutions: list[Solution] = []
     # Только для kind=essay: вопросы идут в условие дословно, ситуацию пишет LLM по фактам,
     # а запрещённые фразы не должны появиться в ситуации. Фразы действуют и для kind=quiz.
     questions: str | None = None
@@ -136,6 +150,11 @@ class TemplateSpec(BaseModel):
     variants: list[QuizVariant] = []
     # У kind=quiz рубрики нет: ответ сверяется с ключом.
     rubric: list[RubricItem] = []
+
+    @property
+    def reference_solution(self) -> str | None:
+        """Первое верное решение: его прогон проверяет экземпляр и задаёт мерило скорости."""
+        return next((s.code for s in self.solutions if s.correct), None)
 
 
 # --- LLM и эмбеддинги -------------------------------------------------------------------

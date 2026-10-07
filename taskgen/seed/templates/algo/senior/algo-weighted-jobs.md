@@ -36,7 +36,9 @@ case_groups:
 - вернуть наибольшую суммарную прибыль набора работ, которые можно выполнить; для пустого списка ответ 0;
 - работы идут в произвольном порядке и могут совпадать; их до {n_max}, но решение должно быть рассчитано на 10^5 работ, поэтому нужна сложность O(n log n).
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 import bisect
@@ -46,6 +48,44 @@ def max_profit(jobs, gap):
     ordered = sorted(jobs, key=lambda job: job[1])
     # Момент, с которого после работы можно начинать следующую; растёт вместе с end.
     free_at = [end + gap for _, end, _ in ordered]
+    best = [0] * (len(ordered) + 1)
+    for i, (start, _, profit) in enumerate(ordered):
+        compatible = bisect.bisect_right(free_at, start, 0, i)
+        best[i + 1] = max(best[i], best[compatible] + profit)
+    return best[-1]
+```
+
+### boundary-dropped -
+
+Работа на границе перерыва отброшена
+
+```python
+import bisect
+
+
+def max_profit(jobs, gap):
+    ordered = sorted(jobs, key=lambda job: job[1])
+    # Момент, с которого после работы можно начинать следующую; растёт вместе с end.
+    free_at = [end + gap for _, end, _ in ordered]
+    best = [0] * (len(ordered) + 1)
+    for i, (start, _, profit) in enumerate(ordered):
+        compatible = bisect.bisect_left(free_at, start, 0, i)
+        best[i + 1] = max(best[i], best[compatible] + profit)
+    return best[-1]
+```
+
+### gap-ignored -
+
+Перерыв не учтён
+
+```python
+import bisect
+
+
+def max_profit(jobs, gap):
+    ordered = sorted(jobs, key=lambda job: job[1])
+    # Момент, с которого после работы можно начинать следующую; растёт вместе с end.
+    free_at = [end for _, end, _ in ordered]
     best = [0] * (len(ordered) + 1)
     for i, (start, _, profit) in enumerate(ordered):
         compatible = bisect.bisect_right(free_at, start, 0, i)

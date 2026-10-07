@@ -38,7 +38,9 @@ case_groups:
 - пустой ключ значит «без идемпотентности»: всегда `"executed"`, ничего не хранится;
 - вернуть список ответов в порядке запросов; запросов до {n_max}.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 def idempotency_outcomes(requests, ttl):
@@ -51,6 +53,44 @@ def idempotency_outcomes(requests, ttl):
             continue
         outcomes.append("executed")
         if key and status < 500:
+            stored[key] = (t, body_hash)
+    return outcomes
+```
+
+### ttl-inclusive -
+
+Запись живёт ровно ttl включительно
+
+```python
+def idempotency_outcomes(requests, ttl):
+    stored = {}
+    outcomes = []
+    for t, key, body_hash, status in requests:
+        record = stored.get(key) if key else None
+        if record is not None and t - record[0] <= ttl:
+            outcomes.append("replayed" if record[1] == body_hash else "conflict")
+            continue
+        outcomes.append("executed")
+        if key and status < 500:
+            stored[key] = (t, body_hash)
+    return outcomes
+```
+
+### errors-stored -
+
+Ошибки сервера сохраняются
+
+```python
+def idempotency_outcomes(requests, ttl):
+    stored = {}
+    outcomes = []
+    for t, key, body_hash, status in requests:
+        record = stored.get(key) if key else None
+        if record is not None and t - record[0] < ttl:
+            outcomes.append("replayed" if record[1] == body_hash else "conflict")
+            continue
+        outcomes.append("executed")
+        if key:
             stored[key] = (t, body_hash)
     return outcomes
 ```

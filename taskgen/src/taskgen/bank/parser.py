@@ -24,7 +24,7 @@ SECTION_GENERATION = "Генерация"
 SECTION_QUESTIONS = "Вопросы"
 SECTION_FACTS = "Факты"
 SECTION_FORBIDDEN = "Нельзя раскрывать"
-SECTION_REFERENCE = "Эталон"
+SECTION_SOLUTIONS = "Решения"
 SECTION_SIGNATURE = "Сигнатура"
 SECTION_TESTS = "Тесты"
 SECTION_RUBRIC = "Рубрика"
@@ -32,7 +32,7 @@ SECTION_QUESTION = "Вопрос"
 SECTION_VARIANTS = "Варианты"
 # Разделы, которые задаются только заданиям перечисленных типов; «Генерация» нужна всем.
 KIND_SECTIONS: dict[str, frozenset[TaskKind]] = {
-    SECTION_REFERENCE: frozenset({TaskKind.CODE}),
+    SECTION_SOLUTIONS: frozenset({TaskKind.CODE}),
     SECTION_SIGNATURE: frozenset({TaskKind.CODE}),
     SECTION_TESTS: frozenset({TaskKind.CODE}),
     SECTION_QUESTIONS: frozenset({TaskKind.ESSAY}),
@@ -53,7 +53,7 @@ BODY_FIELDS = frozenset(
     {
         "generator_prompt",
         "entrypoint",
-        "reference_solution",
+        "solutions",
         "test_generator",
         "questions",
         "scenario_facts",
@@ -619,16 +619,7 @@ def _code_sections(sections: dict[str, str], runtime: Any, out: _Collector) -> d
             entrypoint = line
     result["entrypoint"] = entrypoint
 
-    reference = _single_block(sections, SECTION_REFERENCE, out)
-    if reference is not None:
-        result["reference_solution"] = reference.content
-        label = section_label(SECTION_REFERENCE)
-        if runtime == "python":
-            tree = _parse_python(reference.content, label, out)
-            if tree is not None and entrypoint and entrypoint not in _top_functions(tree):
-                out.add(label, f"нет функции верхнего уровня {entrypoint!r} из раздела Сигнатура")
-        elif entrypoint and not re.search(rf"\b{re.escape(entrypoint)}\b", reference.content):
-            out.add(label, f"эталон не упоминает функцию {entrypoint!r} из раздела Сигнатура")
+    result["solutions"] = _solutions(sections, runtime, entrypoint, out)
 
     tests = _single_block(sections, SECTION_TESTS, out)
     if tests is not None:
@@ -640,6 +631,103 @@ def _code_sections(sections: dict[str, str], runtime: Any, out: _Collector) -> d
             if generate is None or len(generate.args.args) < 2:
                 out.add(label, "нужна функция верхнего уровня generate(params, rng)")
     return result
+
+
+SOLUTION_HEADING = re.compile(r"^###\s+(.*?)\s*$")
+SOLUTION_TITLE = re.compile(r"^([A-Za-z0-9_.-]+)\s+([+-])$")
+
+
+def _solutions(
+    sections: dict[str, str], runtime: Any, entrypoint: str | None, out: _Collector
+) -> list[dict[str, Any]]:
+    """Размеченные решения: '### id +' — верное, '### id -' — заведомо неверное.
+
+    Под заголовком — необязательное описание текстом и ровно один блок кода. Заголовки
+    внутри блоков кода не считаются: решение на Python может содержать строку '### '.
+    """
+    text = sections.get(SECTION_SOLUTIONS)
+    label = section_label(SECTION_SOLUTIONS)
+    if text is None:
+        out.add(label, "раздел обязателен для заданий kind=code")
+        return []
+    entries: list[tuple[str, bool, list[str]]] = []
+    fence: str | None = None
+    for number, line in enumerate(text.splitlines(), start=1):
+        match = FENCE.match(line)
+        if fence is None and (heading := SOLUTION_HEADING.match(line)):
+            title = SOLUTION_TITLE.match(heading.group(1))
+            if title is None:
+                out.add(label, f"строка {number}: заголовок решения — '### id +' или '### id -'")
+                entries.append(("", True, []))
+            else:
+                entries.append((title.group(1), title.group(2) == "+", []))
+            continue
+        if match:
+            if fence is None:
+                fence = match.group(1)
+            elif closes_fence(fence, match):
+                fence = None
+        if entries:
+            entries[-1][2].append(line)
+        elif line.strip():
+            out.add(label, f"строка {number}: текст до первого решения '### id +'")
+
+    ids = [solution_id for solution_id, _, _ in entries if solution_id]
+    for duplicate in sorted({i for i in ids if ids.count(i) > 1}):
+        out.add(label, f"идентификатор решения {duplicate!r} повторяется")
+    if not any(correct for solution_id, correct, _ in entries if solution_id):
+        out.add(label, "нужно хотя бы одно верное решение '### id +': по нему проверяются тесты")
+    if not any(not correct for _, correct, _ in entries):
+        out.add(
+            label,
+            "нужно хотя бы одно неверное решение '### id -': тесты должны его поймать, иначе "
+            "никто не проверил, что они ловят ошибки",
+        )
+
+    solutions = []
+    for solution_id, correct, lines in entries:
+        if not solution_id:
+            continue
+        body = "\n".join(lines)
+        blocks = _code_blocks(body)
+        if len(blocks) != 1 or not blocks[0].content.strip():
+            found = len(blocks) if len(blocks) != 1 else "пустой"
+            out.add(
+                label, f"у решения {solution_id!r} нужен ровно один непустой блок кода: {found}"
+            )
+            continue
+        code = blocks[0].content
+        where = f"{label}, решение {solution_id!r}"
+        if runtime == "python":
+            tree = _parse_python(code, where, out)
+            if tree is not None and entrypoint and entrypoint not in _top_functions(tree):
+                out.add(where, f"нет функции верхнего уровня {entrypoint!r} из раздела Сигнатура")
+        elif entrypoint and not re.search(rf"\b{re.escape(entrypoint)}\b", code):
+            out.add(where, f"решение не упоминает функцию {entrypoint!r} из раздела Сигнатура")
+        solutions.append(
+            {
+                "id": solution_id,
+                "correct": correct,
+                "code": code,
+                "description": " ".join(_outside_blocks(body).split()),
+            }
+        )
+    return solutions
+
+
+def _outside_blocks(text: str) -> str:
+    """Текст без блоков кода и их заборов."""
+    kept: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines():
+        match = FENCE.match(line)
+        if fence is None and match:
+            fence = match.group(1)
+        elif fence is not None and match and closes_fence(fence, match):
+            fence = None
+        elif fence is None:
+            kept.append(line)
+    return "\n".join(kept)
 
 
 def _single_block(sections: dict[str, str], name: str, out: _Collector) -> _CodeBlock | None:

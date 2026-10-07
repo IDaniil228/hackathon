@@ -39,7 +39,9 @@ case_groups:
 - логиты по модулю бывают до 1000, поэтому наивный `exp` переполнится; вычисления — в float64; объектов до {batch_max}, классов до 6;
 - можно использовать NumPy или PyTorch; результат должен совпадать с `torch.nn.functional.cross_entropy(logits, targets, ignore_index=-1, label_smoothing=smoothing)`.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 import numpy as np
@@ -59,6 +61,60 @@ def softmax_cross_entropy(logits, targets, smoothing):
     rows = np.flatnonzero(keep)
     target[rows, targets[rows]] += 1.0 - smoothing
     count = rows.size
+    loss = -(target[rows] * log_probs[rows]).sum() / count
+    grad[rows] = (np.exp(log_probs[rows]) - target[rows]) / count
+    return [float(loss), grad.tolist()]
+```
+
+### smoothing-wrong-only -
+
+Сглаживание только по неверным классам
+
+```python
+import numpy as np
+
+
+def softmax_cross_entropy(logits, targets, smoothing):
+    targets = np.asarray(targets, dtype=np.int64)
+    logits = np.asarray(logits, dtype=np.float64).reshape(len(targets), -1)
+    classes = logits.shape[1]
+    keep = targets != -1
+    grad = np.zeros_like(logits)
+    if not keep.any():
+        return [0.0, grad.tolist()]
+    shifted = logits - logits.max(axis=1, keepdims=True)
+    log_probs = shifted - np.log(np.exp(shifted).sum(axis=1, keepdims=True))
+    target = np.full_like(logits, smoothing / max(classes - 1, 1))
+    rows = np.flatnonzero(keep)
+    target[rows, targets[rows]] += 1.0 - smoothing
+    count = rows.size
+    loss = -(target[rows] * log_probs[rows]).sum() / count
+    grad[rows] = (np.exp(log_probs[rows]) - target[rows]) / count
+    return [float(loss), grad.tolist()]
+```
+
+### mean-over-batch -
+
+Среднее по всему батчу, включая пропущенные строки
+
+```python
+import numpy as np
+
+
+def softmax_cross_entropy(logits, targets, smoothing):
+    targets = np.asarray(targets, dtype=np.int64)
+    logits = np.asarray(logits, dtype=np.float64).reshape(len(targets), -1)
+    classes = logits.shape[1]
+    keep = targets != -1
+    grad = np.zeros_like(logits)
+    if not keep.any():
+        return [0.0, grad.tolist()]
+    shifted = logits - logits.max(axis=1, keepdims=True)
+    log_probs = shifted - np.log(np.exp(shifted).sum(axis=1, keepdims=True))
+    target = np.full_like(logits, smoothing / classes)
+    rows = np.flatnonzero(keep)
+    target[rows, targets[rows]] += 1.0 - smoothing
+    count = len(targets)
     loss = -(target[rows] * log_probs[rows]).sum() / count
     grad[rows] = (np.exp(log_probs[rows]) - target[rows]) / count
     return [float(loss), grad.tolist()]

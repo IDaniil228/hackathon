@@ -37,7 +37,9 @@ case_groups:
 - имена состоят из строчных латинских букв, могут повторяться; баллы — целые от -10^6 до 10^6;
 - участников до {n_max}; функцию `main` писать не нужно, стандартные заголовки уже подключены.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```cpp
 std::vector<std::string> top_k(std::vector<std::string> names, std::vector<int> scores, int k) {
@@ -48,6 +50,50 @@ std::vector<std::string> top_k(std::vector<std::string> names, std::vector<int> 
         return names[a] < names[b];
     };
     size_t take = std::min(static_cast<size_t>(std::max(k, 0)), order.size());
+    // Упорядочиваются только первые take позиций: O(n log k) вместо полной сортировки.
+    std::partial_sort(order.begin(), order.begin() + take, order.end(), ranks_higher);
+    std::vector<std::string> result;
+    result.reserve(take);
+    for (size_t i = 0; i < take; i++) result.push_back(names[order[i]]);
+    return result;
+}
+```
+
+### ties-unordered -
+
+Ничьи не упорядочены по имени
+
+```cpp
+std::vector<std::string> top_k(std::vector<std::string> names, std::vector<int> scores, int k) {
+    std::vector<int> order(names.size());
+    std::iota(order.begin(), order.end(), 0);
+    auto ranks_higher = [&](int a, int b) {
+        if (scores[a] != scores[b]) return scores[a] > scores[b];
+        return false;
+    };
+    size_t take = std::min(static_cast<size_t>(std::max(k, 0)), order.size());
+    // Упорядочиваются только первые take позиций: O(n log k) вместо полной сортировки.
+    std::partial_sort(order.begin(), order.begin() + take, order.end(), ranks_higher);
+    std::vector<std::string> result;
+    result.reserve(take);
+    for (size_t i = 0; i < take; i++) result.push_back(names[order[i]]);
+    return result;
+}
+```
+
+### negative-k -
+
+Отрицательное k не отсечено
+
+```cpp
+std::vector<std::string> top_k(std::vector<std::string> names, std::vector<int> scores, int k) {
+    std::vector<int> order(names.size());
+    std::iota(order.begin(), order.end(), 0);
+    auto ranks_higher = [&](int a, int b) {
+        if (scores[a] != scores[b]) return scores[a] > scores[b];
+        return names[a] < names[b];
+    };
+    size_t take = std::min(static_cast<size_t>(k), order.size());
     // Упорядочиваются только первые take позиций: O(n log k) вместо полной сортировки.
     std::partial_sort(order.begin(), order.begin() + take, order.end(), ranks_higher);
     std::vector<std::string> result;

@@ -17,7 +17,7 @@ from taskgen.bank.selector import (
 from taskgen.config import SelectionSettings
 from taskgen.db import Area, AreaSkill, Grade, Skill, TemplateEmbedding, TestConfig
 from tests.bank.conftest import FakeEmbedder
-from tests.bank.factory import make_essay, make_template
+from tests.bank.factory import local_check, make_essay, make_template
 
 pytestmark = pytest.mark.integration
 
@@ -62,7 +62,7 @@ async def put(
         description=f"{name} описание",
         **fields,
     )
-    await import_documents(session, [TemplateDocument(f"{name}.md", text)])
+    await import_documents(session, [TemplateDocument(f"{name}.md", text)], check=local_check())
     return f"{name} описание", vector
 
 

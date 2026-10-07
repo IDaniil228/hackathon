@@ -1,16 +1,15 @@
 """Шлюз банка шаблонов и демонстрационных вакансий из taskgen/seed.
 
-Каждый шаблон разбирается, проходит справочники БД, а шаблон с кодом даёт на нескольких seed
-кейсы, которые эталон проходит целиком в реальном Piston, а заведомо неверное решение — нет.
-Вакансия ссылается только на коды из справочников, чтобы её можно было подать в отбор.
+Весь банк импортируется в БД тем же кодом, что и `taskgen import`: разбор, прогон шаблонов с
+кодом в реальном Piston (bank/validation.py) и справочники. Сверх импорта шлюз проверяет
+правила, которые касаются банка целиком: покрытие ячеек, сопоставимость сложности, задачки
+и вопросы эссе при каждом сочетании параметров. Вакансия ссылается только на коды из
+справочников, чтобы её можно было подать в отбор.
 """
 
 from __future__ import annotations
 
 import itertools
-import json
-import random
-import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
@@ -20,46 +19,20 @@ import yaml
 from sqlalchemy import select
 
 from taskgen.bank.importer import import_documents, read_directory
-from taskgen.bank.parser import find_phrases, parse_template
-from taskgen.config import SandboxSettings, ScoringSettings, SelectionSettings
-from taskgen.contracts import (
-    ParamSpec,
-    RunLimits,
-    TaskKind,
-    TemplateSpec,
-    TestCase,
-    TestReport,
-    TestRunRequest,
-)
+from taskgen.bank.parser import TemplateError, find_phrases, parse_template
+from taskgen.bank.validation import TemplateValidator, static_problems
+from taskgen.config import SelectionSettings, Settings
+from taskgen.contracts import ParamSpec, TaskKind, TemplateSpec
 from taskgen.db import Area, AreaSkill, Grade
-from taskgen.evaluation.grading import is_solved
-from taskgen.evaluation.scoring import (
-    Components,
-    code_task_score,
-    failed_required_groups,
-    resolve_weights,
-    weighted_pass_rate,
-)
-from taskgen.generation.harness import GeneratorError, generator_request, parse_generator_output
-from taskgen.generation.params import draw_params, fill_placeholders
+from taskgen.generation.params import fill_placeholders
 from taskgen.sandbox.piston import PistonRunner
 from tests.generation.world import TEST_AREA_TITLE
-from tests.seed.mutants import MUTANTS
 
 SEED_DIR = Path(__file__).resolve().parents[2] / "seed" / "templates"
 PATHS = sorted(SEED_DIR.rglob("*.md"))
 VACANCIES = sorted((SEED_DIR.parent / "vacancies").glob("*.md"))
-SEEDS = (0, 1, 2)
-# Меньше кейсов не хватает на публичные примеры, граничные случаи и случайные входы.
-MIN_CASES = 6
 # Шаблоны одной области и грейда заявлены сопоставимыми по сложности.
 MAX_CELL_SPREAD = 1
-# Piston принимает тело запроса не больше 100 КиБ, а входы всех кейсов уходят одним
-# запросом вместе с решением. Остаток оставлен под код кандидата.
-MAX_INPUT_BYTES = 64 * 1024
-
-SANDBOX = SandboxSettings()
-LIMITS = RunLimits(timeout_ms=SANDBOX.run_timeout_ms, memory_bytes=SANDBOX.run_memory_limit_bytes)
 
 
 def _source(path: Path) -> str:
@@ -78,94 +51,12 @@ MIN_QUIZ_PER_CELL = 2
 
 
 @pytest.fixture
-async def piston():
-    runner = PistonRunner(SANDBOX)
-    yield runner
+async def validator():
+    """Проверка импорта в реальном Piston с настройками сервиса по умолчанию."""
+    settings = Settings()
+    runner = PistonRunner(settings.sandbox)
+    yield TemplateValidator.from_settings(runner, settings)
     await runner.aclose()
-
-
-async def generate_cases(piston: PistonRunner, spec: TemplateSpec, seed: int) -> list[TestCase]:
-    # Параметры и обвязка — те же функции, что у генерации экземпляра: шлюз проверяет
-    # шаблон ровно так, как его исполнит сервис.
-    params = draw_params(spec.params, random.Random(seed))
-    result = await piston.run(generator_request(spec.test_generator or "", params, seed, LIMITS))
-    try:
-        cases = parse_generator_output(result, spec.case_groups)
-    except GeneratorError as error:
-        pytest.fail(f"{error}; параметры {params}")
-    assert len(cases) >= MIN_CASES, (params, cases)
-    # Объект именованных аргументов сервис принимает, но обвязка C++ понимает только массив.
-    assert all(isinstance(case.input, list) for case in cases), cases
-    distinct = {json.dumps(case.expected, sort_keys=True) for case in cases}
-    assert len(distinct) > 1, f"все кейсы ждут один ответ {distinct}"
-    size = len(json.dumps([case.input for case in cases], ensure_ascii=False).encode())
-    assert size <= MAX_INPUT_BYTES, f"входы кейсов занимают {size} байт"
-    return cases
-
-
-def solved_at_best(spec: TemplateSpec, cases: list[TestCase], report: TestReport) -> bool:
-    """Решено ли задание, если судья, анализаторы и замер скорости поставят решению 1.
-
-    Это верхняя граница балла: неверное решение, которое не решено даже так, не станет
-    решённым ни при каком судье.
-    """
-    scoring = ScoringSettings()
-    components = Components(
-        tests=weighted_pass_rate(report, cases, spec.case_groups),
-        rubric=1.0,
-        quality=1.0,
-        performance=1.0,
-    )
-    score = code_task_score(components, resolve_weights(scoring, spec.scoring))
-    failed = failed_required_groups(
-        report, cases, spec.case_groups, default=scoring.required_case_groups
-    )
-    return is_solved(score, scoring.solved_threshold, required_passed=not failed)
-
-
-async def run_solution(
-    piston: PistonRunner, spec: TemplateSpec, solution: str, cases: list[TestCase]
-) -> TestReport:
-    return await piston.run_tests(
-        TestRunRequest(
-            runtime=spec.runtime or "",
-            entrypoint=spec.entrypoint or "",
-            solution=solution,
-            cases=cases,
-            limits=LIMITS,
-        )
-    )
-
-
-def wrong_solutions(spec: TemplateSpec, cases: list[TestCase]) -> dict[str, str]:
-    """Неверные решения, которые тесты шаблона обязаны отличить от эталона: мутанты эталона
-    из mutants.py и решения, которые не смотрят на вход."""
-    reference = spec.reference_solution or ""
-    solutions = {}
-    for description, old, new in MUTANTS[spec.name]:
-        assert old in reference, f"мутант «{description}» не находит фрагмент {old!r}"
-        solutions[description] = reference.replace(old, new)
-    return solutions | constant_solutions(spec, cases)
-
-
-def constant_solutions(spec: TemplateSpec, cases: list[TestCase]) -> dict[str, str]:
-    entry = spec.entrypoint or ""
-    if spec.runtime == "cpp":
-        signature = re.search(
-            rf"^([^\n;{{}}()]+?)\b{entry}\s*\(([^)]*)\)\s*\{{",
-            spec.reference_solution or "",
-            re.MULTILINE,
-        )
-        assert signature, f"в эталоне не найдено определение {entry}"
-        result, args = signature.group(1).strip(), signature.group(2)
-        return {"default": f"{result} {entry}({args}) {{ return {{}}; }}\n"}
-    first = cases[0].expected
-    default = type(first)() if first is not None else 0
-    return {
-        name: f"import json\n\n\ndef {entry}(*args, **kwargs):\n"
-        f"    return json.loads({json.dumps(json.dumps(value))})\n"
-        for name, value in (("default", default), ("first-example", first))
-    }
 
 
 def param_variants(specs: dict[str, ParamSpec]) -> list[dict[str, Any]]:
@@ -332,13 +223,22 @@ def test_coverage_check_names_what_is_missing():
 
 
 @pytest.mark.integration
-async def test_bank_covers_every_cell_and_imports(db_session):
+async def test_bank_covers_every_cell(db_session):
     areas = set(await db_session.scalars(select(Area.code).where(Area.title != TEST_AREA_TITLE)))
     grades = set(await db_session.scalars(select(Grade.code)))
     gaps = coverage_gaps([_spec(path) for path in PATHS], areas, grades, SelectionSettings())
     assert not gaps, "\n".join(gaps)
-    # Импорт проверяет навыки по справочнику и их связь с областью; транзакция откатывается.
-    outcomes = await import_documents(db_session, read_directory(SEED_DIR))
+
+
+@pytest.mark.integration
+async def test_bank_imports_with_sandbox_check(db_session, validator):
+    # Тот же импорт, что у taskgen import: каждое верное решение проходит все кейсы на каждом
+    # проверяемом seed, каждое неверное и решения-константы не решены, навыки есть в
+    # справочнике и относятся к области шаблона. Транзакция теста откатывается.
+    try:
+        outcomes = await import_documents(db_session, read_directory(SEED_DIR), check=validator)
+    except TemplateError as error:
+        pytest.fail("\n".join(str(issue) for issue in error.issues))
     assert len(outcomes) == len(PATHS)
 
 
@@ -356,48 +256,7 @@ async def test_vacancy_names_area_grade_and_skills_of_that_area(db_session, path
     assert meta["skills"] and not foreign, foreign
 
 
-@pytest.mark.integration
-@pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("path", CODE_PATHS, ids=_source)
-async def test_reference_passes_generated_cases(piston, path: Path, seed: int):
-    spec = _spec(path)
-    cases = await generate_cases(piston, spec, seed)
-
-    report = await run_solution(piston, spec, spec.reference_solution or "", cases)
-
-    assert report.compile_error is None, report.compile_error
-    failed = [(i, o.error) for i, o in enumerate(report.outcomes) if not o.passed]
-    assert not failed, failed
-    assert solved_at_best(spec, cases, report)
-
-
-def test_every_code_template_has_mutants():
-    names = {_spec(path).name for path in CODE_PATHS}
-
-    assert names == set(MUTANTS), names ^ set(MUTANTS)
-
-
-@pytest.mark.parametrize("path", CODE_PATHS, ids=_source)
-def test_code_template_weighs_case_groups_and_gates_on_one(path: Path):
-    # Без групп все кейсы равноценны, и решение, которое проходит частые простые кейсы,
-    # набирает балл решённого. Гейт нужен, потому что одна ошибка роняет один-два кейса
-    # из десятков, и никакой вес не опустит такой балл ниже порога.
-    groups = _spec(path).case_groups
-    assert groups, "шаблон не объявил группы кейсов"
-    assert any(group.required for group in groups.values()), "ни одна группа не обязательна"
-
-
-@pytest.mark.integration
-@pytest.mark.parametrize("seed", SEEDS)
-@pytest.mark.parametrize("path", CODE_PATHS, ids=_source)
-async def test_wrong_solutions_are_not_solved_at_best(piston, path: Path, seed: int):
-    spec = _spec(path)
-    cases = await generate_cases(piston, spec, seed)
-
-    survivors = []
-    for name, solution in wrong_solutions(spec, cases).items():
-        report = await run_solution(piston, spec, solution, cases)
-        assert report.compile_error is None, (name, report.compile_error)
-        if solved_at_best(spec, cases, report):
-            survivors.append(name)
-    assert not survivors, f"неверные решения засчитаны решёнными: {survivors}"
+def test_code_template_follows_rules_that_need_no_sandbox(path: Path):
+    # Те же правила проверяет импорт; здесь они видны без Postgres и Piston.
+    assert static_problems(_spec(path)) == []

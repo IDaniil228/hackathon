@@ -9,20 +9,22 @@ test_adversarial_llm.py.
 from __future__ import annotations
 
 import json
+import random
 import re
 import uuid
 
 import pytest
 
+from taskgen.bank.validation import generate_cases, run_solution, solved_at_best
 from taskgen.config import SandboxSettings, ScoringSettings
-from taskgen.contracts import CaseOutcome, HiddenPayload, TaskKind, TestReport
+from taskgen.contracts import CaseOutcome, HiddenPayload, RunLimits, TaskKind, TestReport
 from taskgen.evaluation.judge import LLMJudge
 from taskgen.evaluation.service import AnswerInput, TaskInput, evaluate_task
+from taskgen.generation.params import draw_params
 from taskgen.markers import has_marker
 from taskgen.sandbox.piston import PistonRunner
 from tests.evaluation.adversarial.dataset import Answer, AnswerSet, check, load_sets
 from tests.evaluation.fakes import FakeLLM
-from tests.seed.test_seed_templates import generate_cases, run_solution, solved_at_best
 
 SETS = load_sets()
 ANSWERS = [(answer_set, answer) for answer_set in SETS for answer in answer_set.answers]
@@ -148,14 +150,19 @@ async def test_only_complete_code_answers_are_solved_at_best(answer_set):
     # частичный или медленный за пределами лимитов код не решён и так, а честный полный и
     # медленный в пределах лимитов решён.
     spec = answer_set.spec()
-    piston = PistonRunner(SandboxSettings())
+    sandbox = SandboxSettings()
+    limits = RunLimits(
+        timeout_ms=sandbox.run_timeout_ms, memory_bytes=sandbox.run_memory_limit_bytes
+    )
+    piston = PistonRunner(sandbox)
     try:
-        cases = await generate_cases(piston, spec, answer_set.seed)
+        params = draw_params(spec.params, random.Random(answer_set.seed))
+        cases = await generate_cases(piston, spec, params, answer_set.seed, limits)
         verdicts = {}
         for answer in answer_set.answers:
             if answer.content.strip():
-                report = await run_solution(piston, spec, answer.content, cases)
-                verdicts[answer.id] = solved_at_best(spec, cases, report)
+                report = await run_solution(piston, spec, answer.content, cases, limits)
+                verdicts[answer.id] = solved_at_best(spec, cases, report, ScoringSettings())
     finally:
         await piston.aclose()
     expected = {item: answer_set.complete(answer_set.answer(item)) for item in verdicts}

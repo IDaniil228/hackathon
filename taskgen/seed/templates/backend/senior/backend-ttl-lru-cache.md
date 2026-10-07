@@ -39,7 +39,9 @@ case_groups:
 - вернуть список результатов всех `get` по порядку;
 - операций до {n_max}, но каждая операция должна выполняться за O(log n) или амортизированно за O(1); полный перебор записей на операцию не подходит.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 import heapq
@@ -71,6 +73,129 @@ def simulate_cache(capacity, operations):
         else:
             value, ttl = op[3], op[4]
             if key not in entries and len(entries) >= capacity:
+                entries.popitem(last=False)
+            entries[key] = (value, now + ttl)
+            entries.move_to_end(key)
+            heapq.heappush(deadlines, (now + ttl, key))
+    return results
+```
+
+### late-expiry -
+
+Просрочка со следующего момента
+
+```python
+import heapq
+from collections import OrderedDict
+
+
+def simulate_cache(capacity, operations):
+    entries = OrderedDict()  # key -> (value, expires_at); порядок — от давно использованных
+    deadlines = []  # куча (expires_at, key); устаревшие элементы пропускаются при извлечении
+    results = []
+
+    def purge(now):
+        while deadlines and deadlines[0][0] < now:
+            expires_at, key = heapq.heappop(deadlines)
+            if key in entries and entries[key][1] == expires_at:
+                del entries[key]
+
+    for op in operations:
+        kind, now, key = op[0], op[1], op[2]
+        purge(now)
+        if kind == "get":
+            if key in entries:
+                entries.move_to_end(key)
+                results.append(entries[key][0])
+            else:
+                results.append(None)
+        elif kind == "delete":
+            entries.pop(key, None)
+        else:
+            value, ttl = op[3], op[4]
+            if key not in entries and len(entries) >= capacity:
+                entries.popitem(last=False)
+            entries[key] = (value, now + ttl)
+            entries.move_to_end(key)
+            heapq.heappush(deadlines, (now + ttl, key))
+    return results
+```
+
+### stale-heap-entry -
+
+Устаревший срок в куче удаляет новую запись
+
+```python
+import heapq
+from collections import OrderedDict
+
+
+def simulate_cache(capacity, operations):
+    entries = OrderedDict()  # key -> (value, expires_at); порядок — от давно использованных
+    deadlines = []  # куча (expires_at, key); устаревшие элементы пропускаются при извлечении
+    results = []
+
+    def purge(now):
+        while deadlines and deadlines[0][0] <= now:
+            expires_at, key = heapq.heappop(deadlines)
+            if key in entries:
+                del entries[key]
+
+    for op in operations:
+        kind, now, key = op[0], op[1], op[2]
+        purge(now)
+        if kind == "get":
+            if key in entries:
+                entries.move_to_end(key)
+                results.append(entries[key][0])
+            else:
+                results.append(None)
+        elif kind == "delete":
+            entries.pop(key, None)
+        else:
+            value, ttl = op[3], op[4]
+            if key not in entries and len(entries) >= capacity:
+                entries.popitem(last=False)
+            entries[key] = (value, now + ttl)
+            entries.move_to_end(key)
+            heapq.heappush(deadlines, (now + ttl, key))
+    return results
+```
+
+### update-evicts -
+
+Обновление живого ключа вытесняет запись
+
+```python
+import heapq
+from collections import OrderedDict
+
+
+def simulate_cache(capacity, operations):
+    entries = OrderedDict()  # key -> (value, expires_at); порядок — от давно использованных
+    deadlines = []  # куча (expires_at, key); устаревшие элементы пропускаются при извлечении
+    results = []
+
+    def purge(now):
+        while deadlines and deadlines[0][0] <= now:
+            expires_at, key = heapq.heappop(deadlines)
+            if key in entries and entries[key][1] == expires_at:
+                del entries[key]
+
+    for op in operations:
+        kind, now, key = op[0], op[1], op[2]
+        purge(now)
+        if kind == "get":
+            if key in entries:
+                entries.move_to_end(key)
+                results.append(entries[key][0])
+            else:
+                results.append(None)
+        elif kind == "delete":
+            entries.pop(key, None)
+        else:
+            value, ttl = op[3], op[4]
+            if len(entries) >= capacity:
                 entries.popitem(last=False)
             entries[key] = (value, now + ttl)
             entries.move_to_end(key)

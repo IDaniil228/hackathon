@@ -38,7 +38,9 @@ case_groups:
 - вернуть пару `[новые центры списком списков чисел, инерция]`;
 - точек от 1 до {points_max}, центров от 1 до 8, координаты по модулю не больше 1000; можно использовать NumPy, но не scikit-learn.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 import numpy as np
@@ -56,6 +58,50 @@ def kmeans_step(points, centroids):
     filled = counts > 0
     updated = centroids.copy()
     updated[filled] = sums[filled] / counts[filled, None]
+    return [updated.tolist(), float(inertia)]
+```
+
+### tie-to-last -
+
+Ничья уходит к последнему центру
+
+```python
+import numpy as np
+
+
+def kmeans_step(points, centroids):
+    points = np.asarray(points, dtype=np.float64)
+    centroids = np.asarray(centroids, dtype=np.float64)
+    squared = ((points[:, None, :] - centroids[None, :, :]) ** 2).sum(axis=2)
+    labels = len(centroids) - 1 - squared[:, ::-1].argmin(axis=1)
+    inertia = squared[np.arange(len(points)), labels].sum()
+    counts = np.bincount(labels, minlength=len(centroids))
+    sums = np.zeros_like(centroids)
+    np.add.at(sums, labels, points)
+    filled = counts > 0
+    updated = centroids.copy()
+    updated[filled] = sums[filled] / counts[filled, None]
+    return [updated.tolist(), float(inertia)]
+```
+
+### empty-zeroed -
+
+Пустой кластер обнуляется
+
+```python
+import numpy as np
+
+
+def kmeans_step(points, centroids):
+    points = np.asarray(points, dtype=np.float64)
+    centroids = np.asarray(centroids, dtype=np.float64)
+    squared = ((points[:, None, :] - centroids[None, :, :]) ** 2).sum(axis=2)
+    labels = squared.argmin(axis=1)  # argmin берёт первый минимум: ничья к меньшему индексу.
+    inertia = squared[np.arange(len(points)), labels].sum()
+    counts = np.bincount(labels, minlength=len(centroids))
+    sums = np.zeros_like(centroids)
+    np.add.at(sums, labels, points)
+    updated = sums / np.maximum(counts, 1)[:, None]
     return [updated.tolist(), float(inertia)]
 ```
 

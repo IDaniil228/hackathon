@@ -37,13 +37,59 @@ case_groups:
 - заявки могут совпадать и идти в любом порядке, время — целые числа от 0 до 10^6, заявок до {n_max}, список может быть пустым;
 - функцию `main` писать не нужно, стандартные заголовки уже подключены.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```cpp
 int max_meetings(std::vector<std::pair<int, int>> meetings) {
     std::sort(meetings.begin(), meetings.end(),
               [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
                   return a.second < b.second;
+              });
+    int count = 0;
+    long long free_from = std::numeric_limits<long long>::min();
+    for (const auto& [start, end] : meetings) {
+        if (start >= free_from) {
+            count++;
+            free_from = end;
+        }
+    }
+    return count;
+}
+```
+
+### touching-overlaps -
+
+Касание концов считается пересечением
+
+```cpp
+int max_meetings(std::vector<std::pair<int, int>> meetings) {
+    std::sort(meetings.begin(), meetings.end(),
+              [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                  return a.second < b.second;
+              });
+    int count = 0;
+    long long free_from = std::numeric_limits<long long>::min();
+    for (const auto& [start, end] : meetings) {
+        if (start > free_from) {
+            count++;
+            free_from = end;
+        }
+    }
+    return count;
+}
+```
+
+### greedy-by-start -
+
+Жадность по началу заявки
+
+```cpp
+int max_meetings(std::vector<std::pair<int, int>> meetings) {
+    std::sort(meetings.begin(), meetings.end(),
+              [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                  return a.first < b.first;
               });
     int count = 0;
     long long free_from = std::numeric_limits<long long>::min();

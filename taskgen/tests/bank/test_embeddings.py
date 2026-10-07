@@ -9,14 +9,15 @@ from taskgen.bank.importer import TemplateDocument, import_documents
 from taskgen.bank.parser import content_hash
 from taskgen.db import Template, TemplateEmbedding
 from tests.bank.conftest import FakeEmbedder
-from tests.bank.factory import make_template
+from tests.bank.factory import local_check, make_template
 
 pytestmark = pytest.mark.integration
 
 
 async def put(session, name: str, description: str, **fields):
     text = make_template(name=name, description=description, **fields)
-    [outcome] = await import_documents(session, [TemplateDocument("t.md", text)])
+    doc = TemplateDocument("t.md", text)
+    [outcome] = await import_documents(session, [doc], check=local_check())
     return outcome
 
 

@@ -38,7 +38,9 @@ case_groups:
 - вернуть список `[маршрут, число запросов, доля ответов со статусом 500 и выше, перцентиль длительности]` по маршрутам в порядке возрастания строки маршрута; перцентиль p считается методом ближайшего ранга: наименьшая длительность, не меньше которой — по порядку — хотя бы p % запросов маршрута, то есть элемент с номером `ceil(p · n / 100)` в отсортированном списке, считая с единицы;
 - строк до {n_max}, но в реальном журнале их миллионы: решение должно быть линейным по числу строк с сортировкой внутри маршрутов.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 from collections import defaultdict
@@ -48,6 +50,112 @@ METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
 def _digits(text):
     return bool(text) and all(ch in "0123456789" for ch in text)
+
+
+def _route(method, target):
+    path = target.split("?", 1)[0]
+    if len(path) > 1 and path.endswith("/"):
+        path = path[:-1]
+    segments = ["{id}" if _digits(part) else part for part in path.split("/")]
+    return f"{method} {'/'.join(segments)}"
+
+
+def _parse(line):
+    fields = line.split(" ")
+    if len(fields) != 5 or not fields[0]:
+        return None
+    _, method, target, status, duration = fields
+    if method not in METHODS or not target.startswith("/"):
+        return None
+    if len(status) != 3 or not _digits(status) or not 100 <= int(status) <= 599:
+        return None
+    if not duration.endswith("ms") or not _digits(duration[:-2]):
+        return None
+    return _route(method, target), int(status), int(duration[:-2])
+
+
+def latency_report(lines, percentile):
+    groups = defaultdict(list)
+    for line in lines:
+        parsed = _parse(line)
+        if parsed is not None:
+            route, status, duration = parsed
+            groups[route].append((status, duration))
+    report = []
+    for route in sorted(groups):
+        records = groups[route]
+        durations = sorted(duration for _, duration in records)
+        rank = -(-percentile * len(durations) // 100)  # ceil без вещественной арифметики
+        errors = sum(1 for status, _ in records if status >= 500)
+        report.append([route, len(records), errors / len(records), durations[rank - 1]])
+    return report
+```
+
+### percentile-round -
+
+Перцентиль через `round`
+
+```python
+from collections import defaultdict
+
+METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
+
+
+def _digits(text):
+    return bool(text) and all(ch in "0123456789" for ch in text)
+
+
+def _route(method, target):
+    path = target.split("?", 1)[0]
+    if len(path) > 1 and path.endswith("/"):
+        path = path[:-1]
+    segments = ["{id}" if _digits(part) else part for part in path.split("/")]
+    return f"{method} {'/'.join(segments)}"
+
+
+def _parse(line):
+    fields = line.split(" ")
+    if len(fields) != 5 or not fields[0]:
+        return None
+    _, method, target, status, duration = fields
+    if method not in METHODS or not target.startswith("/"):
+        return None
+    if len(status) != 3 or not _digits(status) or not 100 <= int(status) <= 599:
+        return None
+    if not duration.endswith("ms") or not _digits(duration[:-2]):
+        return None
+    return _route(method, target), int(status), int(duration[:-2])
+
+
+def latency_report(lines, percentile):
+    groups = defaultdict(list)
+    for line in lines:
+        parsed = _parse(line)
+        if parsed is not None:
+            route, status, duration = parsed
+            groups[route].append((status, duration))
+    report = []
+    for route in sorted(groups):
+        records = groups[route]
+        durations = sorted(duration for _, duration in records)
+        rank = max(1, round(percentile * len(durations) / 100))
+        errors = sum(1 for status, _ in records if status >= 500)
+        report.append([route, len(records), errors / len(records), durations[rank - 1]])
+    return report
+```
+
+### isdigit -
+
+`isdigit` вместо цифр 0–9
+
+```python
+from collections import defaultdict
+
+METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
+
+
+def _digits(text):
+    return text.isdigit()
 
 
 def _route(method, target):

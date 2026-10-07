@@ -37,7 +37,9 @@ case_groups:
 - вернуть минимальную стоимость пути до `finish` или -1, если дойти нельзя; если `start` совпадает с `finish`, ответ 0;
 - `start` и `finish` никогда не стоят на стене; сторона поля — до {side_max} клеток.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 import heapq
@@ -57,6 +59,35 @@ def shortest_path(grid, start, finish, slow_cost):
         for nr, nc in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):
             if 0 <= nr < rows and 0 <= nc < cols and grid[nr][nc] != "#":
                 step = slow_cost if grid[nr][nc] == "~" else 1
+                new_cost = cost + step
+                if new_cost < dist.get((nr, nc), new_cost + 1):
+                    dist[(nr, nc)] = new_cost
+                    heapq.heappush(heap, (new_cost, nr, nc))
+    return -1
+```
+
+### unweighted-bfs -
+
+Обход в ширину без весов
+
+```python
+import heapq
+
+
+def shortest_path(grid, start, finish, slow_cost):
+    rows, cols = len(grid), len(grid[0])
+    target = (finish[0], finish[1])
+    dist = {(start[0], start[1]): 0}
+    heap = [(0, start[0], start[1])]
+    while heap:
+        cost, r, c = heapq.heappop(heap)
+        if (r, c) == target:
+            return cost
+        if cost > dist[(r, c)]:
+            continue  # Устаревшая запись: клетку уже достали дешевле.
+        for nr, nc in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):
+            if 0 <= nr < rows and 0 <= nc < cols and grid[nr][nc] != "#":
+                step = 1
                 new_cost = cost + step
                 if new_cost < dist.get((nr, nc), new_cost + 1):
                     dist[(nr, nc)] = new_cost

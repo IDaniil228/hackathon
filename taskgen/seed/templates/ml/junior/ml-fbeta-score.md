@@ -37,7 +37,9 @@ case_groups:
 - поясни в легенде, что значит beta больше и меньше единицы для этой задачи;
 - длина списков до {n_max}; можно использовать NumPy, но не готовые метрики из scikit-learn.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 import numpy as np
@@ -54,6 +56,27 @@ def fbeta_score(y_true, y_pred, beta):
     # Форма через матрицу ошибок равна (1 + b²)PR / (b²P + R) и не делит на ноль при tp > 0.
     b2 = beta * beta
     return float((1 + b2) * tp / ((1 + b2) * tp + b2 * fn + fp))
+```
+
+### f1-instead -
+
+F1 вместо F-beta
+
+```python
+import numpy as np
+
+
+def fbeta_score(y_true, y_pred, beta):
+    truth = np.asarray(y_true, dtype=bool)
+    predicted = np.asarray(y_pred, dtype=bool)
+    tp = np.count_nonzero(truth & predicted)
+    fp = np.count_nonzero(~truth & predicted)
+    fn = np.count_nonzero(truth & ~predicted)
+    if tp == 0:
+        return 0.0
+    # Форма через матрицу ошибок равна (1 + b²)PR / (b²P + R) и не делит на ноль при tp > 0.
+    b2 = beta * beta
+    return float((1 + b2) * tp / ((1 + b2) * tp + fn + fp))
 ```
 
 ## Сигнатура

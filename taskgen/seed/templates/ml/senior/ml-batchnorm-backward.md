@@ -37,7 +37,9 @@ case_groups:
 - учитывать, что `μ` и `σ²` зависят от `x`; признак может быть постоянным по батчу, N может быть равно 1;
 - вычисления — в float64, сравнение с точностью до относительной погрешности 1e-6; N до {batch_max}, D до 6; можно использовать NumPy или PyTorch, но если используется autograd, градиент нужно уметь объяснить формулой.
 
-## Эталон
+## Решения
+
+### reference +
 
 ```python
 import numpy as np
@@ -55,6 +57,51 @@ def batchnorm_backward(x, gamma, dout, eps):
     dx_hat = dout * gamma
     # Сокращённая форма: вклады через μ и σ² сведены к двум суммам по батчу.
     dx = inv_std / n * (n * dx_hat - dx_hat.sum(axis=0) - x_hat * (dx_hat * x_hat).sum(axis=0))
+    return [dx.tolist(), dgamma.tolist(), dbeta.tolist()]
+```
+
+### unbiased-var -
+
+Несмещённая дисперсия
+
+```python
+import numpy as np
+
+
+def batchnorm_backward(x, gamma, dout, eps):
+    x = np.asarray(x, dtype=np.float64)
+    gamma = np.asarray(gamma, dtype=np.float64)
+    dout = np.asarray(dout, dtype=np.float64).reshape(x.shape)
+    n = x.shape[0]
+    inv_std = 1.0 / np.sqrt(x.var(axis=0, ddof=1) + eps)
+    x_hat = (x - x.mean(axis=0)) * inv_std
+    dbeta = dout.sum(axis=0)
+    dgamma = (dout * x_hat).sum(axis=0)
+    dx_hat = dout * gamma
+    # Сокращённая форма: вклады через μ и σ² сведены к двум суммам по батчу.
+    dx = inv_std / n * (n * dx_hat - dx_hat.sum(axis=0) - x_hat * (dx_hat * x_hat).sum(axis=0))
+    return [dx.tolist(), dgamma.tolist(), dbeta.tolist()]
+```
+
+### no-mean-var-terms -
+
+Нет вкладов через среднее и дисперсию
+
+```python
+import numpy as np
+
+
+def batchnorm_backward(x, gamma, dout, eps):
+    x = np.asarray(x, dtype=np.float64)
+    gamma = np.asarray(gamma, dtype=np.float64)
+    dout = np.asarray(dout, dtype=np.float64).reshape(x.shape)
+    n = x.shape[0]
+    inv_std = 1.0 / np.sqrt(x.var(axis=0) + eps)
+    x_hat = (x - x.mean(axis=0)) * inv_std
+    dbeta = dout.sum(axis=0)
+    dgamma = (dout * x_hat).sum(axis=0)
+    dx_hat = dout * gamma
+    dx = inv_std / n * (n * dx_hat)
     return [dx.tolist(), dgamma.tolist(), dbeta.tolist()]
 ```
 
