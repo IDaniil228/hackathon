@@ -3,7 +3,7 @@
 > [!NOTE]
 > Файл собран командой `uv run python scripts/gen_docs.py` из каталога `taskgen/`. Не правьте его руками: правьте источник и пересоберите файл. Источник — шаблоны [`seed/templates`](../../../taskgen/seed/templates), разобранные `parse_template`, и вакансии [`seed/vacancies`](../../../taskgen/seed/vacancies)
 
-В банке 59 шаблонов. Формат шаблона описан в [`TEMPLATE_FORMAT.md`](../../../taskgen/TEMPLATE_FORMAT.md)
+В банке 65 шаблонов. Формат шаблона описан в [`TEMPLATE_FORMAT.md`](../../../taskgen/TEMPLATE_FORMAT.md)
 
 ## Сводка по ячейкам
 
@@ -15,9 +15,9 @@
 | `backend` | `junior` | 3 | 3 | 2 | 3 | 3–25 |
 | `backend` | `middle` | 3 | 3 | 2 | 4–5 | 4–30 |
 | `backend` | `senior` | 2 | 3 | 2 | 6–7 | 4–40 |
-| `ml` | `junior` | 2 | 1 | 2 | 3 | 3–20 |
-| `ml` | `middle` | 2 | 1 | 2 | 5 | 4–30 |
-| `ml` | `senior` | 2 | 1 | 2 | 7 | 4–40 |
+| `ml` | `junior` | 2 | 3 | 2 | 3 | 3–20 |
+| `ml` | `middle` | 2 | 3 | 2 | 5 | 4–30 |
+| `ml` | `senior` | 2 | 3 | 2 | 7 | 4–40 |
 
 ## Область `algo`
 
@@ -77,17 +77,23 @@
 
 | Шаблон | Грейд | Тип и вид io | Окружение | Сложность | Время, мин | Навыки | Пунктов рубрики или вариантов кейса | Описание |
 |---|---|---|---|---|---|---|---|---|
+| [`ml-categorical-encoding-essay`](../../../taskgen/seed/templates/ml/junior/ml-categorical-encoding-essay.md) | `junior` | essay |  | 3 | 15 | `data-preprocessing`, `scikit-learn` | 5 | Вопрос о подготовке признаков: кодирование категорий числами и ложный порядок, кодирование индикаторами, признак с тысячами значений, неизвестные категории в продакшене и масштабирование для линейной модели и деревьев |
 | [`ml-fbeta-score`](../../../taskgen/seed/templates/ml/junior/ml-fbeta-score.md) | `junior` | code, function | `python-ml` | 3 | 20 | `python`, `numpy`, `ml-metrics` | 4 | Реализация F-beta меры для бинарной классификации на NumPy: матрица ошибок, вес полноты против точности, деление на ноль при отсутствии положительных примеров |
 | [`ml-metric-choice-quiz`](../../../taskgen/seed/templates/ml/junior/ml-metric-choice-quiz.md) | `junior` | quiz |  | 3 | 3 | `ml-metrics`, `scikit-learn` | 4 | Выбор метрики качества по цене ошибок: сбалансированные классы, дорогой пропуск, дорогая ложная тревога, регрессия с линейным штрафом |
 | [`ml-preprocessing-step-quiz`](../../../taskgen/seed/templates/ml/junior/ml-preprocessing-step-quiz.md) | `junior` | quiz |  | 3 | 3 | `data-preprocessing`, `scikit-learn` | 4 | Выбор шага предобработки по свойству признака: категории без порядка, разные масштабы, пропуски при выбросах, сильная правая асимметрия |
+| [`ml-regression-metrics-essay`](../../../taskgen/seed/templates/ml/junior/ml-regression-metrics-essay.md) | `junior` | essay |  | 3 | 15 | `ml-metrics`, `scikit-learn` | 5 | Вопрос о метриках регрессии: MAE, RMSE и MAPE, нули и малые значения в знаменателе, влияние всплесков, разная цена недопрогноза и перепрогноза, сравнение с простым базовым прогнозом |
 | [`ml-standardize-features`](../../../taskgen/seed/templates/ml/junior/ml-standardize-features.md) | `junior` | code, function | `python-ml` | 3 | 20 | `python`, `numpy`, `data-preprocessing` | 5 | Стандартизация признаков на NumPy: статистики только по обучающей выборке, выбор ddof, постоянные признаки и пустая тестовая выборка без утечки данных |
 | [`ml-validation-leakage-essay`](../../../taskgen/seed/templates/ml/junior/ml-validation-leakage-essay.md) | `junior` | essay |  | 3 | 15 | `scikit-learn`, `data-preprocessing` | 6 | Вопрос о проверке модели: переобучение, разбиение на обучающую, валидационную и тестовую выборки, кросс-валидация, утечка данных через предобработку и время |
+| [`ml-customer-clustering-essay`](../../../taskgen/seed/templates/ml/middle/ml-customer-clustering-essay.md) | `middle` | essay |  | 5 | 20 | `clustering`, `data-preprocessing`, `scikit-learn` | 6 | Сегментация клиентов k-средних: влияние масштабов признаков и выбросов, подготовка числовых и категориальных признаков, выбор числа кластеров, ограничения метода и альтернативы, описание и устойчивость сегментов |
 | [`ml-imbalanced-threshold-essay`](../../../taskgen/seed/templates/ml/middle/ml-imbalanced-threshold-essay.md) | `middle` | essay |  | 5 | 20 | `scikit-learn`, `ml-metrics` | 7 | Вопрос о несбалансированной классификации: выбор метрики, PR-кривая против ROC, порог по стоимости ошибок, калибровка вероятностей и веса классов |
 | [`ml-kmeans-step`](../../../taskgen/seed/templates/ml/middle/ml-kmeans-step.md) | `middle` | code, function | `python-ml` | 5 | 30 | `python`, `numpy`, `clustering` | 6 | Одна итерация алгоритма Ллойда для k-средних на NumPy: векторное назначение кластеров, ничьи по расстоянию, пустые кластеры и инерция |
 | [`ml-logreg-gradient-step`](../../../taskgen/seed/templates/ml/middle/ml-logreg-gradient-step.md) | `middle` | code, function | `python-ml` | 5 | 30 | `python`, `numpy`, `optimization` | 6 | Один шаг градиентного спуска для логистической регрессии с L2-регуляризацией на NumPy: вывод градиента кросс-энтропии, свободный член без штрафа, усреднение по батчу |
 | [`ml-training-diagnosis-quiz`](../../../taskgen/seed/templates/ml/middle/ml-training-diagnosis-quiz.md) | `middle` | quiz |  | 5 | 4 | `optimization`, `python` | 4 | Что исправить по кривым обучения градиентным спуском: расходимость, переобучение, недообучение, признаки разного масштаба |
+| [`ml-training-instability-essay`](../../../taskgen/seed/templates/ml/middle/ml-training-instability-essay.md) | `middle` | essay |  | 5 | 20 | `pytorch`, `optimization` | 6 | Диагностика нестабильного обучения нейросети на PyTorch: NaN в функции потерь, численно неустойчивый логарифм вероятностей, ненормализованные входы, выбор скорости обучения, размер батча и приёмы стабилизации |
 | [`ml-validation-split-quiz`](../../../taskgen/seed/templates/ml/middle/ml-validation-split-quiz.md) | `middle` | quiz |  | 5 | 4 | `scikit-learn`, `ml-metrics` | 3 | Выбор схемы кросс-валидации по устройству данных: редкий класс, несколько строк на объект, временной порядок |
+| [`ml-ab-test-design-essay`](../../../taskgen/seed/templates/ml/senior/ml-ab-test-design-essay.md) | `senior` | essay |  | 7 | 30 | `ml-metrics` | 7 | Проверка новой модели ранжирования в онлайн-эксперименте: разрыв офлайн- и онлайн-метрик, единица рандомизации, метрики и размер выборки, ранние остановки, дисперсия скошенной выручки, рассогласование размеров групп и искажения результата |
 | [`ml-batchnorm-backward`](../../../taskgen/seed/templates/ml/senior/ml-batchnorm-backward.md) | `senior` | code, function | `python-ml` | 7 | 40 | `python`, `numpy`, `optimization` | 6 | Обратный проход батч-нормализации в режиме обучения на NumPy: градиенты по входу, масштабу и сдвигу, вывод через вычислительный граф, постоянные признаки и батч из одного объекта |
+| [`ml-label-noise-essay`](../../../taskgen/seed/templates/ml/senior/ml-label-noise-essay.md) | `senior` | essay |  | 7 | 30 | `ml-metrics`, `data-preprocessing` | 7 | Стратегия данных при шумной разметке: согласованность разметчиков с поправкой на случайность, шумный тест и эталонный набор, плато качества, перекрытие и агрегация оценок, выбор объектов для разметки и обучение на шумных метках |
 | [`ml-production-degradation-essay`](../../../taskgen/seed/templates/ml/senior/ml-production-degradation-essay.md) | `senior` | essay |  | 7 | 30 | `scikit-learn`, `pytorch`, `ml-metrics` | 8 | Расследование падения качества модели в продакшене: расхождение обучения и инференса, сдвиг данных и концепции, утечка в офлайн-оценке, мониторинг и безопасный выкат |
 | [`ml-shift-diagnosis-quiz`](../../../taskgen/seed/templates/ml/senior/ml-shift-diagnosis-quiz.md) | `senior` | quiz |  | 7 | 5 | `ml-metrics`, `scikit-learn` | 4 | Распознать причину деградации модели в работе: изменилось распределение входов, связь входов с целью, доли классов или признак содержит будущее |
 | [`ml-softmax-cross-entropy`](../../../taskgen/seed/templates/ml/senior/ml-softmax-cross-entropy.md) | `senior` | code, function | `python-ml` | 7 | 40 | `python`, `numpy`, `pytorch`, `optimization` | 6 | Численно устойчивые softmax и кросс-энтропия с label smoothing и ignore_index на NumPy или PyTorch: значение функции потерь и аналитический градиент по логитам |
