@@ -15,6 +15,7 @@ from taskgen.generation.instance import (
     SandboxUnavailableError,
     generate_instance,
 )
+from taskgen.sandbox.errors import SandboxServiceError
 from tests.evaluation.fakes import FakeLLM, http_error
 from tests.generation.fakes import LocalSandbox, code_solver_reply, connect_error
 from tests.generation.templates import ENTRYPOINT, REFERENCE, code_spec
@@ -118,14 +119,25 @@ OTHER_GOOD = "def top_sum(nums, k):\n    return sum(sorted(nums)[len(nums) - k:]
 class DownOnSolver(LocalSandbox):
     """Песочница, которая прогоняет эталон, но падает на решении решателя."""
 
+    def __init__(self, failure) -> None:
+        super().__init__()
+        self.failure = failure
+
     async def run_tests(self, request):
         if request.solution == OTHER_GOOD:
-            raise connect_error()
+            raise self.failure()
         return await super().run_tests(request)
 
 
-async def test_sandbox_down_during_solver_run_means_no_instance():
-    sandbox = DownOnSolver()
+# PistonRunner сообщает о недоступном или отказавшем Piston через SandboxServiceError, а
+# подделки песочницы бросают сетевую ошибку httpx.
+@pytest.mark.parametrize(
+    "failure",
+    [connect_error, lambda: SandboxServiceError("Piston недоступен")],
+    ids=["http", "piston"],
+)
+async def test_sandbox_down_during_solver_run_means_no_instance(failure):
+    sandbox = DownOnSolver(failure)
     with pytest.raises(SandboxUnavailableError):
         await generate_instance(
             code_spec(), 4, deps(FakeLLM(model(OTHER_GOOD)), sandbox, solver_enabled=True)

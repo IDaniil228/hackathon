@@ -40,7 +40,7 @@ uv run python scripts/gate_stats.py
 
 ### Результаты
 
-Прогон `scripts/gate_stats.py` на ветке `tg-importcheck`, 7 октября 2026 года, Piston из `docker-compose.yml`, после переноса неверных решений в раздел «Решения» шаблонов:
+Прогон `scripts/gate_stats.py` на ветке `tg-stdio`, 7 октября 2026 года, Piston из `docker-compose.yml` с пакетами из `piston-packages.sh`, после появления задач stdio:
 
 | Шаблон | Окружение | Кейсов на seed | Верные прошли | Неверных поймано |
 |---|---|---|---|---|
@@ -51,8 +51,10 @@ uv run python scripts/gate_stats.py
 | `algo/senior/algo-cheapest-route-cpp.md` | `cpp` | 19 | 3 из 3 | 9 из 9 |
 | `algo/senior/algo-weighted-jobs.md` | `python` | 18 | 3 из 3 | 12 из 12 |
 | `backend/junior/backend-paginate.md` | `python` | 27 | 3 из 3 | 12 из 12 |
+| `backend/junior/backend-status-counts-bash.md` | `bash` | 17 | 3 из 3 | 15 из 15 |
 | `backend/junior/backend-validate-signup.md` | `python` | 53 | 3 из 3 | 9 из 9 |
 | `backend/middle/backend-idempotency-keys.md` | `python` | 16 | 3 из 3 | 12 из 12 |
+| `backend/middle/backend-orders-csv-report.md` | `python` | 16 | 3 из 3 | 15 из 15 |
 | `backend/middle/backend-sliding-rate-limiter.md` | `python` | 16 | 3 из 3 | 12 из 12 |
 | `backend/senior/backend-latency-report.md` | `python` | 12 | 3 из 3 | 12 из 12 |
 | `backend/senior/backend-ttl-lru-cache.md` | `python` | 17 | 3 из 3 | 15 из 15 |
@@ -63,10 +65,11 @@ uv run python scripts/gate_stats.py
 | `ml/senior/ml-batchnorm-backward.md` | `python-ml` | 12 | 3 из 3 | 12 из 12 |
 | `ml/senior/ml-softmax-cross-entropy.md` | `python-ml` | 13 | 3 из 3 | 12 из 12 |
 
-- Шаблонов с кодом и эссе в банке 27: 18 с кодом и 9 эссе, по три шаблона в каждой из девяти ячеек
-- Экземпляров проверено 54: 18 шаблонов на 3 seed, кейсов в них 960
-- Верные решения прошли все кейсы в 54 прогонах из 54: в каждом шаблоне банка пока одно верное решение
-- Неверных решений поймано 201 из 201: 105 прогонов неверных решений из шаблонов (35 решений на 3 seed) и 96 прогонов решений-констант. Доля пойманных — 100 %. Прежний шлюз насчитывал 99 прогонов констант: у `backend-validate-signup` ответ первого кейса — пустой список, он совпадает с константой по умолчанию, и теперь одинаковая константа прогоняется один раз
+- Шаблонов с кодом и эссе в банке 29: 20 с кодом и 9 эссе. Два шаблона с кодом — задачи stdio: `backend-status-counts-bash` на Bash и `backend-orders-csv-report` на Python
+- Экземпляров проверено 60: 20 шаблонов на 3 seed, кейсов в них 1059
+- Верные решения прошли все кейсы в 60 прогонах из 60: в каждом шаблоне банка пока одно верное решение
+- Неверных решений поймано 231 из 231: 123 прогона неверных решений из шаблонов (41 решение на 3 seed) и 108 прогонов решений-констант. Доля пойманных — 100 %. Решения-константы задачи stdio — пустой вывод и вывод первого кейса
+- Импорт всего `seed/templates` через `taskgen import --no-embeddings` с этой проверкой занял 25 с на машине разработчика
 - Число кейсов на seed у каждого шаблона одно и то же: генераторы дают фиксированный набор граничных случаев и фиксированное число случайных, а seed меняет значения
 
 Задачкам песочница не нужна: их проверяют правила шлюза выше, и в банке их 18, по две на ячейку. Таблица всех шаблонов — [generated/templates.md](generated/templates.md)

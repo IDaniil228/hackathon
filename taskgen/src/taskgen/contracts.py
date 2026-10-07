@@ -115,6 +115,36 @@ class CaseGroup(BaseModel):
 CaseGroupName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_-]*$")]
 
 
+class IOKind(StrEnum):
+    """Как решение задания с кодом получает вход и отдаёт ответ."""
+
+    # Кандидат пишет функцию; драйвер языка вызывает её на аргументах кейса.
+    FUNCTION = "function"
+    # Кандидат пишет программу: вход в stdin и файлах, ответ — её stdout.
+    STDIO = "stdio"
+
+
+# Как ответ решения сверяется с ожидаемым; смысл режимов описан в taskgen/sandbox/checkers.py.
+CheckMode = Literal["tokens", "exact", "float", "json", "checker"]
+
+
+class Checker(BaseModel):
+    """Свой проверяльщик шаблона: программа, которая исполняется в песочнице.
+
+    Контракт программы описан в taskgen/sandbox/cases.py. Кандидат проверяльщика не видит.
+    """
+
+    runtime: str
+    code: str
+
+
+class OutputCheck(BaseModel):
+    """Режим проверки ответа; checker задан только при mode=checker."""
+
+    mode: CheckMode
+    checker: Checker | None = None
+
+
 class TemplateSpec(BaseModel):
     """Разобранный md-шаблон. Формат файла описан в taskgen/TEMPLATE_FORMAT.md."""
 
@@ -131,7 +161,11 @@ class TemplateSpec(BaseModel):
     # Переопределение весов балла из ScoringSettings, ключи совпадают с именами полей.
     scoring: dict[str, float] = {}
     generator_prompt: str
-    # Только для kind=code: генератор тестов и имя функции, которую пишет кандидат.
+    # Только для kind=code: вид задания и режим проверки ответа. Режим по умолчанию
+    # подставляет разбор шаблона: json для function, tokens для stdio.
+    io: IOKind | None = None
+    check: OutputCheck | None = None
+    # Только для kind=code: генератор тестов; имя функции кандидата — только для io=function.
     entrypoint: str | None = None
     test_generator: str | None = None
     # Только для kind=code: группы, которые генератор тестов ставит кейсам в поле group.
@@ -221,14 +255,27 @@ class RunResult(BaseModel):
     exit_code: int | None
     signal: str | None = None
     timed_out: bool = False
+    # Вывод превысил лимит песочницы, и процесс остановлен.
+    output_limited: bool = False
     wall_ms: int | None = None
     memory_bytes: int | None = None
+    # Сообщение компилятора; не None — программа не собралась и не запускалась.
+    compile_error: str | None = None
 
 
 class TestCase(BaseModel):
+    """Кейс задания с кодом. У io=function вход — input, у io=stdio — stdin и files.
+
+    expected у io=function — значение JSON, у io=stdio — ожидаемый вывод строкой.
+    """
+
     __test__ = False  # Иначе pytest примет класс за набор тестов.
 
-    input: Any
+    # Аргументы функции: массив позиционных или объект именованных.
+    input: Any = None
+    stdin: str | None = None
+    # Файлы, которые лежат рядом с программой: имя → содержимое.
+    files: dict[str, str] = {}
     expected: Any
     # Группа из TemplateSpec.case_groups; None — шаблон групп не объявил.
     group: str | None = None
@@ -238,9 +285,12 @@ class TestRunRequest(BaseModel):
     __test__ = False
 
     runtime: str
-    entrypoint: str
+    io: IOKind
+    # Только для io=function: имя функции кандидата.
+    entrypoint: str | None = None
     solution: str
     cases: list[TestCase]
+    check: OutputCheck
     limits: RunLimits
 
 
@@ -282,15 +332,18 @@ class SolverRecord(BaseModel):
 class HiddenPayload(BaseModel):
     """Содержимое tasks.hidden_payload: пишет генерация, читает оценка, наружу не уходит.
 
-    Для kind=code обязательны cases, entrypoint и runtime. reference_report — прогон эталона
-    на тех же cases в той же песочнице: без него скорость и память не оцениваются.
-    scoring — переопределение весов балла из TemplateSpec.scoring, case_groups — группы
-    кейсов из TemplateSpec.case_groups: веса групп кандидат не видит.
+    Для kind=code обязательны cases, runtime, io и check, а для io=function ещё entrypoint.
+    reference_report — прогон эталона на тех же cases в той же песочнице: без него скорость
+    и память не оцениваются. scoring — переопределение весов балла из TemplateSpec.scoring,
+    case_groups — группы кейсов из TemplateSpec.case_groups: веса групп кандидат не видит.
+    check может нести свой проверяльщик шаблона, поэтому лежит здесь, а не в публичной части.
     """
 
     cases: list[TestCase] = []
+    io: IOKind | None = None
     entrypoint: str | None = None
     runtime: str | None = None
+    check: OutputCheck | None = None
     rubric: list[RubricItem] = []
     reference_report: TestReport | None = None
     scoring: dict[str, float] = {}
@@ -313,10 +366,10 @@ class AnalysisReport(BaseModel):
     findings: list[dict[str, Any]] = []
 
 
-class Analyzer(Protocol):
-    languages: frozenset[str]
-
-    def analyze(self, code: str, language: str) -> AnalysisReport: ...
+class CodeAnalyzer(Protocol):
+    async def analyze(self, code: str, language: str) -> list[AnalysisReport]:
+        """Отчёты всех анализаторов языка; язык без анализаторов — пустой список."""
+        ...
 
 
 class RubricVerdict(BaseModel):

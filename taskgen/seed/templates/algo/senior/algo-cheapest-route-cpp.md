@@ -8,6 +8,7 @@ grade: senior
 skills: [cpp, graphs, dynamic-programming]
 kind: code
 runtime: cpp
+io: function
 difficulty: 7
 expected_minutes: 40
 params:

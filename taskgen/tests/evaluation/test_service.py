@@ -39,8 +39,10 @@ def _report(passed: list[bool], wall: int = 100) -> dict:
 def _task(**overrides) -> TaskInput:
     hidden = {
         "cases": [{"input": [1, 2], "expected": 3}],
+        "io": "function",
         "entrypoint": "add",
         "runtime": "python",
+        "check": {"mode": "json"},
         "rubric": RUBRIC,
         "reference_report": _report([True, True]),
     }

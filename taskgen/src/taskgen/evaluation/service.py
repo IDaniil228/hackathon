@@ -23,9 +23,10 @@ from taskgen.config import ScoringSettings, Settings
 from taskgen.contracts import (
     AIDetector,
     AnalysisReport,
-    Analyzer,
+    CodeAnalyzer,
     Embedder,
     HiddenPayload,
+    IOKind,
     Judge,
     JudgeRequest,
     JudgeResult,
@@ -39,7 +40,7 @@ from taskgen.contracts import (
     TestRunRequest,
 )
 from taskgen.db import Answer, CandidateSummary, Grade, Task, Template, TestSession
-from taskgen.evaluation.analyzers import default_analyzers, run_analyzers
+from taskgen.evaluation.analyzers import SandboxAnalyzer
 from taskgen.evaluation.detector import LLMAIDetector
 from taskgen.evaluation.evidence import EvidenceOptions
 from taskgen.evaluation.grading import (
@@ -376,7 +377,8 @@ class Evaluator:
     llm: LLMClient
     judge: Judge
     sandbox: SandboxRunner | None
-    analyzers: list[Analyzer]
+    # None — нет песочницы: ответ с кодом тогда не принимается и анализировать нечего.
+    analyzer: CodeAnalyzer | None
     detector: AIDetector | None
 
     @classmethod
@@ -407,16 +409,21 @@ class Evaluator:
                 model=settings.llm.detector.model,
                 reasoning_effort=settings.llm.detector.reasoning_effort,
             )
-        analyzers = getattr(state, "analyzers", None)
+        sandbox = getattr(state, "sandbox", None)
+        analyzer = getattr(state, "analyzer", None)
+        if analyzer is None and sandbox is not None:
+            analyzer = SandboxAnalyzer(
+                sandbox,
+                timeout_seconds=settings.scoring.analyzer_timeout_seconds,
+                memory_bytes=settings.sandbox.run_memory_limit_bytes,
+            )
         return cls(
             settings=settings,
             sessionmaker=state.sessionmaker,
             llm=llm,
             judge=judge,
-            sandbox=getattr(state, "sandbox", None),
-            analyzers=analyzers
-            if analyzers is not None
-            else default_analyzers(settings.scoring.analyzer_timeout_seconds),
+            sandbox=sandbox,
+            analyzer=analyzer,
             detector=detector,
         )
 
@@ -461,11 +468,14 @@ async def check_code(
     """Прогон тестов в песочнице и анализаторы: то, что хранится в ответе с кодом."""
     if ev.sandbox is None:
         raise SandboxUnavailableError("Песочница для прогона тестов не настроена")
+    assert hidden.io is not None and hidden.check is not None
     request = TestRunRequest(
         runtime=hidden.runtime or "",
-        entrypoint=hidden.entrypoint or "",
+        io=hidden.io,
+        entrypoint=hidden.entrypoint,
         solution=content,
         cases=hidden.cases,
+        check=hidden.check,
         limits=RunLimits(
             timeout_ms=ev.settings.sandbox.run_timeout_ms,
             memory_bytes=ev.settings.sandbox.run_memory_limit_bytes,
@@ -476,8 +486,7 @@ async def check_code(
     except (httpx.HTTPError, SandboxError) as error:
         # PistonRunner отдаёт сетевую ошибку и отказ Piston как SandboxError.
         raise SandboxUnavailableError("Песочница недоступна, повторите позже") from error
-    # Анализаторы запускают внешние процессы; в потоке они не блокируют цикл событий.
-    reports = await asyncio.to_thread(run_analyzers, ev.analyzers, content, language)
+    reports = await ev.analyzer.analyze(content, language) if ev.analyzer is not None else []
     return report.model_dump(mode="json"), [item.model_dump(mode="json") for item in reports]
 
 
@@ -508,7 +517,10 @@ async def submit_answer(ev: Evaluator, task_id: uuid.UUID, submission: Submissio
     content = _answer_content(task, submission)
 
     if task.kind == TaskKind.CODE:
-        if not (hidden.cases and hidden.entrypoint and hidden.runtime):
+        needs_entrypoint = hidden.io is IOKind.FUNCTION
+        if not (hidden.cases and hidden.runtime and hidden.io and hidden.check) or (
+            needs_entrypoint and not hidden.entrypoint
+        ):
             raise BrokenTaskError(f"У задания {task.id} нет скрытых тестов")
         if language and not _same_language(language, hidden.runtime):
             raise InvalidAnswerError(

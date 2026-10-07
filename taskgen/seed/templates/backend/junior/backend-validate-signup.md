@@ -8,6 +8,7 @@ grade: junior
 skills: [python, http-api]
 kind: code
 runtime: python
+io: function
 difficulty: 3
 expected_minutes: 25
 params:

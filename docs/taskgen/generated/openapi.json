@@ -1271,16 +1271,36 @@
         "properties": {
           "input": {
             "title": "Input",
-            "description": "Аргументы функции: массив позиционных или объект именованных"
+            "description": "Только для io=function: аргументы функции, массив позиционных или объект именованных"
+          },
+          "stdin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stdin",
+            "description": "Только для io=stdio: вход программы"
+          },
+          "files": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Files",
+            "description": "Только для io=stdio: файлы рядом с программой, имя → текст",
+            "default": {}
           },
           "expected": {
             "title": "Expected",
-            "description": "Ожидаемый результат"
+            "description": "Ожидаемый результат функции или ожидаемый вывод программы строкой"
           }
         },
         "type": "object",
         "required": [
-          "input",
           "expected"
         ],
         "title": "Example"
@@ -1297,6 +1317,15 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "IOKind": {
+        "type": "string",
+        "enum": [
+          "function",
+          "stdio"
+        ],
+        "title": "IOKind",
+        "description": "Как решение задания с кодом получает вход и отдаёт ответ."
       },
       "ImportResult": {
         "properties": {
@@ -1548,7 +1577,7 @@
               }
             ],
             "title": "Environment",
-            "description": "Только для заданий с кодом: окружение и доступные библиотеки. Варианты: cpp — \"Окружение: GCC 10.2.0, стандарт C++17; только стандартная библиотека\"; python — \"Окружение: Python 3.12.0; только стандартная библиотека\"; python-ml — \"Окружение: Python 3.12.0 для задач машинного обучения; библиотеки torch 2.14.1, scikit-learn 1.9.1, numpy 1.26.1\""
+            "description": "Только для заданий с кодом: окружение и доступные библиотеки. Варианты: bash — \"Окружение: Bash 5.2.0; утилиты GNU coreutils 8.30, grep 3.3, sed 4.7 и mawk 1.3.3 (команда awk)\"; cpp — \"Окружение: GCC 10.2.0, стандарт C++17; только стандартная библиотека\"; python — \"Окружение: Python 3.12.0; только стандартная библиотека\"; python-ml — \"Окружение: Python 3.12.0 для задач машинного обучения; библиотеки torch 2.14.1, scikit-learn 1.9.1, numpy 1.26.1\""
           }
         },
         "type": "object",
@@ -2218,10 +2247,21 @@
       },
       "Signature": {
         "properties": {
+          "io": {
+            "$ref": "#/components/schemas/IOKind",
+            "description": "function — кандидат пишет функцию entrypoint; stdio — программу, которая читает stdin и печатает ответ в stdout"
+          },
           "entrypoint": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Entrypoint",
-            "description": "Имя функции, которую пишет кандидат"
+            "description": "Только для io=function: имя функции, которую пишет кандидат"
           },
           "runtime": {
             "type": "string",
@@ -2231,7 +2271,7 @@
         },
         "type": "object",
         "required": [
-          "entrypoint",
+          "io",
           "runtime"
         ],
         "title": "Signature"

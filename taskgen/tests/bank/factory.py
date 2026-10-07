@@ -20,6 +20,7 @@ DEFAULT_FRONTMATTER: dict[str, Any] = {
     "skills": ["python", "two-pointers"],
     "kind": "code",
     "runtime": "python",
+    "io": "function",
     "difficulty": 3,
     "expected_minutes": 15,
     "params": {
@@ -84,6 +85,52 @@ CODE_SECTIONS: dict[str, str] = {
         "- edge: учтён случай, когда пары нет"
     ),
 }
+
+# Задача stdio: программа читает числа из stdin и печатает сумму каждой строки.
+STDIO_REFERENCE = (
+    "import sys\nfor line in sys.stdin:\n    print(sum(int(token) for token in line.split()))\n"
+)
+# Пустая строка входа даёт 0, а неверное решение её пропускает.
+STDIO_SKIPS_EMPTY = (
+    "import sys\n"
+    "for line in sys.stdin:\n"
+    "    if line.strip():\n"
+    "        print(sum(int(token) for token in line.split()))\n"
+)
+
+STDIO_SECTIONS: dict[str, str] = {
+    "Генерация": "Придумай легенду про кассу: в каждой строке входа чеки одного покупателя.",
+    "Решения": (
+        solution("reference", "+", STDIO_REFERENCE)
+        + "\n\n"
+        + solution("skips-empty", "-", STDIO_SKIPS_EMPTY, "Пропускает покупателя без чеков")
+    ),
+    "Тесты": (
+        "```python\n"
+        "def generate(params, rng):\n"
+        "    rows = [[1, 2], [], [5], [-3, 3, 10], [], [7, 7, 7]]\n"
+        "    cases = []\n"
+        "    for size in range(1, len(rows) + 1):\n"
+        "        lines = rows[:size]\n"
+        "        stdin = ''.join(' '.join(map(str, row)) + '\\n' for row in lines)\n"
+        "        expected = ''.join(f'{sum(row)}\\n' for row in lines)\n"
+        "        cases.append({'stdin': stdin, 'expected': expected, 'group': 'main'})\n"
+        "    return cases\n"
+        "```"
+    ),
+    "Рубрика": "- stream: вход читается построчно, без загрузки целиком",
+}
+
+
+def make_stdio(**frontmatter: Any) -> str:
+    """Валидный шаблон задачи stdio на Python."""
+    frontmatter.setdefault("io", "stdio")
+    frontmatter.setdefault("params", {})
+    sections = dict(STDIO_SECTIONS)
+    sections |= frontmatter.pop("sections", {})
+    sections.setdefault("Сигнатура", None)
+    return make_template(sections=sections, **frontmatter)
+
 
 ESSAY_SECTIONS: dict[str, str] = {
     "Генерация": "Опиши команду, которая выбирает, чем распараллелить сервис.",
@@ -168,6 +215,7 @@ class Unchecked:
 def make_essay(**frontmatter: Any) -> str:
     frontmatter.setdefault("kind", "essay")
     frontmatter.setdefault("runtime", None)
+    frontmatter.setdefault("io", None)
     frontmatter.setdefault("case_groups", None)
     frontmatter.setdefault("params", {})
     return make_template(**frontmatter)
@@ -176,6 +224,7 @@ def make_essay(**frontmatter: Any) -> str:
 def make_quiz(**frontmatter: Any) -> str:
     frontmatter.setdefault("kind", "quiz")
     frontmatter.setdefault("runtime", None)
+    frontmatter.setdefault("io", None)
     frontmatter.setdefault("case_groups", None)
     frontmatter.setdefault("params", {"n": {"type": "int", "min": 50, "max": 90}})
     return make_template(**frontmatter)

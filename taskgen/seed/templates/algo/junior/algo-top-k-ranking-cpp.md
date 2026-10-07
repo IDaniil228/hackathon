@@ -8,6 +8,7 @@ grade: junior
 skills: [cpp, sorting]
 kind: code
 runtime: cpp
+io: function
 difficulty: 3
 expected_minutes: 20
 params:

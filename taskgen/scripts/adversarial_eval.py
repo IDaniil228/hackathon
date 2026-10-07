@@ -42,7 +42,7 @@ from taskgen.contracts import (  # noqa: E402
     RunLimits,
     TaskKind,
 )
-from taskgen.evaluation.analyzers import default_analyzers  # noqa: E402
+from taskgen.evaluation.analyzers import SandboxAnalyzer  # noqa: E402
 from taskgen.evaluation.evidence import split_spans  # noqa: E402
 from taskgen.evaluation.jsonout import extract_json_object  # noqa: E402
 from taskgen.evaluation.judge import JudgeError, LLMJudge  # noqa: E402
@@ -277,7 +277,11 @@ async def main() -> int:
         llm=router,
         judge=judge,
         sandbox=piston,
-        analyzers=default_analyzers(settings.scoring.analyzer_timeout_seconds),
+        analyzer=SandboxAnalyzer(
+            piston,
+            timeout_seconds=settings.scoring.analyzer_timeout_seconds,
+            memory_bytes=settings.sandbox.run_memory_limit_bytes,
+        ),
         detector=None,
     )
     deps = InstanceDeps(

@@ -8,6 +8,7 @@ grade: middle
 skills: [python, numpy, clustering]
 kind: code
 runtime: python-ml
+io: function
 difficulty: 5
 expected_minutes: 30
 params:

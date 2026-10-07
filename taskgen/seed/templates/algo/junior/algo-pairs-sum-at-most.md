@@ -8,6 +8,7 @@ grade: junior
 skills: [python, two-pointers]
 kind: code
 runtime: python
+io: function
 difficulty: 3
 expected_minutes: 20
 params:

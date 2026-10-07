@@ -59,7 +59,11 @@ def test_session_with_code_and_essay(world, client_headers):
 
     public_code = next(task for task in body["tasks"] if task["kind"] == "code")
     assert public_code["statement"] == f"Напишите функцию {ENTRYPOINT}."
-    assert public_code["public"]["signature"] == {"entrypoint": ENTRYPOINT, "runtime": "python"}
+    assert public_code["public"]["signature"] == {
+        "io": "function",
+        "entrypoint": ENTRYPOINT,
+        "runtime": "python",
+    }
     assert len(public_code["public"]["examples"]) == 2
 
     # Ни скрытые кейсы, ни рубрика, ни эталон не уходят наружу ни одним эндпоинтом.

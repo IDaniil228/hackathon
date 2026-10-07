@@ -1,5 +1,6 @@
-# Окружения песочницы: имя runtime из шаблона задания -> пакет Piston и обвязка тестов.
-# Новое окружение для уже поддержанного языка добавляется записью сюда, без правки кода.
+# Окружения песочницы: имя runtime из шаблона задания -> пакет Piston и драйвер задач-функций.
+# Новое окружение добавляется записью сюда, без правки кода: задачи stdio ему доступны сразу,
+# а задачам-функциям нужен ещё драйвер языка в taskgen/sandbox/drivers.
 # Поля и допустимые значения задаёт RuntimeSpec в registry.py. Отсюда же скрипт
 # taskgen/sandbox/piston-packages.sh узнаёт, какие пакеты ставить в Piston.
 #
@@ -8,13 +9,15 @@
 python:
   language: python
   version: 3.12.0
-  harness: python
+  driver: python
+  source_file: solution.py
   description: Python {version}
 
 python-ml:
   language: python-ml
   version: 3.12.0
-  harness: python
+  driver: python
+  source_file: solution.py
   description: Python {version} для задач машинного обучения
   # У Piston нет такого пакета, он собирается из taskgen/sandbox/packages/python-ml.
   source: local
@@ -26,7 +29,9 @@ python-ml:
 cpp:
   language: c++
   version: 10.2.0
-  harness: cpp
+  driver: cpp
+  source_file: solution.cpp
+  data_files: false
   package: gcc
   description: GCC {version}, стандарт {standard}
   # Стандарт задаёт скрипт compile пакета gcc в Piston (g++ -std=c++17); совпадение
@@ -34,3 +39,27 @@ cpp:
   standard: C++17
   # Без лимита Piston не ограничивает память компилятора, а шаблонный код раздувает её легко.
   compile_memory_bytes: 1073741824
+
+bash:
+  language: bash
+  version: 5.2.0
+  # Драйвера задач-функций нет: на Bash пишутся только задачи stdio.
+  source_file: solution.sh
+  description: Bash {version}
+  # Утилиты берутся из образа Piston (Debian 10), а не из пакета bash; версии сверяет живой
+  # тест tests/sandbox/test_bash_live.py.
+  extras: утилиты GNU coreutils 8.30, grep 3.3, sed 4.7 и mawk 1.3.3 (команда awk)
+
+# Служебное окружение: статические анализаторы кода кандидата, которые сервис запускает
+# драйвером taskgen/sandbox/drivers/taskgen_analyze.py. Задания в нём не решаются.
+analyzers:
+  language: analyzers
+  version: 1.0.0
+  kind: tool
+  source_file: taskgen_analyze.py
+  description: анализаторы кода кандидата
+  # Пакет собирается из taskgen/sandbox/packages/analyzers.
+  source: local
+  # clang-tidy разбирает заголовки стандартной библиотеки целиком: файл с <bits/stdc++.h>
+  # занял 88 МБ и 1,9 с на все три инструмента C++. Пол взят с запасом на длинный код.
+  min_memory_bytes: 536870912

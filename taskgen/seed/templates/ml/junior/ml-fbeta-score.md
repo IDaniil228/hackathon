@@ -8,6 +8,7 @@ grade: junior
 skills: [python, numpy, ml-metrics]
 kind: code
 runtime: python-ml
+io: function
 difficulty: 3
 expected_minutes: 20
 params:

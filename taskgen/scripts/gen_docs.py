@@ -552,7 +552,7 @@ def render_templates() -> str:
             [
                 f"[{code(spec.name)}]({TO_ROOT}/{path.relative_to(ROOT).as_posix()})",
                 code(spec.grade),
-                spec.kind,
+                f"{spec.kind}, {spec.io}" if spec.io else spec.kind,
                 code(spec.runtime) if spec.runtime else "",
                 spec.difficulty,
                 spec.expected_minutes,
@@ -569,7 +569,7 @@ def render_templates() -> str:
                 [
                     "Шаблон",
                     "Грейд",
-                    "Тип",
+                    "Тип и вид io",
                     "Окружение",
                     "Сложность",
                     "Время, мин",

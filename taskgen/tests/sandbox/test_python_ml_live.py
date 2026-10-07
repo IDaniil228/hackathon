@@ -2,7 +2,14 @@
 
 import pytest
 
-from taskgen.contracts import RunLimits, RunRequest, TestCase, TestRunRequest
+from taskgen.contracts import (
+    IOKind,
+    OutputCheck,
+    RunLimits,
+    RunRequest,
+    TestCase,
+    TestRunRequest,
+)
 from taskgen.sandbox.registry import RuntimeRegistry
 
 pytestmark = pytest.mark.integration
@@ -67,7 +74,13 @@ async def test_ml_solution_answers_with_numpy_and_torch_values(piston):
 
     report = await piston.run_tests(
         TestRunRequest(
-            runtime="python-ml", entrypoint="fit", solution=solution, cases=cases, limits=LIMITS
+            runtime="python-ml",
+            io=IOKind.FUNCTION,
+            entrypoint="fit",
+            solution=solution,
+            cases=cases,
+            check=OutputCheck(mode="json"),
+            limits=LIMITS,
         )
     )
 

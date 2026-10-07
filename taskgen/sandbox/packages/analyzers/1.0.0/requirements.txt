@@ -1,0 +1,9 @@
+# Инструменты статического анализа кода кандидата. Ставит их build.sh пакета analyzers, а
+# запускает драйвер taskgen/src/taskgen/sandbox/drivers/taskgen_analyze.py внутри песочницы.
+# Каждая строка — точный пин. clang-tidy и cppcheck приходят готовыми бинарниками в колёсах
+# manylinux_2_28: glibc образа Piston (Debian 10) — 2.28.
+ruff==0.16.10
+radon==6.0.1
+lizard==1.24.1
+clang-tidy==22.1.8
+cppcheck==1.5.2

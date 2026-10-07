@@ -11,12 +11,12 @@ import ast
 import hashlib
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, get_args
 
 import yaml
 from pydantic import ValidationError
 
-from taskgen.contracts import RubricItem, TaskKind, TemplateSpec
+from taskgen.contracts import CheckMode, IOKind, RubricItem, TaskKind, TemplateSpec
 from taskgen.db import Template
 from taskgen.evaluation.scoring import WEIGHT_OF
 
@@ -30,11 +30,13 @@ SECTION_TESTS = "Тесты"
 SECTION_RUBRIC = "Рубрика"
 SECTION_QUESTION = "Вопрос"
 SECTION_VARIANTS = "Варианты"
+SECTION_CHECKER = "Проверяльщик"
 # Разделы, которые задаются только заданиям перечисленных типов; «Генерация» нужна всем.
 KIND_SECTIONS: dict[str, frozenset[TaskKind]] = {
     SECTION_SOLUTIONS: frozenset({TaskKind.CODE}),
     SECTION_SIGNATURE: frozenset({TaskKind.CODE}),
     SECTION_TESTS: frozenset({TaskKind.CODE}),
+    SECTION_CHECKER: frozenset({TaskKind.CODE}),
     SECTION_QUESTIONS: frozenset({TaskKind.ESSAY}),
     SECTION_FACTS: frozenset({TaskKind.ESSAY}),
     SECTION_QUESTION: frozenset({TaskKind.QUIZ}),
@@ -47,6 +49,10 @@ KNOWN_SECTIONS = (SECTION_GENERATION, *KIND_SECTIONS)
 # Меньше трёх неверных ответов — угадать проще, чем при четырёх вариантах.
 MIN_WRONG_ANSWERS = 3
 MIN_VARIANTS = 2
+# Режим проверки по умолчанию: ответ функции — значение JSON, ответ программы — текст.
+DEFAULT_CHECK = {IOKind.FUNCTION: "json", IOKind.STDIO: "tokens"}
+# Ответ функции драйвер печатает JSON: текстовые режимы сравнивали бы его запись, а не значение.
+FUNCTION_CHECKS = frozenset({"json", "checker"})
 
 # Поля TemplateSpec, которые берутся из разделов тела; остальные задаёт frontmatter.
 BODY_FIELDS = frozenset(
@@ -181,7 +187,7 @@ def parse_template(text: str, *, source: str) -> TemplateSpec:
     if kind != TaskKind.QUIZ.value:
         data["rubric"] = _rubric(sections, out)
     if is_code:
-        data.update(_code_sections(sections, meta.get("runtime"), out))
+        data.update(_code_sections(sections, meta, out))
     elif kind == TaskKind.ESSAY.value:
         data.update(_essay_sections(sections, params, out))
     elif kind == TaskKind.QUIZ.value:
@@ -283,8 +289,15 @@ def _check_frontmatter(meta: dict[str, Any], *, is_code: bool, out: _Collector) 
     runtime = meta.get("runtime")
     if is_code and not runtime:
         out.add("runtime", "заданию с кодом нужно окружение песочницы")
-    if meta.get("kind") in (TaskKind.ESSAY.value, TaskKind.QUIZ.value) and runtime is not None:
-        out.add("runtime", "окружение песочницы задаётся только заданиям kind=code")
+    if is_code and meta.get("io") is None:
+        allowed = ", ".join(io.value for io in IOKind)
+        out.add("io", f"заданию с кодом нужен вид io: {allowed}")
+    if meta.get("kind") in (TaskKind.ESSAY.value, TaskKind.QUIZ.value):
+        if runtime is not None:
+            out.add("runtime", "окружение песочницы задаётся только заданиям kind=code")
+        for key in ("io", "check"):
+            if meta.get(key) is not None:
+                out.add(key, "поле задаётся только заданиям kind=code")
     if meta.get("case_groups") and not is_code:
         out.add("case_groups", "группы тестовых кейсов задаются только заданиям kind=code")
     runtime_limit = Template.__table__.c.runtime.type.length
@@ -603,21 +616,23 @@ def _rubric(sections: dict[str, str], out: _Collector) -> list[RubricItem]:
     return [RubricItem(**item) for item in items]
 
 
-def _code_sections(sections: dict[str, str], runtime: Any, out: _Collector) -> dict[str, Any]:
+def _code_sections(
+    sections: dict[str, str], meta: dict[str, Any], out: _Collector
+) -> dict[str, Any]:
     result: dict[str, Any] = {}
+    runtime = meta.get("runtime")
+    io = meta.get("io")
 
-    signature = _single_block(sections, SECTION_SIGNATURE, out)
     entrypoint = None
-    if signature is not None:
-        line = signature.content.strip()
-        if "\n" in line or not IDENTIFIER.match(line):
-            out.add(
-                section_label(SECTION_SIGNATURE),
-                "блок должен содержать одну строку — имя функции из латиницы, цифр и _",
-            )
-        else:
-            entrypoint = line
+    if io == IOKind.STDIO.value and SECTION_SIGNATURE in sections:
+        out.add(
+            section_label(SECTION_SIGNATURE),
+            "у задания io=stdio нет функции: программа читает stdin и печатает ответ",
+        )
+    elif io != IOKind.STDIO.value:
+        entrypoint = _entrypoint(sections, out)
     result["entrypoint"] = entrypoint
+    result["check"] = _check(sections, meta, out)
 
     result["solutions"] = _solutions(sections, runtime, entrypoint, out)
 
@@ -631,6 +646,56 @@ def _code_sections(sections: dict[str, str], runtime: Any, out: _Collector) -> d
             if generate is None or len(generate.args.args) < 2:
                 out.add(label, "нужна функция верхнего уровня generate(params, rng)")
     return result
+
+
+def _entrypoint(sections: dict[str, str], out: _Collector) -> str | None:
+    signature = _single_block(sections, SECTION_SIGNATURE, out)
+    if signature is None:
+        return None
+    line = signature.content.strip()
+    if "\n" in line or not IDENTIFIER.match(line):
+        out.add(
+            section_label(SECTION_SIGNATURE),
+            "блок должен содержать одну строку — имя функции из латиницы, цифр и _",
+        )
+        return None
+    return line
+
+
+def _check(sections: dict[str, str], meta: dict[str, Any], out: _Collector) -> Any:
+    """Режим проверки ответа и свой проверяльщик из раздела «Проверяльщик».
+
+    Режим без значения берётся по виду задания; неизвестный вид назовёт pydantic.
+    """
+    io = meta.get("io")
+    mode = meta.get("check")
+    if mode is None:
+        if io not in set(IOKind):
+            return None
+        mode = DEFAULT_CHECK[IOKind(io)]
+    elif mode not in get_args(CheckMode):
+        out.add("check", f"неизвестный режим; допустимы: {', '.join(get_args(CheckMode))}")
+        return None
+    if io == IOKind.FUNCTION.value and mode not in FUNCTION_CHECKS:
+        allowed = ", ".join(sorted(FUNCTION_CHECKS))
+        out.add(
+            "check",
+            f"ответ функции сверяется как значение JSON; у io=function допустимы: {allowed}",
+        )
+    label = section_label(SECTION_CHECKER)
+    checker = None
+    if mode == "checker":
+        block = _single_block(sections, SECTION_CHECKER, out, required_by="check: checker")
+        if block is not None and not block.info:
+            out.add(
+                label,
+                "у блока кода нужен язык — имя окружения песочницы, например ```python",
+            )
+        elif block is not None:
+            checker = {"runtime": block.info.split()[0], "code": block.content}
+    elif SECTION_CHECKER in sections:
+        out.add(label, "свой проверяльщик задаётся только вместе с check: checker")
+    return {"mode": mode, "checker": checker}
 
 
 SOLUTION_HEADING = re.compile(r"^###\s+(.*?)\s*$")
@@ -730,11 +795,13 @@ def _outside_blocks(text: str) -> str:
     return "\n".join(kept)
 
 
-def _single_block(sections: dict[str, str], name: str, out: _Collector) -> _CodeBlock | None:
+def _single_block(
+    sections: dict[str, str], name: str, out: _Collector, required_by: str = "kind=code"
+) -> _CodeBlock | None:
     label = section_label(name)
     text = sections.get(name)
     if text is None:
-        out.add(label, "раздел обязателен для заданий kind=code")
+        out.add(label, f"раздел обязателен для заданий {required_by}")
         return None
     blocks = _code_blocks(text)
     if len(blocks) != 1:

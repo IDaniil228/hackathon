@@ -8,6 +8,7 @@ grade: senior
 skills: [python, numpy, pytorch, optimization]
 kind: code
 runtime: python-ml
+io: function
 difficulty: 7
 expected_minutes: 40
 params:

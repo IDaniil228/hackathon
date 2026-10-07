@@ -90,6 +90,21 @@ def test_build_script_has_no_pins_of_its_own():
         assert f"{name}==" not in build
 
 
+def test_bash_names_utilities_instead_of_libraries():
+    text = describe_runtime("bash")
+    assert text.startswith("Окружение: Bash 5.2.0;")
+    assert "mawk" in text and "coreutils" in text
+    assert "стандартная библиотека" not in text
+
+
+def test_service_tool_runtime_is_not_offered_to_candidates():
+    from taskgen.sandbox.environment import describe_all
+
+    described = describe_all()
+    assert "analyzers" not in described
+    assert {"python", "python-ml", "cpp", "bash"} <= set(described)
+
+
 def test_unknown_runtime_is_sandbox_error():
     with pytest.raises(SandboxError, match="rust"):
         describe_runtime("rust")

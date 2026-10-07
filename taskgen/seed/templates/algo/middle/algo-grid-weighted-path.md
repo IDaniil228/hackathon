@@ -8,6 +8,7 @@ grade: middle
 skills: [python, graphs]
 kind: code
 runtime: python
+io: function
 difficulty: 5
 expected_minutes: 30
 params:

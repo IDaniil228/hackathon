@@ -14,16 +14,17 @@ dependencies = [
     "httpx",
     "pyyaml",
     "python-multipart>=0.0.32",
-    "ruff>=0.16.10",
-    "radon>=6.0.1",
-    "lizard>=1.24.1",
 ]
 
 [dependency-groups]
+# radon и lizard сервису не нужны: анализаторы работают в песочнице. Здесь они для тестов,
+# которые исполняют драйвер анализа локально.
 dev = [
     "pytest",
     "pytest-asyncio",
-    "ruff",
+    "ruff>=0.16.10",
+    "radon>=6.0.1",
+    "lizard>=1.24.1",
 ]
 # Проверка фактов эссе моделью NLI (generation/nli.py). Не входит в группы по умолчанию:
 # onnxruntime с токенизатором весят около 150 МБ против 0.9–5 ГБ у torch.

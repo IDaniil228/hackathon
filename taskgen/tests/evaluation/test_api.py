@@ -110,8 +110,10 @@ class World:
                     if spec["kind"] == "code":
                         hidden |= {
                             "cases": [{"input": [1, 2], "expected": SECRET_EXPECTED}],
+                            "io": "function",
                             "entrypoint": "add",
                             "runtime": "python",
+                            "check": {"mode": "json"},
                             "reference_report": _report([True]).model_dump(),
                         } | spec.get("hidden", {})
                     public = {"signature": "def add(a, b)"}
@@ -202,6 +204,22 @@ def test_submit_runs_hidden_tests_and_stores_analysis(world):
     assert {report["tool"] for report in answer.analysis} == {"ruff", "radon", "annotations"}
     assert answer.behavior == {"paste_count": 2, "focus_lost_count": 1, "time_spent_sec": 120}
     assert answer.ai_signal is None
+
+
+def test_stdio_answer_is_run_as_a_program_with_template_check(world):
+    stdio = {
+        "io": "stdio",
+        "entrypoint": None,
+        "check": {"mode": "float"},
+        "cases": [{"stdin": "1 2\n", "expected": "3\n"}],
+    }
+    _, (task_id,) = world.make_session([{"grade": "middle", "kind": "code", "hidden": stdio}])
+    program = "import sys\nprint(sum(map(int, sys.stdin.read().split())))\n"
+    assert _answer(world, task_id, content=program).status_code == 200
+    request = world.state.sandbox.requests[0]
+    assert request.io == "stdio" and request.entrypoint is None
+    assert request.check.mode == "float"
+    assert request.cases[0].stdin == "1 2\n"
 
 
 def test_resubmission_replaces_answer(world):

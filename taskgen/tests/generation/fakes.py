@@ -18,7 +18,16 @@ from typing import Any
 
 import httpx
 
-from taskgen.contracts import CaseOutcome, RunRequest, RunResult, TestReport, TestRunRequest
+from taskgen.contracts import (
+    CaseOutcome,
+    IOKind,
+    RunRequest,
+    RunResult,
+    TestReport,
+    TestRunRequest,
+)
+from taskgen.sandbox import cases
+from taskgen.sandbox.registry import RuntimeRegistry
 
 _FACTS_HEADER = "Факты, которые обязаны быть в ситуации:\n"
 _CHECKER_FACT = re.compile(r"^- (?P<id>[^:\n]+): (?P<text>.+)$", re.MULTILINE)
@@ -164,7 +173,8 @@ class LocalSandbox:
         self.runs.append(request)
         if self.down:
             raise connect_error()
-        assert request.runtime == "python"
+        # Окружение analyzers — тот же Python; инструменты анализа стоят в группе dev проекта.
+        assert request.runtime in ("python", "analyzers")
         with tempfile.TemporaryDirectory() as directory:
             # Как в Piston: исполняется первый файл, остальные лежат рядом.
             paths = []
@@ -205,6 +215,10 @@ class LocalSandbox:
         self.test_runs.append(request)
         if self.down:
             raise connect_error()
+        if request.io is IOKind.STDIO:
+            # Программы stdio идут через настоящий прогон кейсов поверх локального run.
+            report = await cases.run_tests(self.run, RuntimeRegistry.load(), request, concurrency=4)
+            return report if self.tamper is None else self.tamper(request, report)
         outcomes = []
         for case in request.cases:
             try:

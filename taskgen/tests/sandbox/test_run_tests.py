@@ -1,14 +1,14 @@
-"""Прогон тестов: что уходит в Piston и как протокол обвязки превращается в TestReport.
+"""Прогон задачи-функции: что уходит в Piston и как протокол драйвера становится TestReport.
 
-Здесь обвязка не исполняется: поддельный Piston сам печатает записи протокола. Поведение
-настоящей обвязки проверяют интеграционные тесты в test_harness_live.py.
+Здесь драйвер не исполняется: поддельный Piston сам печатает записи протокола. Поведение
+настоящих драйверов проверяют интеграционные тесты в test_drivers_live.py.
 """
 
 import json
 
 import pytest
 
-from taskgen.contracts import RunLimits, TestCase, TestRunRequest
+from taskgen.contracts import IOKind, OutputCheck, RunLimits, TestCase, TestRunRequest
 from tests.sandbox.fakes import execute_response, fake_runner, stage
 
 LIMITS = RunLimits(timeout_ms=2000, memory_bytes=128 * 1024 * 1024)
@@ -18,6 +18,7 @@ SECRET = 918273645
 def request(runtime="python", cases=None, solution="def f(a, b):\n    return a + b\n"):
     return TestRunRequest(
         runtime=runtime,
+        io=IOKind.FUNCTION,
         entrypoint="f",
         solution=solution,
         cases=cases
@@ -26,6 +27,7 @@ def request(runtime="python", cases=None, solution="def f(a, b):\n    return a +
             TestCase(input=[0.1, 0.2], expected=0.3),
             TestCase(input=[5, 5], expected=SECRET),
         ],
+        check=OutputCheck(mode="json"),
         limits=LIMITS,
     )
 
@@ -41,7 +43,7 @@ def protocol(body: dict, *records: dict, extra: str = "") -> str:
 
 
 def answering(make_run):
-    """Ответ Piston строится от тела запроса, потому что обвязка подписывает записи nonce."""
+    """Ответ Piston строится от тела запроса, потому что драйвер подписывает записи nonce."""
     return fake_runner(lambda body: execute_response(make_run(body)))
 
 
@@ -114,7 +116,7 @@ async def test_exception_in_one_case_is_that_case_error():
 
 
 async def test_unsigned_lines_are_ignored():
-    # Строка без nonce могла прийти только не от обвязки, например от кода кандидата.
+    # Строка без nonce могла прийти только не от драйвера, например от кода кандидата.
     forged = json.dumps({"case": 2, "ok": True, "value": SECRET, "ms": 0})
     runner = answering(
         lambda body: stage(

@@ -7,7 +7,6 @@ Piston изолирует каждый запуск через Isolate: отде
 
 from __future__ import annotations
 
-import secrets
 import signal as signals
 from typing import Any
 
@@ -15,9 +14,8 @@ import httpx
 
 from taskgen.config import SandboxSettings
 from taskgen.contracts import RunLimits, RunRequest, RunResult, TestReport, TestRunRequest
-from taskgen.sandbox import protocol
+from taskgen.sandbox import cases
 from taskgen.sandbox.errors import SandboxServiceError
-from taskgen.sandbox.harnesses import harness_files
 from taskgen.sandbox.registry import RuntimeRegistry, RuntimeSpec
 
 # Запас к лимиту запуска на компиляцию по умолчанию у Piston (10 с) и на очередь задач.
@@ -34,6 +32,7 @@ class PistonRunner:
     ) -> None:
         self._http = http or httpx.AsyncClient(base_url=settings.piston_url.rstrip("/"))
         self._registry = registry or RuntimeRegistry.load()
+        self._stdio_concurrency = settings.stdio_concurrency
 
     async def run(self, request: RunRequest) -> RunResult:
         spec = self._registry.get(request.runtime)
@@ -44,28 +43,17 @@ class PistonRunner:
             args=request.args,
             limits=spec.effective_limits(request.limits),
         )
-        return stage_result(response["run"])
-
-    async def run_tests(self, request: TestRunRequest) -> TestReport:
-        """Прогоняет решение на кейсах одним запуском; протокол описан в protocol.py."""
-        spec = self._registry.get(request.runtime)
-        files, args = harness_files(spec.harness, request.entrypoint, request.solution)
-        nonce = secrets.token_hex(16)
-        # Эвристика причины обрыва сравнивает пик памяти с действующим лимитом, а не запрошенным.
-        limits = spec.effective_limits(request.limits)
-        response = await self._execute(
-            spec,
-            files,
-            stdin=protocol.build_stdin(nonce, request.cases),
-            args=args,
-            limits=limits,
-        )
+        result = stage_result(response["run"])
         compiled = response.get("compile")
         if compiled is not None and compiled.get("code") != 0:
-            return protocol.failed_report(request.cases, _compile_error(compiled))
-        run = response["run"]
-        output = protocol.parse_output(run.get("stdout") or "", nonce)
-        return protocol.build_report(request.cases, output, run, limits)
+            result.compile_error = _compile_error(compiled)
+        return result
+
+    async def run_tests(self, request: TestRunRequest) -> TestReport:
+        """Прогоняет решение на кейсах поверх run; устройство описано в cases.py."""
+        return await cases.run_tests(
+            self.run, self._registry, request, concurrency=self._stdio_concurrency
+        )
 
     async def aclose(self) -> None:
         await self._http.aclose()
@@ -128,6 +116,8 @@ def stage_result(stage: dict[str, Any]) -> RunResult:
         signal=signal,
         # Статус TO Piston ставит и при лимите по стенным часам, и при лимите CPU.
         timed_out=stage.get("status") == "TO",
+        # OL — лимит stdout, EL — лимит stderr.
+        output_limited=stage.get("status") in ("OL", "EL"),
         wall_ms=round(wall) if wall is not None else None,
         memory_bytes=stage.get("memory"),
     )
