@@ -74,7 +74,7 @@ from taskgen.generation.solver import (
     SolverVerdict,
     solve_code,
 )
-from taskgen.generation.textcheck import text_problems
+from taskgen.generation.textcheck import AUTHOR_INSTRUCTIONS, text_problems
 from taskgen.markers import markers, new_nonce
 from taskgen.sandbox.environment import describe_all, describe_runtime
 from taskgen.sandbox.errors import SandboxError, SandboxServiceError
@@ -561,7 +561,7 @@ def _code_request(
             "если у примера есть файлы, назови их имена и формат."
         )
     return (
-        f"Инструкция автора задания:\n{fill_placeholders(spec.generator_prompt, params)}\n\n"
+        f"{AUTHOR_INSTRUCTIONS}:\n{fill_placeholders(spec.generator_prompt, params)}\n\n"
         f"{task}\n\n{render_examples(io, public)}\n\n"
         "Других тестовых данных в условии не приводи."
     )
