@@ -17,7 +17,7 @@ from taskgen.db import make_sessionmaker
 from taskgen.evaluation.api import router as evaluation_router
 from taskgen.generation.api import router as generation_router
 from taskgen.generation.worker import GenerationWorker
-from taskgen.llm import OpenAICompatibleClient
+from taskgen.llm import ProviderRouter
 from taskgen.sandbox.piston import PistonRunner
 
 
@@ -38,7 +38,7 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.settings = settings
         app.state.sessionmaker = make_sessionmaker(settings.database_url)
-        own_llm = OpenAICompatibleClient(settings.llm) if llm is None else None
+        own_llm = ProviderRouter.from_settings(settings.llm) if llm is None else None
         own_sandbox = PistonRunner(settings.sandbox) if sandbox is None else None
         app.state.llm = llm or own_llm
         app.state.sandbox = sandbox or own_sandbox

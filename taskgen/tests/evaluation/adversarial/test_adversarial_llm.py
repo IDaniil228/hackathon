@@ -1,23 +1,22 @@
 """Набор ответов на эссе с настоящим судьёй. Основная проверка — test_adversarial.py на подделках.
 
-Включает TASKGEN_LLM_SMOKE=1; модель судьи и адрес — из настроек (TASKGEN_LLM__JUDGE_MODEL,
-TASKGEN_LLM__BASE_URL). Условие собирается из фактов и вопросов шаблона без модели генерации,
-поэтому тест вызывает только судью. Полный прогон с экземплярами от модели и песочницей —
-scripts/adversarial_eval.py.
+Включает TASKGEN_LLM_SMOKE=1; модель и провайдер судьи — из настроек роли llm.judge
+(TASKGEN_LLM__JUDGE__MODEL, TASKGEN_LLM__JUDGE__PROVIDER). Условие собирается из фактов и
+вопросов шаблона без модели генерации, поэтому тест вызывает только судью. Полный прогон с
+экземплярами от модели и песочницей — scripts/adversarial_eval.py.
 """
 
 from __future__ import annotations
 
 import os
 
-import httpx
 import pytest
 
 from taskgen.config import Settings
 from taskgen.contracts import JudgeRequest, TaskKind
 from taskgen.evaluation.judge import LLMJudge
-from taskgen.llm import LimitedLLM, OpenAICompatibleClient
 from tests.evaluation.adversarial.dataset import check, load_sets
+from tests.live_llm import live_router
 
 pytestmark = pytest.mark.integration
 
@@ -30,20 +29,15 @@ async def judge():
     if not os.environ.get("TASKGEN_LLM_SMOKE"):
         pytest.skip("smoke-тест на настоящей модели включает TASKGEN_LLM_SMOKE=1")
     settings = Settings()
-    try:
-        async with httpx.AsyncClient(timeout=3) as http:
-            (await http.get(f"{settings.llm.base_url}/models")).raise_for_status()
-    except httpx.HTTPError:
-        pytest.skip(f"LLM недоступна по адресу {settings.llm.base_url}")
-    client = OpenAICompatibleClient(settings.llm.model_copy(update={"timeout_seconds": 600}))
+    router = await live_router(settings.llm, ("judge",))
     yield LLMJudge(
-        LimitedLLM(client, limit=settings.llm.concurrency),
-        model=settings.llm.judge_model,
+        router,
+        model=settings.llm.judge.model,
         samples=settings.scoring.judge_samples,
         temperature=settings.scoring.judge_temperature,
-        reasoning_effort=settings.llm.judge_reasoning_effort,
+        reasoning_effort=settings.llm.judge.reasoning_effort,
     )
-    await client.aclose()
+    await router.aclose()
 
 
 @pytest.mark.parametrize("answer_set", ESSAYS, ids=[item.name for item in ESSAYS])

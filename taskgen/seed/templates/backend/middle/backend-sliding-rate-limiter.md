@@ -19,6 +19,10 @@ params:
       - отправка SMS-кодов подтверждения на номер телефона
       - попытки входа в аккаунт с одного IP-адреса
       - запросы к платному API генерации изображений от одного клиента
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 1, required: true}
 ---
 
 # Ограничитель частоты со скользящим окном
@@ -105,6 +109,10 @@ def stream(rng, n, clients, max_gap):
     return result
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     cases = [
         case([[0, "a"], [100, "a"], [200, "a"], [1000, "a"], [1100, "a"]], 2, 1000),
@@ -117,12 +125,13 @@ def generate(params, rng):
         case([[0, "a"], [10, "a"], [20, "a"], [30, "a"], [40, "a"]], 2, 25),
         case([[0, "a"], [1, "a"], [2, "a"], [3, "a"], [3, "a"]], 10, 5),
     ]
+    cases = grouped("manual", cases)
     for _ in range(6):
         clients = ["k" + str(i) for i in range(rng.randint(1, 4))]
         requests = stream(rng, rng.randint(5, 120), clients, 50)
-        cases.append(case(requests, rng.randint(1, 5), rng.randint(1, 120)))
+        cases.append(dict(case(requests, rng.randint(1, 5), rng.randint(1, 120)), group="random"))
     requests = stream(rng, params["n_max"], ["k1", "k2", "k3"], 30)
-    cases.append(case(requests, rng.randint(3, 20), rng.randint(100, 2000)))
+    cases.append(dict(case(requests, rng.randint(3, 20), rng.randint(100, 2000)), group="stress"))
     return cases
 ```
 

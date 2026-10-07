@@ -3,11 +3,12 @@
 Не все OpenAI-совместимые провайдеры поддерживают response_format с json_schema целиком:
 одни отвечают ошибкой 4xx, другие игнорируют схему. Поэтому вызов идёт в два шага: со схемой,
 а при отказе или ответе не по схеме — без неё, со схемой в тексте запроса и разбором первого
-JSON-объекта из ответа. Результат в обоих случаях проверяет pydantic-модель.
+JSON-объекта из ответа. Провайдер, о котором известно, что json_schema он не принимает
+(llm.providers.<имя>.structured_output), сразу получает второй шаг. Результат в обоих случаях
+проверяет pydantic-модель.
 
-Ответ не по схеме или с ошибкой, которую нашёл вызывающий, можно вернуть модели с перечнем
-ошибок: модель исправляет свой ответ в том же разговоре. Число таких повторов задаёт
-вызывающий.
+Ответ не по схеме или с ошибкой, которую нашёл вызывающий, можно отклонить: запрос
+повторяется с перечнем ошибок. Число таких повторов задаёт вызывающий.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from taskgen.contracts import ChatMessage, LLMClient, ReasoningEffort
+from taskgen.contracts import ChatMessage, LLMClient, ReasoningEffort, StructuredOutput
 
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
 _FENCE = re.compile(r"```(?:json)?\s*\n(.*?)```", re.DOTALL)
@@ -100,6 +101,16 @@ def _repair_instruction(problems: list[str]) -> ChatMessage:
     )
 
 
+def _structured_output(llm: LLMClient, model: str | None) -> StructuredOutput:
+    """Режим провайдера модели; клиент без метода structured_output считается json_schema.
+
+    Метод есть у llm.ProviderRouter. Подделки в тестах и обёртки его не имеют и идут прежним
+    путём в два шага.
+    """
+    query = getattr(llm, "structured_output", None)
+    return "json_schema" if query is None else query(model)
+
+
 async def complete_structured[ModelT: BaseModel](
     llm: LLMClient,
     messages: list[ChatMessage],
@@ -123,33 +134,38 @@ async def complete_structured[ModelT: BaseModel](
     разобранный ответ: что с ним делать, решает вызывающий.
 
     Ошибка провайдера 5xx и сетевые ошибки не скрываются: повтор без схемы их не исправит.
+    Провайдер без json_schema сразу получает схему в тексте запроса, одной попыткой.
     """
+    mode = _structured_output(llm, model)
     conversation = messages
     json_schema: dict[str, Any] | None = schema
     reply: str | None = None
     parsed: ModelT | str = "ответ модели не получен"
-    try:
-        reply = await llm.complete(
-            messages,
-            model=model,
-            temperature=temperature,
-            json_schema=schema,
-            reasoning_effort=reasoning_effort,
-        )
-    except httpx.HTTPStatusError as error:
-        if not error.response.is_client_error:
-            raise
-    else:
-        if not _THINK.sub("", reply).strip():
-            raise EmptyReplyError("Модель вернула пустой ответ")
-        parsed = _parse(reply, model_cls)
+    if mode == "json_schema":
+        try:
+            reply = await llm.complete(
+                messages,
+                model=model,
+                temperature=temperature,
+                json_schema=schema,
+                reasoning_effort=reasoning_effort,
+            )
+        except httpx.HTTPStatusError as error:
+            if not error.response.is_client_error:
+                raise
+        else:
+            if not _THINK.sub("", reply).strip():
+                raise EmptyReplyError("Модель вернула пустой ответ")
+            parsed = _parse(reply, model_cls)
     if isinstance(parsed, str):
         conversation = [*messages, _fallback_instruction(schema)]
-        json_schema = None
+        # Провайдеру без json_schema клиент передаст из схемы то, что тот принимает.
+        json_schema = None if mode == "json_schema" else schema
         reply = await llm.complete(
             conversation,
             model=model,
             temperature=temperature,
+            json_schema=json_schema,
             reasoning_effort=reasoning_effort,
         )
         parsed = _parse(reply, model_cls)

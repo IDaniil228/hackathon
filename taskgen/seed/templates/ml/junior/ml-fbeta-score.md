@@ -19,6 +19,10 @@ params:
       - фильтр спама в почте
       - модель, которая находит брак на конвейере по фото
       - классификатор заявок, которые нужно передать старшему специалисту
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 1, required: true}
 ---
 
 # F-beta мера
@@ -88,6 +92,10 @@ def noisy(rng, n, positive_share, error_share):
     return truth, predicted
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     cases = [
         case([1, 0, 1, 1, 0, 0], [1, 1, 0, 1, 0, 0], 1.0),
@@ -99,13 +107,14 @@ def generate(params, rng):
         case([0, 0, 1], [1, 1, 1], 0.5),
         case([1, 1, 1, 1], [1, 0, 0, 0], 0.25),
     ]
+    cases = grouped("manual", cases)
     for beta in (0.5, 1.0, 2.0):
         truth, predicted = noisy(rng, rng.randint(10, 60), rng.uniform(0.1, 0.6), 0.25)
-        cases.append(case(truth, predicted, beta))
+        cases.append(dict(case(truth, predicted, beta), group="random"))
     truth, predicted = noisy(rng, params["n_max"], 0.05, 0.03)
-    cases.append(case(truth, predicted, rng.choice([0.5, 2.0])))
+    cases.append(dict(case(truth, predicted, rng.choice([0.5, 2.0])), group="stress"))
     truth, predicted = noisy(rng, 500, 0.5, 0.4)
-    cases.append(case(truth, predicted, round(rng.uniform(0.1, 4.0), 2)))
+    cases.append(dict(case(truth, predicted, round(rng.uniform(0.1, 4.0), 2)), group="random"))
     return cases
 ```
 

@@ -747,7 +747,7 @@
 | `answered` | boolean | да |  |  |
 | `language` | string или null | да |  |  |
 | `score` | number | да |  | Балл задания от 0 до 1 |
-| `solved` | boolean | да |  | Балл не ниже порога решённости |
+| `solved` | boolean | да |  | Балл не ниже порога решённости, и пройдены все кейсы обязательных групп |
 | `components` | [Components](#components) или null | да |  | Компоненты балла задания с кодом; null — компонент не измерен |
 | `tests` | [TestsSummary](#testssummary) или null | да |  |  |
 | `judge` | [JudgeCounts](#judgecounts) или null | да |  |  |
@@ -786,6 +786,7 @@
 | `passed` | integer | да |  |  |
 | `total` | integer | да |  |  |
 | `compile_error` | boolean | да |  |  |
+| `failed_required` | array из string | нет | `[]` | Обязательные группы кейсов, в которых упал хотя бы один кейс: с ними задание не решено при любом балле |
 
 ### Thresholds
 

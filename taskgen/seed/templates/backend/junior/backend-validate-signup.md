@@ -19,6 +19,9 @@ params:
       - регистрация в приложении для бронирования спортзалов
       - создание аккаунта в игровом сервисе
       - регистрация покупателя в интернет-магазине
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
 ---
 
 # Валидация запроса регистрации
@@ -158,6 +161,10 @@ def mutate(rng, payload, fields, unknown, min_password):
     return {"input": [payload, min_password], "expected": sorted(codes)}
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     m = params["min_password"]
     base = {
@@ -189,9 +196,11 @@ def generate(params, rng):
                 cases.append(
                     {"input": [dict(base, **{field: value}), m], "expected": [f"{field}.{kind}"]}
                 )
+    cases = grouped("manual", cases)
     for _ in range(12):
         fields = rng.sample(names, rng.randint(0, 4))
-        cases.append(mutate(rng, valid_payload(rng, m), fields, rng.random() < 0.3, m))
+        case = mutate(rng, valid_payload(rng, m), fields, rng.random() < 0.3, m)
+        cases.append(dict(case, group="random"))
     return cases
 ```
 

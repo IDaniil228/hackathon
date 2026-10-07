@@ -1,16 +1,16 @@
 """Прогон набора ответов tests/evaluation/adversarial через настоящую оценку.
 
     uv run python scripts/adversarial_eval.py --out results.json [--instances cache.json]
-        [--only SET[:ANSWER,...]] [--judge-base-url URL --judge-model NAME
-        --judge-key-env VAR --judge-reasoning-effort none]
+        [--only SET[:ANSWER,...]] [--judge-model PROVIDER/NAME --judge-reasoning-effort none]
 
 Экземпляр каждого шаблона собирается generate_instance с моделью генерации из настроек и
 песочницей Piston, ответ с кодом проходит тот же check_code, что в API, а балл считает
-evaluate_task с LLM-судьёй. Без флагов --judge-* судья — модель и провайдер из настроек.
-Способ доказательства и повторы судьи тоже берутся из настроек, например
-TASKGEN_SCORING__JUDGE_EVIDENCE=spans. Экземпляры кэшируются в --instances: повторный прогон
-и прогон другим судьёй оценивают те же условия. Ключ провайдера берётся из переменной
-окружения, имя которой задаёт --judge-key-env, и никуда не пишется.
+evaluate_task с LLM-судьёй. Судья — роль llm.judge из настроек, например
+TASKGEN_LLM__JUDGE__MODEL=deepseek/deepseek-flash; флаги --judge-* заменяют её модель вместе с
+провайдером и рассуждения. Способ доказательства и повторы судьи тоже берутся из настроек,
+например TASKGEN_SCORING__JUDGE_EVIDENCE=spans.
+Экземпляры кэшируются в --instances: повторный прогон и прогон другим судьёй оценивают те
+же условия.
 
     uv run python scripts/adversarial_eval.py --summary results.json [другие.json ...]
 
@@ -24,7 +24,6 @@ import argparse
 import asyncio
 import json
 import math
-import os
 import sys
 import time
 import uuid
@@ -36,7 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tests.evaluation.adversarial.dataset import AnswerSet, check, load_sets  # noqa: E402
 
-from taskgen.config import Settings  # noqa: E402
+from taskgen.config import LLMSettings, Settings  # noqa: E402
 from taskgen.contracts import (  # noqa: E402
     ChatMessage,
     HiddenPayload,
@@ -62,7 +61,7 @@ from taskgen.generation.instance import (  # noqa: E402
     InstanceDeps,
     generate_instance,
 )
-from taskgen.llm import LimitedLLM, OpenAICompatibleClient  # noqa: E402
+from taskgen.llm import ProviderRouter  # noqa: E402
 from taskgen.sandbox.piston import PistonRunner  # noqa: E402
 
 
@@ -233,9 +232,7 @@ async def main() -> int:
     parser.add_argument("--out", type=Path)
     parser.add_argument("--instances", type=Path)
     parser.add_argument("--only", nargs="*", default=[])
-    parser.add_argument("--judge-base-url")
     parser.add_argument("--judge-model")
-    parser.add_argument("--judge-key-env")
     parser.add_argument("--judge-reasoning-effort")
     parser.add_argument("--summary", nargs="+", type=Path)
     args = parser.parse_args()
@@ -246,53 +243,53 @@ async def main() -> int:
         parser.error("нужен --out или --summary")
 
     settings = Settings()
+    judge_role = settings.llm.judge.model_copy(
+        update={
+            "model": args.judge_model or settings.llm.judge.model,
+            "reasoning_effort": args.judge_reasoning_effort or settings.llm.judge.reasoning_effort,
+        }
+    )
+    # Через validate, а не model_copy: новая модель судьи проверяется вместе с остальными.
+    llm_settings = LLMSettings.model_validate(
+        {**dict(settings.llm.with_timeout(600)), "judge": judge_role}
+    )
     cache: dict[str, Any] = {}
     if args.instances and args.instances.exists():
         cache = json.loads(args.instances.read_text(encoding="utf-8"))
 
-    generator_client = OpenAICompatibleClient(
-        settings.llm.model_copy(update={"timeout_seconds": 600})
-    )
-    judge_settings = settings.llm.model_copy(update={"timeout_seconds": 600})
-    if args.judge_base_url:
-        judge_settings = judge_settings.model_copy(update={"base_url": args.judge_base_url})
-    if args.judge_key_env:
-        judge_settings = judge_settings.model_copy(
-            update={"api_key": os.environ[args.judge_key_env]}
-        )
-    judge_client = OpenAICompatibleClient(judge_settings)
-    counting = CountingLLM(judge_client)
-    judge_model = args.judge_model or settings.llm.judge_model
+    router = ProviderRouter.from_settings(llm_settings)
+    counting = CountingLLM(router)
+    judge_model = judge_role.model
     judge = LLMJudge(
-        LimitedLLM(counting, limit=settings.llm.concurrency),
+        counting,
         model=judge_model,
         samples=settings.scoring.judge_samples,
         temperature=settings.scoring.judge_temperature,
-        reasoning_effort=args.judge_reasoning_effort or settings.llm.judge_reasoning_effort,
+        reasoning_effort=judge_role.reasoning_effort,
         evidence=judge_evidence(settings.scoring),
-        # Эмбеддинги для проверки смысла доказательств даёт провайдер генерации из настроек.
-        relevance=judge_relevance(settings.scoring, generator_client, EmbeddingCache()),
+        # Эмбеддинги для проверки смысла доказательств даёт роль llm.embedding из настроек.
+        relevance=judge_relevance(settings.scoring, router, EmbeddingCache()),
     )
     piston = PistonRunner(settings.sandbox)
     ev = Evaluator(
         settings=settings,
         sessionmaker=None,  # type: ignore[arg-type]
-        llm=generator_client,
+        llm=router,
         judge=judge,
         sandbox=piston,
         analyzers=default_analyzers(settings.scoring.analyzer_timeout_seconds),
         detector=None,
     )
     deps = InstanceDeps(
-        llm=generator_client,
+        llm=router,
         sandbox=piston,
-        model=settings.llm.generator_model,
+        model=llm_settings.generator.model,
         options=settings.generation,
         limits=RunLimits(
             timeout_ms=settings.sandbox.run_timeout_ms,
             memory_bytes=settings.sandbox.run_memory_limit_bytes,
         ),
-        reasoning_effort=settings.llm.generator_reasoning_effort,
+        reasoning_effort=llm_settings.generator.reasoning_effort,
     )
 
     chosen = _selection(args.only)
@@ -364,8 +361,7 @@ async def main() -> int:
                 )
     finally:
         await piston.aclose()
-        await generator_client.aclose()
-        await judge_client.aclose()
+        await router.aclose()
     print(f"Вызовов судьи: {counting.calls}")
     return 0
 

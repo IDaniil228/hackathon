@@ -14,13 +14,15 @@ import uuid
 
 import pytest
 
-from taskgen.config import ScoringSettings
+from taskgen.config import SandboxSettings, ScoringSettings
 from taskgen.contracts import CaseOutcome, HiddenPayload, TaskKind, TestReport
 from taskgen.evaluation.judge import LLMJudge
 from taskgen.evaluation.service import AnswerInput, TaskInput, evaluate_task
 from taskgen.markers import has_marker
+from taskgen.sandbox.piston import PistonRunner
 from tests.evaluation.adversarial.dataset import Answer, AnswerSet, check, load_sets
 from tests.evaluation.fakes import FakeLLM
+from tests.seed.test_seed_templates import generate_cases, run_solution, solved_at_best
 
 SETS = load_sets()
 ANSWERS = [(answer_set, answer) for answer_set in SETS for answer in answer_set.answers]
@@ -134,6 +136,30 @@ async def test_code_without_passed_tests_scores_zero_whatever_the_judge(answer_s
     )
     assert outcome.score == 0.0
     assert llm.calls == []
+
+
+CODE_SETS = [answer_set for answer_set in SETS if answer_set.spec().kind is TaskKind.CODE]
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("answer_set", CODE_SETS, ids=[item.name for item in CODE_SETS])
+async def test_only_complete_code_answers_are_solved_at_best(answer_set):
+    # Верхняя граница балла: судья, анализаторы и замер скорости ставят 1. Неверный,
+    # частичный или медленный за пределами лимитов код не решён и так, а честный полный и
+    # медленный в пределах лимитов решён.
+    spec = answer_set.spec()
+    piston = PistonRunner(SandboxSettings())
+    try:
+        cases = await generate_cases(piston, spec, answer_set.seed)
+        verdicts = {}
+        for answer in answer_set.answers:
+            if answer.content.strip():
+                report = await run_solution(piston, spec, answer.content, cases)
+                verdicts[answer.id] = solved_at_best(spec, cases, report)
+    finally:
+        await piston.aclose()
+    expected = {item: answer_set.complete(answer_set.answer(item)) for item in verdicts}
+    assert verdicts == expected
 
 
 # --- Цитаты --------------------------------------------------------------------------------

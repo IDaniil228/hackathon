@@ -20,6 +20,9 @@ params:
       - каталог книг в API библиотеки
       - список комментариев к посту
       - журнал платежей в банковском API
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
 ---
 
 # Пагинация списка
@@ -110,6 +113,10 @@ def case(items, page, per_page, params):
     return {"input": args, "expected": expected_page(*args)}
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     top = params["max_per_page"]
     numbers = list(range(1, 48))
@@ -132,11 +139,12 @@ def generate(params, rng):
         case(list(range(top * 2)), "2", "1000", params),
         case([{"id": 1}, {"id": 2}, {"id": 3}], "2", "2", params),
     ]
+    cases = grouped("manual", cases)
     for _ in range(10):
         items = [rng.randint(0, 999) for _ in range(rng.randint(0, 120))]
         page = rng.choice(["", "0", str(rng.randint(1, 15)), "x"])
         per_page = rng.choice(["", "0", str(rng.randint(1, top + 20)), "-3"])
-        cases.append(case(items, page, per_page, params))
+        cases.append(dict(case(items, page, per_page, params), group="random"))
     return cases
 ```
 

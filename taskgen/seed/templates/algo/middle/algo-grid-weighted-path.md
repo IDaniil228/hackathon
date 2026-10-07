@@ -19,6 +19,10 @@ params:
       - курьер в парке, где газоны проходить дольше, чем дорожки
       - персонаж игры на карте с болотами
       - марсоход на равнине с участками рыхлого грунта
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 3, required: true}
 ---
 
 # Путь по полю с медленными клетками
@@ -142,6 +146,10 @@ def case(grid, start, finish, slow_cost):
     return {"input": [grid, list(start), list(finish), slow_cost], "expected": expected}
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     cases = [
         case(["..~", ".#~", "..."], [0, 0], [2, 2], 3),
@@ -152,6 +160,7 @@ def generate(params, rng):
         case([".~.", ".#.", "..."], [0, 0], [0, 2], 5),
         case(["....", "####", "...."], [2, 3], [0, 0], 4),
     ]
+    cases = grouped("manual", cases)
     for _ in range(6):
         rows, cols = rng.randint(1, 10), rng.randint(1, 12)
         while rows * cols > 150:
@@ -159,7 +168,7 @@ def generate(params, rng):
         grid = random_grid(rng, rows, cols, 0.25, 0.3)
         start = [rng.randrange(rows), rng.randrange(cols)]
         finish = [rng.randrange(rows), rng.randrange(cols)]
-        cases.append(case(grid, start, finish, rng.randint(2, 9)))
+        cases.append(dict(case(grid, start, finish, rng.randint(2, 9)), group="random"))
     side = params["side_max"]
     # Большое поле проверяет скорость, поэтому цель на нём должна быть достижима.
     for _ in range(10):
@@ -167,7 +176,7 @@ def generate(params, rng):
         big = case(grid, [0, 0], [side - 1, side - 1], rng.randint(2, 9))
         if big["expected"] != -1:
             break
-    cases.append(big)
+    cases.append(dict(big, group="stress"))
     return cases
 ```
 

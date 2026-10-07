@@ -48,7 +48,9 @@ class ModelStub:
         if "sentences" in properties:
             return json.dumps({"sentences": ["Кандидат решил задания."]}, ensure_ascii=False)
         if "items" in properties:
-            answer = ANSWER_IN_JUDGE.search(messages[-1].content).group(1)
+            # Провайдер без json_schema получает схему последним сообщением, после промпта.
+            prompt = "\n".join(message.content for message in messages)
+            answer = ANSWER_IN_JUDGE.search(prompt).group(1)
             quote = next(line for line in answer.splitlines() if line.strip())
             ids = properties["items"]["items"]["properties"]["item_id"]["enum"]
             items = [{"item_id": i, "verdict": "yes", "quotes": [quote]} for i in ids]

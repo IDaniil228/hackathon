@@ -13,7 +13,7 @@ from statistics import fmean
 from pydantic import BaseModel, Field
 
 from taskgen.config import ScoringSettings
-from taskgen.contracts import TaskKind, TestReport
+from taskgen.contracts import CaseGroup, TaskKind, TestCase, TestReport
 
 # Компонент балла и поле ScoringSettings, которое задаёт его вес.
 WEIGHT_OF = {
@@ -22,6 +22,8 @@ WEIGHT_OF = {
     "quality": "weight_quality",
     "performance": "weight_performance",
 }
+# Компоненты, которые меряют уже работающий код: их вклад идёт с множителем tests.
+SCALED_BY_TESTS = frozenset({"quality", "performance"})
 
 
 class Components(BaseModel):
@@ -43,8 +45,72 @@ def resolve_weights(settings: ScoringSettings, override: Mapping[str, float]) ->
     return weights
 
 
+def _group_results(report: TestReport, cases: list[TestCase]) -> dict[str | None, tuple[int, int]]:
+    """Пройдено и всего кейсов по группам; исходы и кейсы идут в одном порядке."""
+    if len(report.outcomes) != len(cases):
+        raise ValueError(f"Исходов {len(report.outcomes)}, а кейсов {len(cases)}")
+    results: dict[str | None, tuple[int, int]] = {}
+    for outcome, case in zip(report.outcomes, cases, strict=True):
+        passed, total = results.get(case.group, (0, 0))
+        results[case.group] = (passed + outcome.passed, total + 1)
+    return results
+
+
+def weighted_pass_rate(
+    report: TestReport, cases: list[TestCase], groups: Mapping[str, CaseGroup]
+) -> float:
+    """Компонент tests: доля пройденных кейсов, взвешенная по группам шаблона.
+
+    Вес задаёт долю группы целиком, внутри группы кейсы равноценны. Группа без кейсов в
+    этом экземпляре в знаменатель не входит. Без групп — доля пройденных кейсов.
+    """
+    # Нет исходов — тесты не запускались: доля 0, как у pass_rate.
+    if not groups or not report.outcomes:
+        return report.pass_rate
+    results = _group_results(report, cases)
+    if None in results:
+        raise ValueError("У задания объявлены группы кейсов, но не у всех кейсов есть группа")
+    weighted = sum(
+        groups[name].weight * passed / total for name, (passed, total) in results.items()
+    )
+    return weighted / sum(groups[name].weight for name in results)
+
+
+def failed_required_groups(
+    report: TestReport,
+    cases: list[TestCase],
+    groups: Mapping[str, CaseGroup],
+    *,
+    default: Iterable[str],
+) -> list[str]:
+    """Обязательные группы, в которых упал хотя бы один кейс, по алфавиту.
+
+    Группа обязательна, если так решил шаблон, а без его решения — если она есть в default
+    из ScoringSettings.required_case_groups. Группа без кейсов в экземпляре не проваливается.
+    Пустой отчёт значит, что тесты не запускались, и проваливает все обязательные группы.
+    """
+    defaults = set(default)
+    required = {
+        name
+        for name, group in groups.items()
+        if (group.required if group.required is not None else name in defaults)
+    }
+    if not required:
+        return []
+    if not report.outcomes:
+        return sorted(required & {case.group for case in cases})
+    results = _group_results(report, cases)
+    return sorted(
+        name for name in required if name in results and results[name][0] < results[name][1]
+    )
+
+
 def code_task_score(components: Components, weights: Mapping[str, float]) -> float:
     """Взвешенная сумма с жёстким гейтом: ни одного пройденного теста — балл 0.
+
+    Вклад качества и скорости умножается на компонент tests: аккуратный и быстрый код,
+    который почти не проходит тесты, не получает за них балл. Знаменатель множитель не
+    меняет, поэтому при всех пройденных тестах сумма та же, что без него.
 
     Вес неизмеренного компонента делится между измеренными. Иначе кандидат терял бы балл
     за то, что у сервиса нет анализатора для его языка или эталонного замера времени.
@@ -59,7 +125,10 @@ def code_task_score(components: Components, weights: Mapping[str, float]) -> flo
     total_weight = sum(weights[WEIGHT_OF[name]] for name in measured)
     if total_weight <= 0:
         raise ValueError("Все веса измеренных компонентов балла равны нулю")
-    weighted = sum(weights[WEIGHT_OF[name]] * value for name, value in measured.items())
+    weighted = sum(
+        weights[WEIGHT_OF[name]] * value * (components.tests if name in SCALED_BY_TESTS else 1.0)
+        for name, value in measured.items()
+    )
     return weighted / total_weight
 
 

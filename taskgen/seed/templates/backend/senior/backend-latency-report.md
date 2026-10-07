@@ -19,6 +19,10 @@ params:
       - бэкенд мобильного банка
       - API онлайн-кинотеатра
       - сервис бронирования отелей
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 1, required: true}
 ---
 
 # Отчёт о задержках по журналу доступа
@@ -181,6 +185,10 @@ def case(lines, records, percentile):
     return {"input": [lines, percentile], "expected": summarize(records, percentile)}
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     t = "2026-10-06T12:00:00Z"
     example = [
@@ -222,11 +230,12 @@ def generate(params, rng):
             96,
         ),
     ]
+    cases = grouped("manual", cases)
     for p in (50, 90, 99):
         lines, records = synthetic(rng, rng.randint(5, 60), 0.2)
-        cases.append(case(lines, records, p))
+        cases.append(dict(case(lines, records, p), group="random"))
     lines, records = synthetic(rng, params["n_max"], 0.1)
-    cases.append(case(lines, records, rng.choice([90, 95, 99])))
+    cases.append(dict(case(lines, records, rng.choice([90, 95, 99])), group="stress"))
     return cases
 ```
 

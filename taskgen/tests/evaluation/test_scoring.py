@@ -1,14 +1,16 @@
 import pytest
 
 from taskgen.config import ScoringSettings
-from taskgen.contracts import CaseOutcome, TaskKind, TestReport
+from taskgen.contracts import CaseGroup, CaseOutcome, TaskKind, TestCase, TestReport
 from taskgen.evaluation.scoring import (
     Components,
     code_task_score,
+    failed_required_groups,
     performance_score,
     quiz_score,
     resolve_weights,
     session_score,
+    weighted_pass_rate,
 )
 
 CODE, ESSAY, QUIZ = TaskKind.CODE, TaskKind.ESSAY, TaskKind.QUIZ
@@ -63,7 +65,20 @@ def test_zero_pass_rate_gates_score_to_zero_whatever_else():
 
 def test_small_nonzero_pass_rate_is_not_gated():
     components = Components(tests=0.1, rubric=1.0, quality=1.0, performance=1.0)
-    assert code_task_score(components, WEIGHTS) == pytest.approx(0.06 + 0.4)
+    # Качество и скорость идут с множителем доли тестов: 0.1 · (0.1 + 0.05).
+    assert code_task_score(components, WEIGHTS) == pytest.approx(0.06 + 0.25 + 0.015)
+
+
+def test_quality_and_speed_are_scaled_by_tests_share():
+    # Один кейс из 27 с идеальными качеством и скоростью: раньше они давали 0.15 балла.
+    tests = 1 / 27
+    components = Components(tests=tests, rubric=0.0, quality=1.0, performance=1.0)
+    assert code_task_score(components, WEIGHTS) == pytest.approx(0.75 * tests)
+
+
+def test_quality_scaling_keeps_full_score_reachable():
+    components = Components(tests=1.0, rubric=0.0, quality=1.0, performance=None)
+    assert code_task_score(components, WEIGHTS) == pytest.approx(0.7 / 0.95)
 
 
 def test_missing_component_redistributes_its_weight():
@@ -92,6 +107,93 @@ def test_all_weights_zero_is_rejected():
     zero = {name: 0.0 for name in WEIGHTS}
     with pytest.raises(ValueError):
         code_task_score(Components(tests=1.0), zero)
+
+
+GROUPS = {"manual": CaseGroup(weight=1), "stress": CaseGroup(weight=3)}
+
+
+def _cases(*groups: str | None) -> list[TestCase]:
+    return [TestCase(input=[n], expected=n, group=group) for n, group in enumerate(groups)]
+
+
+def _passed(*flags: bool) -> TestReport:
+    return TestReport(outcomes=[CaseOutcome(passed=flag) for flag in flags])
+
+
+def test_weighted_pass_rate_weighs_groups_not_cases():
+    # Три ручных кейса из трёх и ни одного стресс-кейса: доля кейсов 0.75, но вес
+    # стресс-группы 3 из 4 оставляет за тесты только 0.25.
+    cases = _cases("manual", "manual", "manual", "stress")
+    assert weighted_pass_rate(_passed(True, True, True, False), cases, GROUPS) == pytest.approx(
+        0.25
+    )
+    assert weighted_pass_rate(_passed(False, False, False, True), cases, GROUPS) == pytest.approx(
+        0.75
+    )
+
+
+def test_group_share_inside_group_is_share_of_its_cases():
+    cases = _cases("manual", "manual", "stress", "stress")
+    share = weighted_pass_rate(_passed(True, False, True, False), cases, GROUPS)
+    assert share == pytest.approx((1 * 0.5 + 3 * 0.5) / 4)
+
+
+def test_weighted_pass_rate_without_groups_is_pass_rate():
+    report = _passed(True, False, True)
+    assert weighted_pass_rate(report, _cases(None, None, None), {}) == pytest.approx(
+        report.pass_rate
+    )
+
+
+def test_declared_group_without_cases_leaves_the_denominator():
+    # Группа объявлена, но в этом экземпляре её кейсов нет: её вес не делает балл ниже.
+    cases = _cases("manual", "manual")
+    assert weighted_pass_rate(_passed(True, True), cases, GROUPS) == pytest.approx(1.0)
+
+
+def test_weighted_pass_rate_needs_an_outcome_per_case():
+    with pytest.raises(ValueError):
+        weighted_pass_rate(_passed(True), _cases("manual", "stress"), GROUPS)
+
+
+REQUIRED = {"manual": CaseGroup(weight=1), "stress": CaseGroup(weight=1, required=True)}
+STRESS_FAILED = _passed(True, True, False)
+STRESS_CASES = _cases("manual", "manual", "stress")
+
+
+def test_gate_is_off_without_required_groups():
+    assert failed_required_groups(STRESS_FAILED, STRESS_CASES, GROUPS, default=[]) == []
+    assert failed_required_groups(_passed(True, False), _cases(None, None), {}, default=[]) == []
+
+
+def test_template_required_group_fails_on_one_failed_case():
+    assert failed_required_groups(STRESS_FAILED, STRESS_CASES, REQUIRED, default=[]) == ["stress"]
+    passed = _passed(False, True, True)
+    assert failed_required_groups(passed, STRESS_CASES, REQUIRED, default=[]) == []
+
+
+def test_settings_default_requires_group_the_template_left_open():
+    assert failed_required_groups(STRESS_FAILED, STRESS_CASES, GROUPS, default=["stress"]) == [
+        "stress"
+    ]
+
+
+def test_template_can_switch_off_a_group_required_by_settings():
+    groups = {"manual": CaseGroup(weight=1), "stress": CaseGroup(weight=1, required=False)}
+    assert failed_required_groups(STRESS_FAILED, STRESS_CASES, groups, default=["stress"]) == []
+
+
+def test_required_group_absent_from_instance_does_not_fail():
+    cases = _cases("manual", "manual")
+    assert failed_required_groups(_passed(True, True), cases, GROUPS, default=["stress"]) == []
+
+
+def test_missing_test_report_fails_every_required_group():
+    report = TestReport(outcomes=[])
+    assert failed_required_groups(report, STRESS_CASES, REQUIRED, default=["manual"]) == [
+        "manual",
+        "stress",
+    ]
 
 
 def _report(walls: list[int | None], passed: list[bool], memory: int | None) -> TestReport:

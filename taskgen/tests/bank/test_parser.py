@@ -81,6 +81,39 @@ def test_scoring_override_with_known_weight_is_accepted():
     assert spec.scoring == {"weight_performance": 0.15}
 
 
+def test_case_groups_are_parsed_with_optional_required():
+    groups = {"manual": {"weight": 2, "required": True}, "random": {"weight": 0.5}}
+    spec = parse_template(make_template(case_groups=groups), source="t.md")
+    assert spec.case_groups["manual"].weight == 2 and spec.case_groups["manual"].required
+    # Не заданный required берётся из настройки required_case_groups при оценке.
+    assert spec.case_groups["random"].weight == 0.5 and spec.case_groups["random"].required is None
+
+
+def test_template_without_case_groups_has_none():
+    assert parse_template(make_template(), source="t.md").case_groups == {}
+
+
+@pytest.mark.parametrize(
+    "groups",
+    [
+        {"manual": {"weight": 0}},
+        {"manual": {"weight": -1}},
+        {"manual": {}},
+        {"manual": {"weight": 1, "share": 2}},
+        {"Bad Name": {"weight": 1}},
+        {"manual": 1},
+    ],
+)
+def test_invalid_case_groups_are_named(groups):
+    found = locations(make_template(case_groups=groups))
+    assert any(loc.startswith("case_groups") for loc in found), found
+
+
+def test_case_groups_belong_to_code_templates_only():
+    text = make_essay(case_groups={"manual": {"weight": 1}})
+    assert any(loc.startswith("case_groups") for loc in locations(text))
+
+
 def test_content_hash_is_sha256_of_whole_text():
     text = make_template()
     assert content_hash(text) == content_hash(text)

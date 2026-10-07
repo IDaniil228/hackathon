@@ -19,6 +19,10 @@ params:
       - веса посылок, которые курьер может взять парой
       - длительности песен для двухтрекового сета
       - время выполнения задач, которые запускают парами на одном сервере
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 3, required: true}
 ---
 
 # Пары с суммой не больше порога
@@ -82,6 +86,10 @@ def case(values, limit):
     return {"input": [values, limit], "expected": expected}
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     cases = [
         case([1, 2, 3, 4, 5], 6),
@@ -94,12 +102,13 @@ def generate(params, rng):
         case([-(10**9), -(10**9), 10**9, 10**9], -2 * 10**9),
         case([-5, -5, -5], -11),
     ]
+    cases = grouped("manual", cases)
     for _ in range(8):
         n = rng.randint(2, SMALL)
         values = [rng.randint(-50, 50) for _ in range(n)]
-        cases.append(case(values, rng.randint(-60, 60)))
+        cases.append(dict(case(values, rng.randint(-60, 60)), group="random"))
     big = [rng.randint(-(10**4), 10**4) for _ in range(params["n_max"])]
-    cases.append(case(big, rng.randint(-5000, 5000)))
+    cases.append(dict(case(big, rng.randint(-5000, 5000)), group="stress"))
     return cases
 ```
 

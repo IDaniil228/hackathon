@@ -5,7 +5,7 @@ import random
 
 import pytest
 
-from taskgen.contracts import RunLimits, RunResult
+from taskgen.contracts import CaseGroup, RunLimits, RunResult
 from taskgen.generation.harness import GeneratorError, generator_request, parse_generator_output
 from tests.generation.fakes import LocalSandbox
 
@@ -106,6 +106,55 @@ async def test_failing_generator_reports_stderr(source, fragment):
 def test_bad_output_shape_is_rejected(stdout, fragment):
     with pytest.raises(GeneratorError, match=fragment):
         parse_generator_output(RunResult(stdout=stdout, stderr="", exit_code=0))
+
+
+GROUPS = {
+    "manual": CaseGroup(weight=2, required=True),
+    "random": CaseGroup(weight=1),
+    "stress": CaseGroup(weight=1),
+}
+
+
+def _output(*groups: object) -> RunResult:
+    cases = [
+        {"input": [n], "expected": n} | ({"group": group} if group is not None else {})
+        for n, group in enumerate(groups)
+    ]
+    return RunResult(stdout=json.dumps(cases), stderr="", exit_code=0)
+
+
+def test_case_keeps_its_declared_group():
+    cases = parse_generator_output(_output("manual", "random", "manual"), GROUPS)
+    assert [case.group for case in cases] == ["manual", "random", "manual"]
+
+
+def test_cases_without_declared_groups_have_no_group():
+    assert [case.group for case in parse_generator_output(_output(None, None))] == [None, None]
+
+
+@pytest.mark.parametrize(
+    ("groups", "declared", "fragment"),
+    [
+        # Шаблон объявил группы: кейс без группы не получил бы веса.
+        (("manual", None), GROUPS, "без группы"),
+        (("manual", "smoke"), GROUPS, "smoke"),
+        # Группа в кейсе без объявления в шаблоне: вес группы неизвестен.
+        (("manual",), {}, "manual"),
+        # Обязательная группа без кейсов сделала бы гейт пустым.
+        (("random", "stress"), GROUPS, "manual"),
+        ((1,), GROUPS, "строк"),
+    ],
+)
+def test_case_groups_are_checked_against_template(groups, declared, fragment):
+    with pytest.raises(GeneratorError, match=fragment):
+        parse_generator_output(_output(*groups), declared)
+
+
+def test_group_required_only_by_settings_may_be_empty():
+    # required: null решает настройка при оценке. Группа без required: true — не дефект
+    # шаблона, если её кейсов нет в экземпляре.
+    groups = {"manual": CaseGroup(weight=1), "stress": CaseGroup(weight=1)}
+    assert len(parse_generator_output(_output("manual"), groups)) == 1
 
 
 def test_timeout_is_reported():

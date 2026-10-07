@@ -19,6 +19,10 @@ params:
       - рекламные слоты на одном экране с паузой между роликами
       - аренда одного автомобиля с обязательной мойкой между клиентами
       - задания для одного GPU-сервера с перезагрузкой между запусками
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 3, required: true}
 ---
 
 # Самый выгодный набор работ
@@ -98,8 +102,12 @@ def random_jobs(rng, n, horizon, longest, top):
     return jobs
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
-    cases = [
+    manual = [
         case([(1, 3, 50), (2, 5, 20), (4, 6, 70), (6, 7, 60)], 0),
         case([(1, 3, 50), (2, 5, 20), (4, 6, 70), (6, 7, 60)], 1),
         case([], 5),
@@ -110,13 +118,15 @@ def generate(params, rng):
         case([(5, 9, 7), (5, 9, 7), (5, 9, 3)], 0),
         case([(0, 1, 1), (1, 2, 1), (2, 3, 1), (0, 3, 2)], 0),
     ]
+    randoms = []
     for _ in range(7):
         jobs = random_jobs(rng, rng.randint(2, 12), 30, 8, 20)
-        cases.append(case(jobs, rng.randint(0, 3)))
-    cases.append(case(random_jobs(rng, 300, 5000, 200, 1000), rng.randint(0, 50)))
+        randoms.append(case(jobs, rng.randint(0, 3)))
+    # Уже 300 работ не по силам перебору подмножеств.
+    stress = [case(random_jobs(rng, 300, 5000, 200, 1000), rng.randint(0, 50))]
     n = params["n_max"]
-    cases.append(case(random_jobs(rng, n, 10**6, 20000, 10**6), rng.randint(0, 1000)))
-    return cases
+    stress.append(case(random_jobs(rng, n, 10**6, 20000, 10**6), rng.randint(0, 1000)))
+    return grouped("manual", manual) + grouped("random", randoms) + grouped("stress", stress)
 ```
 
 ## Рубрика

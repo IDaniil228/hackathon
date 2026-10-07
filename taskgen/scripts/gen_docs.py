@@ -307,21 +307,44 @@ def render_settings() -> str:
     prefix, delimiter = config["env_prefix"], config["env_nested_delimiter"]
     missing: list[str] = []
 
-    def rows(properties: dict[str, Any], path: list[str]) -> list[list[str]]:
+    def ref(schema: dict[str, Any]) -> dict[str, Any] | None:
+        return defs[schema["$ref"].rsplit("/", 1)[-1]] if "$ref" in schema else None
+
+    def rows(
+        properties: dict[str, Any], path: list[str], defaults: dict[str, Any] | None = None
+    ) -> list[list[str]]:
+        """Строки полей; вложенная модель и словарь моделей раскрываются до листьев.
+
+        defaults — значение по умолчанию объемлющего поля: у вложенной модели оно задаёт
+        умолчания её полей вместо умолчаний самого класса.
+        """
         result = []
         for name, field in properties.items():
             dotted = ".".join([*path, name])
             if not field.get("description"):
                 missing.append(dotted)
+            if defaults is not None and name in defaults:
+                default = code(json.dumps(defaults[name], ensure_ascii=False))
+            else:
+                default = default_value(field)
+            nested = ref(field)
+            items = ref(field.get("additionalProperties") or {})
             result.append(
                 [
                     code(dotted),
                     code(prefix + delimiter.join([*path, name]).upper()),
-                    schema_type(field, code),
-                    default_value(field),
+                    schema_type(field, code)
+                    if items is None
+                    else f"словарь {code('имя')} → объект",
+                    "" if nested or items else default,
                     cell(field.get("description")),
                 ]
             )
+            if nested is not None:
+                result += rows(nested["properties"], [*path, name], field.get("default"))
+            elif items is not None:
+                for key, value in field.get("default", {}).items():
+                    result += rows(items["properties"], [*path, name, key], value)
         return result
 
     head = ["Поле", "Переменная окружения", "Тип", "По умолчанию", "Описание"]

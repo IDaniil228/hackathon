@@ -39,7 +39,7 @@ from typing import Any
 import yaml
 
 from taskgen.bank.parser import find_phrases, normalize_phrase, parse_template
-from taskgen.config import Settings
+from taskgen.config import ChatRole, LLMSettings, Settings
 from taskgen.contracts import ChatMessage, TemplateSpec
 from taskgen.evaluation.evidence import split_sentences
 from taskgen.evaluation.quotes import EmbeddingCache, QuoteRelevance
@@ -50,7 +50,7 @@ from taskgen.generation.essay import (
     embedding_scores,
     filled_facts,
 )
-from taskgen.llm import OpenAICompatibleClient
+from taskgen.llm import ProviderRouter
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "seed" / "templates"
@@ -459,10 +459,12 @@ async def run(args: argparse.Namespace) -> int:
     )
     log(f"tune: {tune}\ntest: {test}")
 
-    settings = Settings().llm.model_copy(update={"timeout_seconds": args.timeout})
-    client = OpenAICompatibleClient(settings)
+    base = Settings().llm.with_timeout(args.timeout)
+    checker = ChatRole(model=args.checker_model, reasoning_effort=args.reasoning_effort)
+    settings = LLMSettings.model_validate({**dict(base), "checker": checker})
+    client = ProviderRouter.from_settings(settings, roles=("checker", "embedding"))
     llm = CountingLLM(client)
-    log(f"эмбеддер {client.model_name} по адресу {settings.base_url}")
+    log(f"эмбеддер {settings.embedding.model}, проверяльщик {settings.checker.model}")
 
     started = time.perf_counter()
     scores = await all_scores(cases, client)
@@ -788,7 +790,7 @@ def quote_table(report: dict[str, Any], marks: list[float]) -> str:
 
 async def run_quotes(args: argparse.Namespace) -> int:
     pairs = quote_pairs()
-    client = OpenAICompatibleClient(Settings().llm.model_copy(update={"timeout_seconds": 600.0}))
+    client = ProviderRouter.from_settings(Settings().llm.with_timeout(600.0), roles=("embedding",))
     log(f"пар {len(pairs)}, эмбеддер {client.model_name}")
     # Сходство считает тот же код, что и сервис: склейка цитат и векторы пунктов из кэша.
     relevance = QuoteRelevance(threshold=0.0, embedder=client)
@@ -836,7 +838,9 @@ def main(argv: list[str] | None = None) -> int:
     build.add_argument("--check", action="store_true", help="только сверить cases.json")
     bench = sub.add_parser("run", help="прогнать режимы и напечатать таблицу")
     bench.add_argument("--out", required=True, help="куда записать результаты в JSON")
-    bench.add_argument("--checker-model", required=True, help="модель LLM-проверяльщика")
+    bench.add_argument(
+        "--checker-model", required=True, help="модель LLM-проверяльщика: провайдер/модель"
+    )
     # С рассуждениями по умолчанию локальная модель тратила на них весь ответ и возвращала
     # пустой content, поэтому по умолчанию рассуждения выключены.
     bench.add_argument("--reasoning-effort", default="none")
