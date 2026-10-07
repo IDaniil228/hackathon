@@ -3,12 +3,13 @@ import re
 import pytest
 
 from taskgen.bank.parser import TemplateError, content_hash, parse_template, unclosed_fence
-from taskgen.contracts import TaskKind
+from taskgen.contracts import IOKind, TaskKind
 from tests.bank.factory import (
     REFERENCE,
     SHORT_RIGHT,
     make_essay,
     make_quiz,
+    make_stdio,
     make_template,
     solution,
 )
@@ -168,6 +169,104 @@ def test_missing_required_field_is_named(field):
 
 def test_code_template_requires_runtime():
     assert "runtime" in locations(make_template(runtime=None))
+
+
+# --- Вид задания с кодом и проверка ответа ------------------------------------------------
+
+CHECKER_SECTION = (
+    "```python\nimport sys\n_, out, ans = (open(n).read().split() for n in sys.argv[1:4])\n"
+    "sys.exit(0 if sorted(out) == sorted(ans) else 1)\n```"
+)
+
+
+def test_code_template_requires_io():
+    assert "io" in locations(make_template(io=None))
+
+
+def test_unknown_io_is_named():
+    assert "io" in locations(make_template(io="socket"))
+
+
+@pytest.mark.parametrize("maker", [make_essay, make_quiz])
+def test_io_belongs_to_code_templates_only(maker):
+    assert "io" in locations(maker(io="stdio"))
+
+
+def test_function_template_checks_answers_as_json_by_default():
+    spec = parse_template(make_template(), source="t.md")
+    assert spec.io is IOKind.FUNCTION
+    assert spec.check.mode == "json" and spec.check.checker is None
+
+
+def test_stdio_template_is_parsed_without_signature():
+    spec = parse_template(make_stdio(), source="s.md")
+    assert spec.io is IOKind.STDIO
+    assert spec.entrypoint is None
+    assert spec.check.mode == "tokens"
+    assert [s.id for s in spec.solutions] == ["reference", "skips-empty"]
+
+
+def test_stdio_template_must_not_carry_signature():
+    text = make_stdio(sections={"Сигнатура": "```\nmain\n```"})
+    assert "раздел «Сигнатура»" in locations(text)
+
+
+def test_function_template_requires_signature():
+    assert "раздел «Сигнатура»" in locations(make_template(sections={"Сигнатура": None}))
+
+
+def test_stdio_python_solution_still_needs_valid_syntax():
+    broken = make_stdio(
+        sections={
+            "Решения": solution("reference", "+", "print(")
+            + "\n\n"
+            + solution("bad", "-", "print(1)\n")
+        }
+    )
+    assert "раздел «Решения», решение 'reference'" in locations(broken)
+
+
+@pytest.mark.parametrize("mode", ["tokens", "exact", "float", "json"])
+def test_stdio_takes_any_builtin_mode(mode):
+    assert parse_template(make_stdio(check=mode), source="s.md").check.mode == mode
+
+
+@pytest.mark.parametrize("mode", ["tokens", "exact", "float"])
+def test_function_answers_are_json_so_text_modes_are_rejected(mode):
+    assert "check" in locations(make_template(check=mode))
+
+
+def test_unknown_check_mode_is_named():
+    assert "check" in locations(make_stdio(check="fuzzy"))
+
+
+@pytest.mark.parametrize("maker", [make_template, make_stdio])
+def test_checker_mode_takes_program_from_its_section(maker):
+    spec = parse_template(
+        maker(check="checker", sections={"Проверяльщик": CHECKER_SECTION}), source="t.md"
+    )
+    assert spec.check.mode == "checker"
+    assert spec.check.checker.runtime == "python"
+    assert "sorted(out)" in spec.check.checker.code
+
+
+def test_checker_mode_requires_its_section():
+    assert "раздел «Проверяльщик»" in locations(make_stdio(check="checker"))
+
+
+def test_checker_section_needs_checker_mode():
+    text = make_stdio(sections={"Проверяльщик": CHECKER_SECTION})
+    assert "раздел «Проверяльщик»" in locations(text)
+
+
+def test_checker_block_names_its_runtime():
+    text = make_stdio(check="checker", sections={"Проверяльщик": "```\nexit 0\n```"})
+    assert "раздел «Проверяльщик»" in locations(text)
+
+
+def test_checker_section_belongs_to_code_templates_only():
+    text = make_essay() + f"\n## Проверяльщик\n\n{CHECKER_SECTION}\n"
+    assert "раздел «Проверяльщик»" in locations(text)
 
 
 def test_essay_must_not_carry_runtime():

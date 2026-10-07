@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,11 +22,8 @@ from pydantic import BaseModel
 
 from taskgen.contracts import (
     ChatMessage,
-    IOKind,
     LLMClient,
-    OutputCheck,
     ReasoningEffort,
-    RunLimits,
     SandboxRunner,
     TestCase,
     TestRunRequest,
@@ -181,10 +178,11 @@ async def solve_code(
     environment: str,
     examples: list[TestCase],
     cases: list[TestCase],
-    limits: RunLimits,
+    run_request: Callable[[str], TestRunRequest],
 ) -> SolverVerdict:
     """Годно ли условие: решение, написанное только по публичной части, проходит все кейсы.
 
+    run_request строит запрос прогона решения на всех кейсах так, как задание проверяется.
     Причина отказа называет только число непройденных кейсов: писатель условия не видел
     скрытых кейсов и не должен увидеть их через причину.
     """
@@ -203,17 +201,8 @@ async def solve_code(
         except StructuredOutputError:
             reason = "решатель не ответил по схеме, условие не проверено"
             continue
-        request = TestRunRequest(
-            runtime=runtime,
-            io=IOKind.FUNCTION,
-            entrypoint=entrypoint,
-            solution=reply.solution,
-            cases=cases,
-            check=OutputCheck(mode="json"),
-            limits=limits,
-        )
         try:
-            report = await sandbox.run_tests(request)
+            report = await sandbox.run_tests(run_request(reply.solution))
         # PistonRunner сообщает об отказе Piston через SandboxServiceError, а не через httpx.
         except (httpx.HTTPError, SandboxServiceError) as error:
             raise SolverSandboxError("Песочница недоступна для решения решателя") from error

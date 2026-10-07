@@ -30,7 +30,6 @@ from taskgen.contracts import (
     JudgeRequest,
     JudgeResult,
     LLMClient,
-    OutputCheck,
     RunLimits,
     SandboxRunner,
     SessionStatus,
@@ -449,13 +448,14 @@ async def check_code(
     """Прогон тестов в песочнице и анализаторы: то, что хранится в ответе с кодом."""
     if ev.sandbox is None:
         raise SandboxUnavailableError("Песочница для прогона тестов не настроена")
+    assert hidden.io is not None and hidden.check is not None
     request = TestRunRequest(
         runtime=hidden.runtime or "",
-        io=IOKind.FUNCTION,
-        entrypoint=hidden.entrypoint or "",
+        io=hidden.io,
+        entrypoint=hidden.entrypoint,
         solution=content,
         cases=hidden.cases,
-        check=OutputCheck(mode="json"),
+        check=hidden.check,
         limits=RunLimits(
             timeout_ms=ev.settings.sandbox.run_timeout_ms,
             memory_bytes=ev.settings.sandbox.run_memory_limit_bytes,
@@ -498,7 +498,10 @@ async def submit_answer(ev: Evaluator, task_id: uuid.UUID, submission: Submissio
     content = _answer_content(task, submission)
 
     if task.kind == TaskKind.CODE:
-        if not (hidden.cases and hidden.entrypoint and hidden.runtime):
+        needs_entrypoint = hidden.io is IOKind.FUNCTION
+        if not (hidden.cases and hidden.runtime and hidden.io and hidden.check) or (
+            needs_entrypoint and not hidden.entrypoint
+        ):
             raise BrokenTaskError(f"У задания {task.id} нет скрытых тестов")
         if language and not _same_language(language, hidden.runtime):
             raise InvalidAnswerError(

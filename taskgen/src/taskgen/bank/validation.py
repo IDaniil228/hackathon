@@ -28,8 +28,6 @@ import httpx
 from taskgen.bank.parser import TemplateIssue
 from taskgen.config import ImportCheckSettings, ScoringSettings, Settings
 from taskgen.contracts import (
-    IOKind,
-    OutputCheck,
     RunLimits,
     SandboxRunner,
     TaskKind,
@@ -80,16 +78,25 @@ async def run_solution(
     cases: list[TestCase],
     limits: RunLimits,
 ) -> TestReport:
-    request = TestRunRequest(
+    request = solution_request(spec, solution, cases, limits)
+    return await _call(sandbox.run_tests(request))
+
+
+def solution_request(
+    spec: TemplateSpec, solution: str, cases: list[TestCase], limits: RunLimits
+) -> TestRunRequest:
+    """Запрос прогона решения на кейсах так, как задание с кодом шаблона его проверяет."""
+    if spec.io is None or spec.check is None:
+        raise SandboxError(f"шаблон {spec.name} без вида io или режима проверки")
+    return TestRunRequest(
         runtime=spec.runtime or "",
-        io=IOKind.FUNCTION,
-        entrypoint=spec.entrypoint or "",
+        io=spec.io,
+        entrypoint=spec.entrypoint,
         solution=solution,
         cases=cases,
-        check=OutputCheck(mode="json"),
+        check=spec.check,
         limits=limits,
     )
-    return await _call(sandbox.run_tests(request))
 
 
 async def _call[T](call: Any) -> T:

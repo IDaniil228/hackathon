@@ -161,7 +161,11 @@ class TemplateSpec(BaseModel):
     # Переопределение весов балла из ScoringSettings, ключи совпадают с именами полей.
     scoring: dict[str, float] = {}
     generator_prompt: str
-    # Только для kind=code: генератор тестов и имя функции, которую пишет кандидат.
+    # Только для kind=code: вид задания и режим проверки ответа. Режим по умолчанию
+    # подставляет разбор шаблона: json для function, tokens для stdio.
+    io: IOKind | None = None
+    check: OutputCheck | None = None
+    # Только для kind=code: генератор тестов; имя функции кандидата — только для io=function.
     entrypoint: str | None = None
     test_generator: str | None = None
     # Только для kind=code: группы, которые генератор тестов ставит кейсам в поле group.
@@ -325,15 +329,18 @@ class SolverRecord(BaseModel):
 class HiddenPayload(BaseModel):
     """Содержимое tasks.hidden_payload: пишет генерация, читает оценка, наружу не уходит.
 
-    Для kind=code обязательны cases, entrypoint и runtime. reference_report — прогон эталона
-    на тех же cases в той же песочнице: без него скорость и память не оцениваются.
-    scoring — переопределение весов балла из TemplateSpec.scoring, case_groups — группы
-    кейсов из TemplateSpec.case_groups: веса групп кандидат не видит.
+    Для kind=code обязательны cases, runtime, io и check, а для io=function ещё entrypoint.
+    reference_report — прогон эталона на тех же cases в той же песочнице: без него скорость
+    и память не оцениваются. scoring — переопределение весов балла из TemplateSpec.scoring,
+    case_groups — группы кейсов из TemplateSpec.case_groups: веса групп кандидат не видит.
+    check может нести свой проверяльщик шаблона, поэтому лежит здесь, а не в публичной части.
     """
 
     cases: list[TestCase] = []
+    io: IOKind | None = None
     entrypoint: str | None = None
     runtime: str | None = None
+    check: OutputCheck | None = None
     rubric: list[RubricItem] = []
     reference_report: TestReport | None = None
     scoring: dict[str, float] = {}

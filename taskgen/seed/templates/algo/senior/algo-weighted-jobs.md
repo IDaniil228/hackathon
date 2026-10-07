@@ -8,6 +8,7 @@ grade: senior
 skills: [python, dynamic-programming, binary-search]
 kind: code
 runtime: python
+io: function
 difficulty: 7
 expected_minutes: 35
 params:

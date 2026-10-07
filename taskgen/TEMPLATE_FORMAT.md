@@ -14,6 +14,8 @@ grade: junior                    # код грейда из таблицы grade
 skills: [python, two-pointers]   # коды навыков из таблицы skills
 kind: code                       # code, essay или quiz
 runtime: python                  # окружение песочницы, только для code
+io: function                     # только для code: function или stdio
+check: json                      # необязательно, только для code: режим проверки ответа
 difficulty: 3                    # 1..10, единая шкала для всех грейдов
 expected_minutes: 15
 params:                          # значения выбирает код по seed, а не LLM

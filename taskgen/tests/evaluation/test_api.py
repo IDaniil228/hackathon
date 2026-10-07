@@ -108,8 +108,10 @@ class World:
                     if spec["kind"] == "code":
                         hidden |= {
                             "cases": [{"input": [1, 2], "expected": SECRET_EXPECTED}],
+                            "io": "function",
                             "entrypoint": "add",
                             "runtime": "python",
+                            "check": {"mode": "json"},
                             "reference_report": _report([True]).model_dump(),
                         } | spec.get("hidden", {})
                     public = {"signature": "def add(a, b)"}

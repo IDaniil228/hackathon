@@ -8,6 +8,7 @@ grade: middle
 skills: [cpp, greedy, sorting]
 kind: code
 runtime: cpp
+io: function
 difficulty: 5
 expected_minutes: 25
 params:

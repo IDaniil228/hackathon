@@ -64,8 +64,10 @@ def _task(answer_set: AnswerSet, answer: Answer, report: TestReport | None) -> T
     spec = answer_set.spec()
     hidden = HiddenPayload(
         cases=[{"input": [0], "expected": 0}] if spec.kind is TaskKind.CODE else [],
+        io=spec.io,
         entrypoint=spec.entrypoint,
         runtime=spec.runtime,
+        check=spec.check,
         rubric=spec.rubric,
     )
     return TaskInput(

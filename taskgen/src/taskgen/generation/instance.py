@@ -19,7 +19,12 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field
 
-from taskgen.bank.validation import generate_cases, reference_problem, run_solution
+from taskgen.bank.validation import (
+    generate_cases,
+    reference_problem,
+    run_solution,
+    solution_request,
+)
 from taskgen.config import GenerationSettings
 from taskgen.contracts import (
     ChatMessage,
@@ -460,7 +465,7 @@ async def _code(
                     environment=environment,
                     examples=public_cases,
                     cases=cases,
-                    limits=deps.limits,
+                    run_request=lambda code: solution_request(spec, code, cases, deps.limits),
                 )
             except SolverSandboxError as error:
                 raise SandboxUnavailableError("Песочница недоступна, повторите позже") from error
@@ -480,8 +485,10 @@ async def _code(
         ),
         hidden=HiddenPayload(
             cases=cases,
+            io=spec.io,
             entrypoint=spec.entrypoint,
             runtime=spec.runtime,
+            check=spec.check,
             rubric=spec.rubric,
             reference_report=report,
             scoring=spec.scoring,

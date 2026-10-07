@@ -8,6 +8,7 @@ grade: senior
 skills: [python, observability, http-api]
 kind: code
 runtime: python
+io: function
 difficulty: 6
 expected_minutes: 40
 params:

@@ -8,6 +8,7 @@ grade: senior
 skills: [python, caching]
 kind: code
 runtime: python
+io: function
 difficulty: 7
 expected_minutes: 40
 params:
