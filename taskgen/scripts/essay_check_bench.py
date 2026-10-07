@@ -41,6 +41,7 @@ import yaml
 from taskgen.bank.parser import find_phrases, normalize_phrase, parse_template
 from taskgen.config import Settings
 from taskgen.contracts import ChatMessage, TemplateSpec
+from taskgen.evaluation.evidence import split_sentences
 from taskgen.evaluation.quotes import EmbeddingCache, QuoteRelevance
 from taskgen.generation.essay import (
     EssayCheckOptions,
@@ -48,7 +49,6 @@ from taskgen.generation.essay import (
     check_essay_scenario,
     embedding_scores,
     filled_facts,
-    split_sentences,
 )
 from taskgen.llm import OpenAICompatibleClient
 
