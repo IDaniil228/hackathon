@@ -5,11 +5,18 @@ import random
 
 import pytest
 
-from taskgen.contracts import CaseGroup, RunLimits, RunResult
-from taskgen.generation.harness import GeneratorError, generator_request, parse_generator_output
+from taskgen.contracts import CaseGroup, IOKind, RunLimits, RunResult
+from taskgen.generation.harness import GeneratorError, generator_request
+from taskgen.generation.harness import parse_generator_output as parse_any
 from tests.generation.fakes import LocalSandbox
 
 LIMITS = RunLimits(timeout_ms=5000, memory_bytes=256 * 1024 * 1024)
+FUNCTION, STDIO = IOKind.FUNCTION, IOKind.STDIO
+
+
+def parse_generator_output(result, groups=None, *, io=FUNCTION):
+    return parse_any(result, groups, io=io)
+
 
 GENERATOR = """
 def generate(params, rng):
@@ -167,3 +174,48 @@ def test_request_carries_source_in_stdin_not_in_files():
     payload = json.loads(request.stdin)
     assert payload == {"source": GENERATOR, "params": {"n": 1}, "seed": 3}
     assert GENERATOR not in "".join(request.files.values())
+
+
+# --- Кейсы задачи stdio --------------------------------------------------------------------
+
+
+def _stdio(*cases: dict) -> list:
+    stdout = json.dumps(list(cases))
+    return parse_generator_output(RunResult(stdout=stdout, stderr="", exit_code=0), io=STDIO)
+
+
+def test_stdio_case_carries_stdin_files_and_expected_text():
+    [case] = _stdio({"stdin": "GET /\n", "files": {"access.log": "x\n"}, "expected": "1\n"})
+    assert (case.stdin, case.files, case.expected) == ("GET /\n", {"access.log": "x\n"}, "1\n")
+    assert case.input is None
+
+
+def test_stdio_case_without_files_has_none():
+    assert _stdio({"stdin": "", "expected": "0"})[0].files == {}
+
+
+@pytest.mark.parametrize(
+    ("case", "fragment"),
+    [
+        ({"expected": "1"}, "stdin"),
+        ({"stdin": 5, "expected": "1"}, "stdin"),
+        ({"stdin": "1"}, "expected"),
+        # Вывод программы — текст: число или список сравнивать не с чем.
+        ({"stdin": "1", "expected": 1}, "expected"),
+        ({"stdin": "1", "expected": "1", "input": [1]}, "input"),
+        ({"stdin": "1", "expected": "1", "files": ["a"]}, "files"),
+        ({"stdin": "1", "expected": "1", "files": {"a.txt": 1}}, "files"),
+        ({"stdin": "1", "expected": "1", "files": {"../etc/x": "1"}}, "имя"),
+        ({"stdin": "1", "expected": "1", "files": {".hidden": "1"}}, "имя"),
+        ({"stdin": "1", "expected": "1", "files": {"dir/a.txt": "1"}}, "имя"),
+    ],
+)
+def test_bad_stdio_case_is_rejected(case, fragment):
+    with pytest.raises(GeneratorError, match=fragment):
+        _stdio(case)
+
+
+def test_function_case_must_not_carry_stdin():
+    stdout = json.dumps([{"input": [1], "stdin": "1", "expected": 1}])
+    with pytest.raises(GeneratorError, match="stdin"):
+        parse_generator_output(RunResult(stdout=stdout, stderr="", exit_code=0), io=FUNCTION)

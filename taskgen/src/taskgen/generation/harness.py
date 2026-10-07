@@ -11,22 +11,27 @@
 - print внутри generate уходит в stderr и не портит вывод; ошибка генератора даёт
   ненулевой код выхода и traceback в stderr.
 
-Кейс — {"input": [аргументы entrypoint], "expected": значение}. input — массив позиционных
-аргументов, для Python допустим и объект именованных; так его понимает песочница в run_tests.
-Если шаблон объявил группы кейсов, у каждого кейса есть ещё "group" — имя одной из них.
+Кейс задачи io=function — {"input": [аргументы entrypoint], "expected": значение}. input —
+массив позиционных аргументов, для Python допустим и объект именованных; так его понимает
+драйвер в песочнице. Кейс задачи io=stdio — {"stdin": текст, "expected": текст вывода} и
+необязательно "files": {имя: текст} — файлы рядом с программой. Если шаблон объявил группы
+кейсов, у каждого кейса есть ещё "group" — имя одной из них.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from typing import Any
 
 from pydantic import ValidationError
 
-from taskgen.contracts import CaseGroup, RunLimits, RunRequest, RunResult, TestCase
+from taskgen.contracts import CaseGroup, IOKind, RunLimits, RunRequest, RunResult, TestCase
 
 HARNESS_FILE = "main.py"
+# Имя файла кейса — одно имя в каталоге запуска: без каталогов и без скрытых файлов.
+FILE_NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
 
 HARNESS = """\
 import contextlib
@@ -69,10 +74,10 @@ def generator_request(
 
 
 def parse_generator_output(
-    result: RunResult, groups: Mapping[str, CaseGroup] | None = None
+    result: RunResult, groups: Mapping[str, CaseGroup] | None = None, *, io: IOKind
 ) -> list[TestCase]:
-    """Кейсы из вывода генератора; groups — TemplateSpec.case_groups шаблона."""
-    cases = _parse_cases(result)
+    """Кейсы из вывода генератора; groups — TemplateSpec.case_groups, io — вид задания."""
+    cases = _parse_cases(result, io)
     _check_groups(cases, groups or {})
     return cases
 
@@ -94,7 +99,7 @@ def _check_groups(cases: list[TestCase], groups: Mapping[str, CaseGroup]) -> Non
         raise GeneratorError(f"обязательные группы без кейсов: {', '.join(empty)}")
 
 
-def _parse_cases(result: RunResult) -> list[TestCase]:
+def _parse_cases(result: RunResult, io: IOKind) -> list[TestCase]:
     if result.timed_out:
         raise GeneratorError("генератор тестов не уложился во время прогона")
     if result.exit_code != 0:
@@ -109,14 +114,12 @@ def _parse_cases(result: RunResult) -> list[TestCase]:
     if not raw:
         raise GeneratorError("генератор тестов вернул пустой список кейсов")
     cases = []
+    check = _check_function_case if io is IOKind.FUNCTION else _check_stdio_case
+    fields = "input и expected" if io is IOKind.FUNCTION else "stdin и expected"
     for number, item in enumerate(raw, start=1):
-        if not isinstance(item, dict) or "input" not in item or "expected" not in item:
-            raise GeneratorError(f"кейс {number}: нужен объект с полями input и expected")
-        if not isinstance(item["input"], list | dict):
-            raise GeneratorError(
-                f"кейс {number}: input — массив аргументов функции или объект "
-                "именованных аргументов"
-            )
+        if not isinstance(item, dict):
+            raise GeneratorError(f"кейс {number}: нужен объект с полями {fields}")
+        check(number, item)
         if not isinstance(item.get("group", ""), str):
             raise GeneratorError(f"кейс {number}: group — имя группы строкой")
         try:
@@ -124,3 +127,32 @@ def _parse_cases(result: RunResult) -> list[TestCase]:
         except ValidationError as error:
             raise GeneratorError(f"кейс {number}: {error}") from error
     return cases
+
+
+def _check_function_case(number: int, item: dict[str, Any]) -> None:
+    if "input" not in item or "expected" not in item:
+        raise GeneratorError(f"кейс {number}: нужен объект с полями input и expected")
+    if not isinstance(item["input"], list | dict):
+        raise GeneratorError(
+            f"кейс {number}: input — массив аргументов функции или объект именованных аргументов"
+        )
+    extra = sorted({"stdin", "files"} & set(item))
+    if extra:
+        raise GeneratorError(f"кейс {number}: поле {extra[0]} — только у задания io=stdio")
+
+
+def _check_stdio_case(number: int, item: dict[str, Any]) -> None:
+    if not isinstance(item.get("stdin"), str):
+        raise GeneratorError(f"кейс {number}: stdin — вход программы строкой")
+    if not isinstance(item.get("expected"), str):
+        raise GeneratorError(f"кейс {number}: expected — ожидаемый вывод программы строкой")
+    if "input" in item:
+        raise GeneratorError(f"кейс {number}: поле input — только у задания io=function")
+    files = item.get("files", {})
+    if not isinstance(files, dict) or not all(isinstance(v, str) for v in files.values()):
+        raise GeneratorError(f"кейс {number}: files — объект имя файла → текст")
+    for name in files:
+        if not FILE_NAME.match(name):
+            raise GeneratorError(
+                f"кейс {number}: имя файла {name!r} — одно имя без каталогов, не скрытое"
+            )

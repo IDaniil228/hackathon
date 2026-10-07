@@ -13,7 +13,16 @@ from taskgen.bank.validation import MIN_CASES, TemplateValidator, static_problem
 from taskgen.config import ImportCheckSettings, ScoringSettings
 from taskgen.contracts import RunLimits, TemplateSpec
 from taskgen.sandbox.errors import SandboxServiceError
-from tests.bank.factory import REFERENCE, SHORT_RIGHT, make_essay, make_template, solution
+from tests.bank.factory import (
+    REFERENCE,
+    SHORT_RIGHT,
+    STDIO_REFERENCE,
+    STDIO_SKIPS_EMPTY,
+    make_essay,
+    make_stdio,
+    make_template,
+    solution,
+)
 from tests.generation.fakes import LocalSandbox
 
 LIMITS = RunLimits(timeout_ms=5000, memory_bytes=256 * 1024 * 1024)
@@ -222,6 +231,89 @@ async def test_unknown_runtime_is_a_template_issue_not_a_sandbox_failure():
         scoring=ScoringSettings(),
     ).check([("t.md", spec_of(text))])
     assert issues and "brainfuck" in issues[0].message
+
+
+# --- Задачи stdio ----------------------------------------------------------------------------
+
+
+async def test_valid_stdio_template_passes_and_runs_programs_per_case():
+    sandbox = LocalSandbox()
+    spec = spec_of(make_stdio())
+    assert await validator(sandbox, seeds=1).check([("s.md", spec)]) == []
+    programs = {run.files.get("solution.py") for run in sandbox.runs}
+    assert {STDIO_REFERENCE.rstrip("\n"), STDIO_SKIPS_EMPTY.rstrip("\n")} <= programs
+
+
+async def test_stdio_wrong_solution_that_passes_is_named():
+    text = make_stdio(
+        sections={
+            "Решения": solution("reference", "+", STDIO_REFERENCE)
+            + "\n\n"
+            + solution("same", "-", STDIO_REFERENCE, "Совпадает с верным")
+        }
+    )
+    issues = await issues_of(text, seeds=1)
+    assert any("неверное решение 'same'" in i.message for i in issues)
+
+
+async def test_stdio_constant_output_must_be_caught():
+    # Все кейсы ждут один вывод: программа, которая печатает его не читая вход, проходит.
+    generator = (
+        "```python\n"
+        "def generate(params, rng):\n"
+        "    return [{'stdin': f'{i} {-i}\\n', 'expected': '0\\n', 'group': 'main'}\n"
+        "            for i in range(6)]\n"
+        "```"
+    )
+    issues = await issues_of(make_stdio(sections={"Тесты": generator}), seeds=1)
+    messages = " ".join(i.message for i in issues)
+    assert "все кейсы ждут один ответ" in messages
+    assert "решение-константа" in messages and "засчитано решённым" in messages
+
+
+async def test_stdio_expected_equal_under_tokens_counts_as_one_answer():
+    # "0" и "0\n" для режима tokens один ответ: константа угадала бы оба.
+    generator = (
+        "```python\n"
+        "def generate(params, rng):\n"
+        "    return [{'stdin': f'{i} {-i}\\n', 'expected': '0' + '\\n' * (i % 2), "
+        "'group': 'main'} for i in range(6)]\n"
+        "```"
+    )
+    issues = await issues_of(make_stdio(sections={"Тесты": generator}), seeds=1)
+    assert any("все кейсы ждут один ответ" in i.message for i in issues)
+
+
+async def test_stdio_case_too_large_for_one_run_is_reported():
+    generator = (
+        "```python\n"
+        "def generate(params, rng):\n"
+        "    big = '1 ' * 40000 + '\\n'\n"
+        "    return [{'stdin': big if i == 0 else f'{i}\\n', 'expected': f'{i}\\n', "
+        "'group': 'main'} for i in range(6)]\n"
+        "```"
+    )
+    issues = await issues_of(make_stdio(sections={"Тесты": generator}), seeds=1)
+    assert any("кейс 1" in i.message and "байт" in i.message for i in issues)
+
+
+async def test_stdio_checker_failing_on_correct_solution_is_reported():
+    broken = "```python\nimport sys\nsys.exit(2)\n```"
+    text = make_stdio(check="checker", sections={"Проверяльщик": broken})
+    issues = await issues_of(text, seeds=1)
+    assert any("верное решение 'reference'" in i.message for i in issues)
+    assert any("проверяльщик отказал" in i.message for i in issues)
+
+
+async def test_checker_failure_on_wrong_solution_is_reported_not_counted_as_catch():
+    # Проверяльщик, который вместо «неверно» падает: неверное решение «поймано» его отказом.
+    crashing = (
+        "```python\nimport sys\n_, out, ans = (open(n).read().split() for n in sys.argv[1:4])\n"
+        "sys.exit(0 if out == ans else 2)\n```"
+    )
+    text = make_stdio(check="checker", sections={"Проверяльщик": crashing})
+    issues = await issues_of(text, seeds=1)
+    assert any("'skips-empty'" in i.message and "проверяльщик отказал" in i.message for i in issues)
 
 
 class _UnknownRuntimeSandbox(LocalSandbox):

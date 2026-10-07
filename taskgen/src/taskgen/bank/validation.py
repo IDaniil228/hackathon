@@ -3,11 +3,14 @@
 Шаблон проверяется так, как его исполнит генерация экземпляра: параметры по seed, кейсы от
 генератора в песочнице, прогон решений на этих кейсах. На каждом seed из настроек:
 
-- генератор даёт не меньше MIN_CASES кейсов, не все с одним ответом, входы — массивы
-  аргументов, и все входы помещаются в один запрос к Piston;
-- каждое верное решение ('### id +') проходит все кейсы;
+- генератор даёт не меньше MIN_CASES кейсов, не все с одним ответом; у задачи-функции входы —
+  массивы аргументов и все вместе помещаются в один запрос к Piston, у задачи stdio в один
+  запрос помещается вход каждого кейса;
+- каждое верное решение ('### id +') проходит все кейсы, и свой проверяльщик шаблона на нём
+  не отказывает;
 - каждое неверное решение ('### id -') и решения-константы, которые не смотрят на вход,
-  не решены даже при идеальных рубрике, качестве и скорости.
+  не решены даже при идеальных рубрике, качестве и скорости, и пойманы ответом
+  проверяльщика, а не его отказом.
 
 Генерация экземпляра вызывает отсюда generate_cases, run_solution и reference_problem:
 входы зависят от seed экземпляра, поэтому прогон первого верного решения при генерации
@@ -28,6 +31,7 @@ import httpx
 from taskgen.bank.parser import TemplateIssue
 from taskgen.config import ImportCheckSettings, ScoringSettings, Settings
 from taskgen.contracts import (
+    IOKind,
     RunLimits,
     SandboxRunner,
     TaskKind,
@@ -46,13 +50,18 @@ from taskgen.evaluation.scoring import (
 )
 from taskgen.generation.harness import GeneratorError, generator_request, parse_generator_output
 from taskgen.generation.params import draw_params
+from taskgen.sandbox.cases import CHECKER_FAILURE
+from taskgen.sandbox.checkers import output_matches
 from taskgen.sandbox.errors import SandboxError, SandboxServiceError
 
 # Меньше кейсов не хватает на публичные примеры, граничные случаи и случайные входы.
 MIN_CASES = 6
-# Piston принимает тело запроса не больше 100 КиБ, а входы всех кейсов уходят одним
-# запросом вместе с решением. Остаток оставлен под код кандидата.
+# Piston принимает тело запроса не больше 100 КиБ. Входы всех кейсов задачи-функции уходят
+# одним запросом вместе с решением, а вход кейса stdio — своим. Остаток оставлен под код.
 MAX_INPUT_BYTES = 64 * 1024
+# Решение-константа задачи stdio печатает свой ответ на любом языке одинаково, поэтому она
+# пишется на Python, а не на языке шаблона: проверяется только вывод.
+CONSTANT_RUNTIME = "python"
 
 
 # --- Запуски в песочнице; их же вызывает генерация экземпляра --------------------------------
@@ -68,7 +77,9 @@ async def generate_cases(
     """Кейсы генератора шаблона; GeneratorError — генератор упал или вернул не то."""
     request = generator_request(spec.test_generator or "", params, seed, limits)
     result = await _call(sandbox.run(request))
-    return parse_generator_output(result, spec.case_groups)
+    if spec.io is None:
+        raise SandboxError(f"шаблон {spec.name} без вида io")
+    return parse_generator_output(result, spec.case_groups, io=spec.io)
 
 
 async def run_solution(
@@ -143,26 +154,68 @@ def static_problems(spec: TemplateSpec, source: str | None = None) -> list[Templ
     return []
 
 
-def case_problems(cases: list[TestCase]) -> list[str]:
+def case_problems(spec: TemplateSpec, cases: list[TestCase]) -> list[str]:
     problems = []
     if len(cases) < MIN_CASES:
         problems.append(f"генератор дал {len(cases)} кейсов, нужно не меньше {MIN_CASES}")
-    # Объект именованных аргументов сервис принимает, но обвязка C++ понимает только массив.
+    if not cases:
+        return problems
+    if spec.io is IOKind.STDIO:
+        return problems + _stdio_case_problems(spec, cases)
+    # Объект именованных аргументов сервис принимает, но драйвер C++ понимает только массив.
     objects = [i for i, case in enumerate(cases, start=1) if not isinstance(case.input, list)]
     if objects:
         problems.append(f"входы кейсов {objects} — не массив аргументов функции")
     distinct = {json.dumps(case.expected, sort_keys=True) for case in cases}
     if len(distinct) < 2:
-        problems.append("все кейсы ждут один ответ: его угадает решение-константа")
+        problems.append(ONE_ANSWER)
     size = len(json.dumps([case.input for case in cases], ensure_ascii=False).encode())
     if size > MAX_INPUT_BYTES:
         problems.append(f"входы кейсов занимают {size} байт, допустимо {MAX_INPUT_BYTES}")
     return problems
 
 
-def constant_solutions(spec: TemplateSpec, cases: list[TestCase]) -> dict[str, str]:
-    """Решения, которые возвращают константу и не смотрят на вход; ключ — эта константа."""
+ONE_ANSWER = "все кейсы ждут один ответ: его угадает решение-константа"
+
+
+def _stdio_case_problems(spec: TemplateSpec, cases: list[TestCase]) -> list[str]:
+    problems = []
+    mode = spec.check.mode if spec.check else "tokens"
+    first = str(cases[0].expected)
+    if mode == "checker":
+        same = all(case.expected == first for case in cases)
+    else:
+        # Ответы, равные в режиме проверки, — один ответ: "0" и "0\n" для tokens совпадают.
+        same = all(output_matches(mode, str(case.expected), first) for case in cases)
+    if same:
+        problems.append(ONE_ANSWER)
+    for number, case in enumerate(cases, start=1):
+        texts = [case.stdin or "", str(case.expected), *case.files.values()]
+        size = sum(len(text.encode()) for text in texts)
+        if size > MAX_INPUT_BYTES:
+            problems.append(
+                f"кейс {number}: вход, файлы и ответ занимают {size} байт, допустимо "
+                f"{MAX_INPUT_BYTES}"
+            )
+    return problems
+
+
+def constant_solutions(spec: TemplateSpec, cases: list[TestCase]) -> dict[str, tuple[str, str]]:
+    """Решения, которые возвращают константу и не смотрят на вход.
+
+    Ключ — эта константа, значение — окружение и код решения.
+    """
+    if spec.io is IOKind.STDIO:
+        outputs = ("", str(cases[0].expected))
+        return {
+            json.dumps(text, ensure_ascii=False): (
+                CONSTANT_RUNTIME,
+                f"import sys\nsys.stdout.write({text!r})\n",
+            )
+            for text in outputs
+        }
     entry = spec.entrypoint or ""
+    runtime = spec.runtime or ""
     if spec.runtime == "cpp":
         signature = re.search(
             rf"^([^\n;{{}}()]+?)\b{entry}\s*\(([^)]*)\)\s*\{{",
@@ -172,13 +225,14 @@ def constant_solutions(spec: TemplateSpec, cases: list[TestCase]) -> dict[str, s
         if signature is None:
             return {}
         result, args = signature.group(1).strip(), signature.group(2)
-        return {"{}": f"{result} {entry}({args}) {{ return {{}}; }}\n"}
+        return {"{}": (runtime, f"{result} {entry}({args}) {{ return {{}}; }}\n")}
     first = cases[0].expected
     default = type(first)() if first is not None else 0
     return {
         json.dumps(value, ensure_ascii=False): (
+            runtime,
             f"import json\n\n\ndef {entry}(*args, **kwargs):\n"
-            f"    return json.loads({json.dumps(json.dumps(value))})\n"
+            f"    return json.loads({json.dumps(json.dumps(value))})\n",
         )
         for value in (default, first)
     }
@@ -293,7 +347,7 @@ class TemplateValidator:
             result.problems.append(f"{error}; параметры {params}")
             return result
         cases = result.cases
-        result.problems += case_problems(cases)
+        result.problems += case_problems(spec, cases)
         try:
             await self._run_correct(spec, result)
             await self._run_wrong(spec, result)
@@ -317,8 +371,12 @@ class TemplateValidator:
                 result.problems.append(f"верное решение {solution.id!r}: {problem}")
 
     async def _run_wrong(self, spec: TemplateSpec, result: SeedCheck) -> None:
+        runtime = spec.runtime or ""
         wrong = {
-            f"неверное решение {s.id!r}" + (f" ({s.description})" if s.description else ""): s.code
+            f"неверное решение {s.id!r}" + (f" ({s.description})" if s.description else ""): (
+                runtime,
+                s.code,
+            )
             for s in spec.solutions
             if not s.correct
         }
@@ -328,13 +386,19 @@ class TemplateValidator:
                 f"в первом верном решении не найдено определение {spec.entrypoint}: "
                 "решение-константу для проверки тестов не построить"
             )
-        wrong |= {f"решение-константа {value}": code for value, code in constants.items()}
-        for name, code in wrong.items():
-            report = await self._run(spec, code, result.cases)
+        wrong |= {f"решение-константа {value}": run for value, run in constants.items()}
+        for name, (solution_runtime, code) in wrong.items():
+            report = await self._run(spec, code, result.cases, runtime=solution_runtime)
             if report.compile_error is not None:
                 # Решение, которое не компилируется, проваливает всё и ничего не проверяет.
                 result.caught[name] = False
                 result.problems.append(f"{name} не компилируется: {report.compile_error}")
+                continue
+            refused = checker_refusal(report)
+            if refused:
+                # Отказ проверяльщика — дефект шаблона, а не пойманная ошибка решения.
+                result.caught[name] = False
+                result.problems.append(f"{name}: {refused}")
                 continue
             caught = not solved_at_best(spec, result.cases, report, self.scoring)
             result.caught[name] = caught
@@ -344,6 +408,23 @@ class TemplateValidator:
                     "скорости: тесты его не ловят"
                 )
 
-    async def _run(self, spec: TemplateSpec, code: str, cases: list[TestCase]) -> TestReport:
+    async def _run(
+        self, spec: TemplateSpec, code: str, cases: list[TestCase], runtime: str | None = None
+    ) -> TestReport:
         assert self.sandbox is not None
+        if runtime is not None and runtime != spec.runtime:
+            spec = spec.model_copy(update={"runtime": runtime})
         return await run_solution(self.sandbox, spec, code, cases, self.limits)
+
+
+def checker_refusal(report: TestReport) -> str:
+    """Пустая строка или причина первого отказа своего проверяльщика с номерами кейсов."""
+    refused = [
+        (number, outcome.error)
+        for number, outcome in enumerate(report.outcomes, start=1)
+        if outcome.error and outcome.error.startswith(CHECKER_FAILURE)
+    ]
+    if not refused:
+        return ""
+    numbers = [number for number, _ in refused]
+    return f"на кейсах {numbers} {refused[0][1]}"
