@@ -18,12 +18,14 @@ _ALIASES = {
 
 
 @cache
-def _runtime_drivers() -> dict[str, str]:
-    # Окружение вроде python-ml пишется на языке своего драйвера, а драйверы названы
-    # каноническими именами: реестр окружений — единственный список таких окружений.
-    registry = RuntimeRegistry.load()
-    drivers = {name: registry.get(name).driver for name in registry.names()}
-    return {name: driver for name, driver in drivers.items() if driver is not None}
+def _registry() -> RuntimeRegistry:
+    return RuntimeRegistry.load()
+
+
+def language_runtimes() -> list[str]:
+    """Окружения, в которых решают задания; служебные окружения сервиса не входят."""
+    registry = _registry()
+    return [name for name in registry.names() if registry.get(name).kind == "language"]
 
 
 def canonical_language(language: str | None) -> str | None:
@@ -34,12 +36,18 @@ def canonical_language(language: str | None) -> str | None:
 
 
 def source_language(language: str | None) -> str | None:
-    """Язык исходника: окружение вроде python-ml даёт язык своего драйвера.
+    """Язык исходника: имя языка или окружения; None — сервис такого не знает.
 
-    Только для выбора анализаторов и рубрики. Ответ сверяется с окружением задания через
-    canonical_language, и там python-ml остаётся отдельным окружением.
+    Окружение пишется на языке своего драйвера (python-ml — на python), а окружение без
+    драйвера — на языке пакета Piston (bash). Ответ кандидата сверяется с окружением задания
+    через canonical_language: там python-ml остаётся отдельным окружением.
     """
     if language is None:
         return None
     name = language.strip().lower()
-    return canonical_language(name) or canonical_language(_runtime_drivers().get(name))
+    if (known := canonical_language(name)) is not None:
+        return known
+    if name not in _registry().names():
+        return None
+    spec = _registry().get(name)
+    return canonical_language(spec.driver) or canonical_language(spec.language) or spec.language

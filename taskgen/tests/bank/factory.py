@@ -49,9 +49,11 @@ REFERENCE = (
 SHORT_RIGHT = REFERENCE.replace("len(nums) - 1", "len(nums) - 2")
 
 
-def solution(solution_id: str, mark: str, code: str, description: str = "") -> str:
+def solution(
+    solution_id: str, mark: str, code: str, description: str = "", language: str = "python"
+) -> str:
     text = f"\n\n{description}" if description else ""
-    return f"### {solution_id} {mark}{text}\n\n```python\n{code}```"
+    return f"### {solution_id} {mark}{text}\n\n```{language}\n{code}```"
 
 
 SOLUTIONS = (

@@ -171,6 +171,49 @@ def test_code_template_requires_runtime():
     assert "runtime" in locations(make_template(runtime=None))
 
 
+@pytest.mark.parametrize("runtime", ["pyhton", "analyzers"])
+def test_runtime_must_be_a_language_environment_of_the_registry(runtime):
+    # Опечатка проходила разбор и всплывала только ошибкой песочницы при импорте, а в
+    # служебном окружении анализаторов задания не решают.
+    assert "runtime" in locations(make_template(runtime=runtime))
+
+
+def _solutions_in(language: str, code: str = REFERENCE) -> dict[str, str]:
+    wrong = SHORT_RIGHT if code == REFERENCE else code
+    return {
+        "Решения": solution("a", "+", code, language=language)
+        + "\n\n"
+        + solution("b", "-", wrong, language=language)
+    }
+
+
+@pytest.mark.parametrize("language", ["", "cpp", "python-ml"])
+def test_solution_block_names_the_language_of_the_runtime(language):
+    # Метка блока — язык кода, окружение задаёт только runtime: python-ml пишется на python.
+    found = issues_of(make_template(runtime="python-ml", sections=_solutions_in(language)))
+    assert any("язык" in issue.message for issue in found), found
+
+
+@pytest.mark.parametrize("language", ["python", "py"])
+def test_python_ml_solutions_are_labelled_python(language):
+    spec = parse_template(
+        make_template(runtime="python-ml", sections=_solutions_in(language)), source="t.md"
+    )
+    assert spec.runtime == "python-ml"
+
+
+def test_python_ml_solution_is_checked_as_python():
+    broken = REFERENCE.replace("def two_sum(nums, target):", "def two_sum(nums, target)")
+    found = issues_of(make_template(runtime="python-ml", sections=_solutions_in("python", broken)))
+    assert any("синтаксическая ошибка" in issue.message for issue in found), found
+
+
+def test_test_generator_block_is_labelled_python():
+    tests = make_template().split("## Тесты\n\n", 1)[1].split("\n## ", 1)[0]
+    found = issues_of(make_template(sections={"Тесты": tests.replace("```python", "```cpp", 1)}))
+    assert any(issue.location == "раздел «Тесты»" for issue in found), found
+
+
 # --- Вид задания с кодом и проверка ответа ------------------------------------------------
 
 CHECKER_SECTION = (
@@ -259,8 +302,9 @@ def test_checker_section_needs_checker_mode():
     assert "раздел «Проверяльщик»" in locations(text)
 
 
-def test_checker_block_names_its_runtime():
-    text = make_stdio(check="checker", sections={"Проверяльщик": "```\nexit 0\n```"})
+@pytest.mark.parametrize("label", ["", "pyhton", "analyzers"])
+def test_checker_block_names_a_language_runtime(label):
+    text = make_stdio(check="checker", sections={"Проверяльщик": f"```{label}\nexit 0\n```"})
     assert "раздел «Проверяльщик»" in locations(text)
 
 

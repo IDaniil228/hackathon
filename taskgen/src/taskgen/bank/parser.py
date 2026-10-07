@@ -18,6 +18,7 @@ from pydantic import ValidationError
 
 from taskgen.contracts import CheckMode, IOKind, RubricItem, TaskKind, TemplateSpec
 from taskgen.db import Template
+from taskgen.evaluation.languages import canonical_language, language_runtimes, source_language
 from taskgen.evaluation.scoring import WEIGHT_OF
 from taskgen.markdown import Fence, code_rows, fences, headings, lines, split_frontmatter
 
@@ -264,6 +265,9 @@ def _check_frontmatter(meta: dict[str, Any], *, is_code: bool, out: _Collector) 
     runtime_limit = Template.__table__.c.runtime.type.length
     if isinstance(runtime, str) and len(runtime) > runtime_limit:
         out.add("runtime", f"имя окружения длиннее {runtime_limit} символов")
+    if is_code and runtime and runtime not in language_runtimes():
+        known = ", ".join(language_runtimes())
+        out.add("runtime", f"неизвестное окружение {runtime!r}; допустимы: {known}")
 
     params = meta.get("params")
     if isinstance(params, dict):
@@ -599,6 +603,8 @@ def _code_sections(
     if tests is not None:
         result["test_generator"] = tests.content
         label = section_label(SECTION_TESTS)
+        if _block_language(tests) != "python":
+            out.add(label, f"генератор тестов пишется на Python: ```python, а не ```{tests.info}")
         tree = _parse_python(tests.content, label, out)
         if tree is not None:
             generate = _top_functions(tree).get("generate")
@@ -645,13 +651,16 @@ def _check(sections: dict[str, str], meta: dict[str, Any], out: _Collector) -> A
     checker = None
     if mode == "checker":
         block = _single_block(sections, SECTION_CHECKER, out, required_by="check: checker")
-        if block is not None and not block.info:
+        name = block.info.split()[0] if block is not None and block.info else ""
+        if block is not None and name not in language_runtimes():
+            known = ", ".join(language_runtimes())
             out.add(
                 label,
-                "у блока кода нужен язык — имя окружения песочницы, например ```python",
+                f"метка блока кода — окружение песочницы, в котором запускается проверяльщик; "
+                f"допустимы: {known}",
             )
         elif block is not None:
-            checker = {"runtime": block.info.split()[0], "code": block.content}
+            checker = {"runtime": name, "code": block.content}
     elif SECTION_CHECKER in sections:
         out.add(label, "свой проверяльщик задаётся только вместе с check: checker")
     return {"mode": mode, "checker": checker}
@@ -665,8 +674,10 @@ def _solutions(
 ) -> list[dict[str, Any]]:
     """Размеченные решения: '### id +' — верное, '### id -' — заведомо неверное.
 
-    Под заголовком — необязательное описание текстом и ровно один блок кода.
+    Под заголовком — необязательное описание текстом и ровно один блок кода. Метка блока —
+    язык окружения runtime: окружение python-ml пишется на python.
     """
+    language = source_language(runtime) if runtime in language_runtimes() else None
     text = sections.get(SECTION_SOLUTIONS)
     label = section_label(SECTION_SOLUTIONS)
     if text is None:
@@ -706,7 +717,13 @@ def _solutions(
             continue
         code = blocks[0].content
         where = f"{label}, решение {solution_id!r}"
-        if runtime == "python":
+        if language is not None and _block_language(blocks[0]) != language:
+            out.add(
+                where,
+                f"у блока кода нужен язык окружения {runtime}: ```{language}, а не "
+                f"```{blocks[0].info}",
+            )
+        if language == "python":
             tree = _parse_python(code, where, out)
             if tree is not None and entrypoint and entrypoint not in _top_functions(tree):
                 out.add(where, f"нет функции верхнего уровня {entrypoint!r} из раздела Сигнатура")
@@ -766,6 +783,12 @@ def _single_block(
         out.add(label, "блок кода пуст")
         return None
     return blocks[0]
+
+
+def _block_language(block: Fence) -> str:
+    """Язык из метки блока кода: синонимы вроде py и c++ сводятся к одному имени."""
+    word = block.info.split()[0].lower() if block.info else ""
+    return canonical_language(word) or word
 
 
 def _code_blocks(text: str) -> list[Fence]:

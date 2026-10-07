@@ -178,8 +178,11 @@ async def test_unknown_runtime_is_template_defect_not_unavailable():
             RuntimeRegistry.load().get(request.runtime)
             return await super().run_tests(request)
 
+    # Разбор такой runtime уже отклоняет; так выглядит шаблон, чьё окружение убрали из
+    # реестра после импорта.
+    spec = code_spec().model_copy(update={"runtime": "brainfuck"})
     with pytest.raises(TemplateDefectError, match="brainfuck"):
-        await generate_instance(code_spec(runtime="brainfuck"), 1, deps(FakeLLM([]), Strict()))
+        await generate_instance(spec, 1, deps(FakeLLM([]), Strict()))
 
 
 async def test_legend_prompt_names_environment():

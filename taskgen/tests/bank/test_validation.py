@@ -223,13 +223,15 @@ async def test_missing_or_down_sandbox_is_an_explicit_error():
 
 
 async def test_unknown_runtime_is_a_template_issue_not_a_sandbox_failure():
-    text = make_template(runtime="brainfuck")
+    # Разбор такой runtime уже отклоняет; спецификация в обход разбора — шаблон, чьё
+    # окружение убрали из реестра после импорта.
+    spec = spec_of(make_template()).model_copy(update={"runtime": "brainfuck"})
     issues = await TemplateValidator(
         _UnknownRuntimeSandbox(),
         check=ImportCheckSettings(seeds=1),
         limits=LIMITS,
         scoring=ScoringSettings(),
-    ).check([("t.md", spec_of(text))])
+    ).check([("t.md", spec)])
     assert issues and "brainfuck" in issues[0].message
 
 
