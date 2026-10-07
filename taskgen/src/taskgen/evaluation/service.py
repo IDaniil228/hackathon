@@ -330,6 +330,15 @@ async def evaluate_task(task: TaskInput, *, judge: Judge, scoring: ScoringSettin
 # --- Зависимости ---------------------------------------------------------------------------
 
 
+def judge_evidence(scoring: ScoringSettings) -> EvidenceOptions:
+    """Способ доказательства судьи и его пределы из настроек."""
+    return EvidenceOptions(
+        mode=scoring.judge_evidence,
+        repairs=scoring.judge_repairs,
+        max_spans=scoring.judge_max_spans,
+    )
+
+
 @dataclass
 class Evaluator:
     settings: Settings
@@ -366,11 +375,7 @@ class Evaluator:
             temperature=settings.scoring.judge_temperature,
             reasoning_effort=settings.llm.judge_reasoning_effort,
             relevance=relevance,
-            evidence=EvidenceOptions(
-                mode=settings.scoring.judge_evidence,
-                repairs=settings.scoring.judge_repairs,
-                max_spans=settings.scoring.judge_max_spans,
-            ),
+            evidence=judge_evidence(settings.scoring),
         )
         detector = None
         if settings.ai_detector_enabled:
