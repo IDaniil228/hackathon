@@ -28,9 +28,9 @@ def language_runtimes() -> list[str]:
     return [name for name in registry.names() if registry.get(name).kind == "language"]
 
 
-def function_runtimes() -> list[str]:
-    """Окружения, в которых доступны задачи io=function: для их языка написан драйвер."""
-    return [name for name in language_runtimes() if _registry().get(name).functions]
+def runtime_io(runtime: str) -> list[str]:
+    """Виды задач, которые решают в окружении, по его записи в runtimes.yaml."""
+    return [str(kind) for kind in _registry().get(runtime).io]
 
 
 def canonical_language(language: str | None) -> str | None:

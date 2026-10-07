@@ -20,8 +20,8 @@ from taskgen.contracts import CheckMode, IOKind, RubricItem, TaskKind, TemplateS
 from taskgen.db import Template
 from taskgen.evaluation.languages import (
     canonical_language,
-    function_runtimes,
     language_runtimes,
+    runtime_io,
     source_language,
 )
 from taskgen.evaluation.scoring import WEIGHT_OF
@@ -273,12 +273,17 @@ def _check_frontmatter(meta: dict[str, Any], *, is_code: bool, out: _Collector) 
     if is_code and runtime and runtime not in language_runtimes():
         known = ", ".join(language_runtimes())
         out.add("runtime", f"неизвестное окружение {runtime!r}; допустимы: {known}")
-    elif is_code and meta.get("io") == IOKind.FUNCTION.value and runtime not in function_runtimes():
-        known = ", ".join(function_runtimes())
+    elif (
+        is_code
+        and runtime
+        and meta.get("io") in set(IOKind)
+        and meta["io"] not in runtime_io(runtime)
+    ):
+        supported = ", ".join(runtime_io(runtime))
         out.add(
             "io",
-            f"у окружения {runtime!r} нет драйвера задач-функций, только io=stdio; "
-            f"io=function доступно в: {known}",
+            f"окружение {runtime!r} не поддерживает io={meta['io']}; по runtimes.yaml в нём "
+            f"решают: {supported}",
         )
 
     params = meta.get("params")

@@ -4,60 +4,77 @@ from taskgen.sandbox.errors import SandboxError
 from taskgen.sandbox.registry import RuntimeRegistry
 
 
+def _load(tmp_path, name: str, fields: str) -> RuntimeRegistry:
+    path = tmp_path / "runtimes.yaml"
+    path.write_text(
+        f"{name}:\n  version: 1.0.0\n  description: {name} {{version}}\n{fields}",
+        encoding="utf-8",
+    )
+    return RuntimeRegistry.load(path)
+
+
 def test_default_registry_knows_service_runtimes():
     registry = RuntimeRegistry.load()
 
     assert registry.get("python").language == "python"
-    # Окружение называет язык своего кода явно: python-ml пишется на python.
-    assert {name: registry.get(name).code for name in ("python", "python-ml", "cpp", "bash")} == {
-        "python": "python",
-        "python-ml": "python",
-        "cpp": "cpp",
-        "bash": "bash",
+    # Окружение называет язык своего кода и виды задач явно: python-ml пишется на python.
+    shown = {
+        name: (spec.code, spec.io, spec.function_driver)
+        for name in ("python", "python-ml", "cpp", "bash")
+        if (spec := registry.get(name))
     }
-    assert registry.get("python-ml").functions and registry.get("cpp").functions
-    assert not registry.get("bash").functions
+    assert shown == {
+        "python": ("python", ["stdio", "function"], "python"),
+        "python-ml": ("python", ["stdio", "function"], "python"),
+        "cpp": ("cpp", ["stdio", "function"], "cpp"),
+        "bash": ("bash", ["stdio"], None),
+    }
 
 
 def test_new_runtime_is_added_by_data_only(tmp_path):
-    path = tmp_path / "runtimes.yaml"
-    path.write_text(
-        "python-old:\n  language: python\n  version: 3.10.0\n  code: python\n"
-        "  source_file: solution.py\n  description: Python {version}\n",
-        encoding="utf-8",
+    fields = (
+        "  language: python\n  code: python\n  io: [stdio, function]\n"
+        "  function_driver: python\n  source_file: solution.py\n"
     )
+    spec = _load(tmp_path, "python-old", fields).get("python-old")
 
-    spec = RuntimeRegistry.load(path).get("python-old")
-
-    assert (spec.language, spec.version, spec.code, spec.functions) == (
-        "python",
-        "3.10.0",
-        "python",
-        True,
-    )
+    assert (spec.code, spec.io, spec.function_driver) == ("python", ["stdio", "function"], "python")
 
 
-def test_runtime_on_a_language_without_driver_is_stdio_only(tmp_path):
-    path = tmp_path / "runtimes.yaml"
-    path.write_text(
-        "ruby:\n  language: ruby\n  version: 3.0.1\n  code: ruby\n  source_file: solution.rb\n"
-        "  description: Ruby {version}\n",
-        encoding="utf-8",
-    )
+def test_stdio_only_runtime_needs_no_driver(tmp_path):
+    fields = "  language: ruby\n  code: ruby\n  io: [stdio]\n  source_file: solution.rb\n"
+    spec = _load(tmp_path, "ruby", fields).get("ruby")
 
-    assert not RuntimeRegistry.load(path).get("ruby").functions
+    assert spec.io == ["stdio"] and spec.function_driver is None
 
 
-def test_runtime_must_name_the_language_of_its_code(tmp_path):
-    path = tmp_path / "runtimes.yaml"
-    path.write_text(
-        "python-data:\n  language: python-data\n  version: 3.12.0\n"
-        "  source_file: solution.py\n  description: Python {version}\n",
-        encoding="utf-8",
-    )
-
-    with pytest.raises(SandboxError, match="python-data"):
-        RuntimeRegistry.load(path)
+@pytest.mark.parametrize(
+    ("fields", "reason"),
+    [
+        # Язык кода не выводится из имени пакета: python-data без code — ошибка.
+        ("  language: python-data\n  io: [stdio]\n  source_file: solution.py\n", "code"),
+        # Окружению, в котором решают задания, нужен хотя бы один вид io.
+        ("  language: python\n  code: python\n  source_file: solution.py\n", r"\bio\b"),
+        (
+            "  language: ruby\n  code: ruby\n  io: [stdio, function]\n  source_file: s.rb\n",
+            "function_driver",
+        ),
+        (
+            "  language: ruby\n  code: ruby\n  io: [stdio, function]\n"
+            "  function_driver: ruby\n  source_file: s.rb\n",
+            "ruby",
+        ),
+        (
+            "  language: ruby\n  code: ruby\n  io: [stdio]\n  function_driver: python\n"
+            "  source_file: s.rb\n",
+            "function_driver",
+        ),
+    ],
+    ids=["no-code", "no-io", "function-no-driver", "unknown-driver", "driver-no-function"],
+)
+def test_registry_rejects_inconsistent_runtime(tmp_path, fields, reason):
+    with pytest.raises(SandboxError, match=reason):
+        _load(tmp_path, "custom", fields)
 
 
 def test_packages_name_what_to_install_in_piston():
@@ -94,10 +111,10 @@ def test_registry_rejects_a_field_it_does_not_know(tmp_path):
     # Устаревшее поле driver иначе молча не действовало бы.
     path = tmp_path / "runtimes.yaml"
     path.write_text(
-        "go:\n  language: go\n  version: 1.16.2\n  code: go\n  driver: go\n"
+        "go:\n  language: go\n  version: 1.16.2\n  code: go\n  io: [stdio]\n  driver: go\n"
         "  source_file: main.go\n  description: Go {version}\n",
         encoding="utf-8",
     )
 
-    with pytest.raises(SandboxError, match="go"):
+    with pytest.raises(SandboxError, match="driver"):
         RuntimeRegistry.load(path)

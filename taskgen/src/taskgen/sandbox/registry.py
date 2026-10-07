@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
-from taskgen.contracts import RunLimits
-from taskgen.sandbox.drivers import FUNCTION_LANGUAGES
+from taskgen.contracts import IOKind, RunLimits
+from taskgen.sandbox.drivers import DRIVERS
 from taskgen.sandbox.errors import SandboxError
 
 # Рецепты локальных пакетов Piston: taskgen/sandbox/packages. Каталог лежит вне пакета
@@ -32,12 +32,16 @@ class RuntimeSpec(BaseModel):
     # Язык пакета Piston: его имя Piston ждёт в запросе запуска.
     language: str
     version: str
-    # Язык кода окружения: python у python и python-ml. По нему выбираются драйвер задач-
-    # функций, анализаторы, рубрика и проверка решений шаблона.
+    # Язык кода окружения: python у python и python-ml. По нему выбираются анализаторы,
+    # рубрика и проверка решений шаблона.
     code: str
     # language — язык решений кандидата; tool — служебное окружение сервиса, например
     # анализаторы кода: в нём не решают задания, и кандидату оно не описывается.
     kind: Literal["language", "tool"] = "language"
+    # Какие задачи решают в окружении: stdio — программа целиком, function — функция, которую
+    # вызывает драйвер function_driver из taskgen/sandbox/drivers (DRIVERS).
+    io: list[IOKind] = []
+    function_driver: str | None = None
     # Имя файла программы кандидата в задаче stdio; по нему же анализаторы узнают язык.
     source_file: str
     # Можно ли положить рядом с программой файлы кейса. Скрипт compile пакета gcc собирает
@@ -66,8 +70,21 @@ class RuntimeSpec(BaseModel):
 
     @property
     def functions(self) -> bool:
-        """Доступны ли задачи io=function: для языка кода написан драйвер."""
-        return self.code in FUNCTION_LANGUAGES
+        """Доступны ли задачи io=function."""
+        return IOKind.FUNCTION in self.io
+
+    @model_validator(mode="after")
+    def _io_matches_driver(self) -> RuntimeSpec:
+        if self.kind == "language" and not self.io:
+            raise ValueError("окружению, в котором решают задания, нужен хотя бы один вид io")
+        if self.functions and self.function_driver is None:
+            raise ValueError("io содержит function, но не задан function_driver")
+        if not self.functions and self.function_driver is not None:
+            raise ValueError("function_driver задан, а function в io нет")
+        if self.function_driver is not None and self.function_driver not in DRIVERS:
+            known = ", ".join(sorted(DRIVERS))
+            raise ValueError(f"нет драйвера {self.function_driver}; известны: {known}")
+        return self
 
     def effective_limits(self, limits: RunLimits) -> RunLimits:
         """Запрошенные лимиты, поднятые до пола окружения; бо́льшие запросы не меняются."""

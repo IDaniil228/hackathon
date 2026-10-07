@@ -205,7 +205,8 @@ async def _function(run: Run, spec: RuntimeSpec, request: TestRunRequest) -> Exe
         raise SandboxError(
             f"у окружения {request.runtime} нет драйвера задач-функций, только io=stdio"
         )
-    files, args = driver_files(spec.code, request.entrypoint or "", request.solution)
+    driver = spec.function_driver or ""
+    files, args = driver_files(driver, request.entrypoint or "", request.solution)
     nonce = secrets.token_hex(16)
     # Эвристика причины обрыва сравнивает пик памяти с действующим лимитом, а не запрошенным.
     limits = spec.effective_limits(request.limits)
