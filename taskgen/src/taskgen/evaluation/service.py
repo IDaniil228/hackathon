@@ -63,6 +63,7 @@ from taskgen.evaluation.scoring import (
 )
 from taskgen.evaluation.summary import SessionFacts, fallback_text, summary_data, write_summary
 from taskgen.llm import limited_llm, state_embedder
+from taskgen.sandbox.errors import SandboxError
 
 logger = logging.getLogger(__name__)
 
@@ -420,6 +421,32 @@ def _answer_content(task: Task, submission: Submission) -> str:
     return submission.choice
 
 
+async def check_code(
+    ev: Evaluator, hidden: HiddenPayload, content: str, language: str
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Прогон тестов в песочнице и анализаторы: то, что хранится в ответе с кодом."""
+    if ev.sandbox is None:
+        raise SandboxUnavailableError("Песочница для прогона тестов не настроена")
+    request = TestRunRequest(
+        runtime=hidden.runtime or "",
+        entrypoint=hidden.entrypoint or "",
+        solution=content,
+        cases=hidden.cases,
+        limits=RunLimits(
+            timeout_ms=ev.settings.sandbox.run_timeout_ms,
+            memory_bytes=ev.settings.sandbox.run_memory_limit_bytes,
+        ),
+    )
+    try:
+        report = await ev.sandbox.run_tests(request)
+    except (httpx.HTTPError, SandboxError) as error:
+        # PistonRunner отдаёт сетевую ошибку и отказ Piston как SandboxError.
+        raise SandboxUnavailableError("Песочница недоступна, повторите позже") from error
+    # Анализаторы запускают внешние процессы; в потоке они не блокируют цикл событий.
+    reports = await asyncio.to_thread(run_analyzers, ev.analyzers, content, language)
+    return report.model_dump(mode="json"), [item.model_dump(mode="json") for item in reports]
+
+
 async def submit_answer(ev: Evaluator, task_id: uuid.UUID, submission: Submission) -> uuid.UUID:
     """Сохраняет ответ; для кода сразу прогоняет тесты и анализаторы.
 
@@ -454,26 +481,7 @@ async def submit_answer(ev: Evaluator, task_id: uuid.UUID, submission: Submissio
                 f"Ответ на языке {language}, а задание решается на {hidden.runtime}"
             )
         language = language or hidden.runtime
-        if ev.sandbox is None:
-            raise SandboxUnavailableError("Песочница для прогона тестов не настроена")
-        request = TestRunRequest(
-            runtime=hidden.runtime,
-            entrypoint=hidden.entrypoint,
-            solution=content,
-            cases=hidden.cases,
-            limits=RunLimits(
-                timeout_ms=ev.settings.sandbox.run_timeout_ms,
-                memory_bytes=ev.settings.sandbox.run_memory_limit_bytes,
-            ),
-        )
-        try:
-            report = await ev.sandbox.run_tests(request)
-        except httpx.HTTPError as error:
-            raise SandboxUnavailableError("Песочница недоступна, повторите позже") from error
-        test_report = report.model_dump(mode="json")
-        # Анализаторы запускают внешние процессы; в потоке они не блокируют цикл событий.
-        reports = await asyncio.to_thread(run_analyzers, ev.analyzers, content, language)
-        analysis = [item.model_dump(mode="json") for item in reports]
+        test_report, analysis = await check_code(ev, hidden, content, language)
 
     ai_signal = None
     # В ответе на задачку только id варианта: детектору нечего читать.

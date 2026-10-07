@@ -11,6 +11,7 @@ from sqlalchemy import delete, select
 from taskgen.app import create_app
 from taskgen.contracts import AISignal, CaseOutcome, SessionStatus, TaskStatus, TestReport
 from taskgen.db import Answer, CandidateSummary, Task, Template, TestSession
+from taskgen.sandbox.errors import SandboxError
 from tests.conftest import ADMIN_KEY
 from tests.evaluation.fakes import FakeLLM, FakeSandbox
 
@@ -221,6 +222,17 @@ def test_language_mismatch_is_422(world):
 def test_no_sandbox_is_503(world):
     _, (task_id,) = world.make_session([{"grade": "middle", "kind": "code"}])
     world.state.sandbox = None
+    assert _answer(world, task_id).status_code == 503
+
+
+def test_unreachable_piston_is_503(world):
+    # PistonRunner переводит сетевую ошибку в SandboxError, а не отдаёт httpx.HTTPError.
+    class DownSandbox(FakeSandbox):
+        async def run_tests(self, request):
+            raise SandboxError("Piston недоступен: ConnectError")
+
+    _, (task_id,) = world.make_session([{"grade": "middle", "kind": "code"}])
+    world.state.sandbox = DownSandbox(_report([True]))
     assert _answer(world, task_id).status_code == 503
 
 
