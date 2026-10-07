@@ -34,6 +34,9 @@ services:
     profiles: [ollama]
     ports: ["11434:11434"]
     volumes: [ollama-data:/root/.ollama]
+    # При малой видеопамяти Ollama берёт окно 4096 токенов, а запросу судьи нужно больше:
+    # docs/taskgen/deployment.md, раздел про модели.
+    environment: {OLLAMA_CONTEXT_LENGTH: "16384"}
 
   taskgen:
     build: .
