@@ -166,7 +166,7 @@ class LLMSettings(Section):
     checker: ChatRole = Field(
         default=ChatRole(model=CLOUD_MODEL),
         description="Проверяльщик ситуации эссе и кейса задачки: ищет в тексте факты шаблона "
-        "и цитирует их",
+        "и цитирует их. Он же сверяет каждое предложение machine summary с фактами сессий",
     )
     solver: ChatRole = Field(
         default=ChatRole(model=LOCAL_MODEL),
@@ -298,7 +298,8 @@ class SelectionSettings(Section):
 
 class EvidenceSettings(Section):
     """Чем модель подтверждает вердикт: один способ для судьи ответа и для LLM-проверяльщика
-    ситуации эссе, кейса задачки и темы легенды. Механика — taskgen/evaluation/evidence.py."""
+    ситуации эссе, кейса задачки, темы легенды и machine summary. Механика —
+    taskgen/evaluation/evidence.py."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -307,7 +308,8 @@ class EvidenceSettings(Section):
         description="Способ доказательства: quotes — дословные цитаты текста, spans — номера "
         "его участков, которые модели показаны с номерами: строк кода или предложений. "
         "Судья так подтверждает вердикты yes и partial, проверяльщик — найденный факт, "
-        "запрещённое понятие или тему. spans по умолчанию: судья и проверяльщик по "
+        "запрещённое понятие, тему или предложение machine summary; у summary участок — "
+        "строка фактов с путём и значением. spans по умолчанию: судья и проверяльщик по "
         "умолчанию — deepseek-flash, и на нём ссылки не уступают цитатам. GigaChat с "
         "цитатами терял больше половины верных вердиктов судьи, но со ссылками засчитывает и "
         "самоутверждения кандидата. Замеры — docs/taskgen/validation.md",

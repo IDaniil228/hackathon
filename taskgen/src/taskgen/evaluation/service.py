@@ -719,12 +719,15 @@ async def refresh_summary(ev: Evaluator, candidate_ref: str) -> None:
     ]
     data = summary_data(candidate_ref, facts)
     try:
-        # Summary пишет модель генерации, поэтому и рассуждения у него — как у генерации.
+        # Текст пишет роль генерации, а сверяет с фактами роль проверяльщика.
         text = await write_summary(
             ev.llm,
             data,
             model=ev.settings.llm.generator.model,
             reasoning_effort=ev.settings.llm.generator.reasoning_effort,
+            checker_model=ev.settings.llm.checker.model,
+            checker_reasoning_effort=ev.settings.llm.checker.reasoning_effort,
+            evidence=ev.settings.evidence,
         )
     except httpx.HTTPError:
         # Summary не должен срывать оценку: при недоступной модели — текст по шаблону.
