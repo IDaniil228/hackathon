@@ -329,7 +329,8 @@ async def test_relevance_check_does_not_embed_when_no_item_is_confirmed():
 
 
 def _service_state(threshold: float | None, embedder: TableEmbedder) -> SimpleNamespace:
-    reply = _sample(leak=("yes", [CLAIM]), scheme=("no", []))
+    # Судье сервиса ответ показан участками: CLAIM — второе предложение ESSAY_ANSWER.
+    reply = _spans_sample(leak=("yes", [2]), scheme=("no", []))
     settings = Settings(scoring=ScoringSettings(judge_quote_threshold=threshold))
     return SimpleNamespace(
         settings=settings, sessionmaker=None, llm=FakeLLM(lambda _m, _s: reply), embedder=embedder

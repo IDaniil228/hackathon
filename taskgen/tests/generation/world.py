@@ -52,8 +52,11 @@ class ModelStub:
             prompt = "\n".join(message.content for message in messages)
             answer = ANSWER_IN_JUDGE.search(prompt).group(1)
             quote = next(line for line in answer.splitlines() if line.strip())
-            ids = properties["items"]["items"]["properties"]["item_id"]["enum"]
-            items = [{"item_id": i, "verdict": "yes", "quotes": [quote]} for i in ids]
+            item = properties["items"]["items"]["properties"]
+            ids = item["item_id"]["enum"]
+            # Первый участок ответа — его первая непустая строка.
+            evidence = {"spans": [1]} if "spans" in item else {"quotes": [quote]}
+            items = [{"item_id": i, "verdict": "yes", **evidence} for i in ids]
             return json.dumps({"items": items}, ensure_ascii=False)
         prompt = messages[1].content
         match = ENTRYPOINT_IN_PROMPT.search(prompt)
