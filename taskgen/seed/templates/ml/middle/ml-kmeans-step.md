@@ -19,6 +19,10 @@ params:
       - размещение пунктов выдачи заказов по координатам клиентов
       - группировка датчиков по средним показаниям
       - сжатие палитры изображения до k цветов
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 1, required: true}
 ---
 
 # Итерация k-средних
@@ -97,6 +101,10 @@ def cloud(rng, n, d, k, spread):
     return result
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     cases = [
         case([[0, 0], [1, 0], [9, 9], [10, 10]], [[0, 1], [10, 9]]),
@@ -108,13 +116,14 @@ def generate(params, rng):
         case([[0], [10]], [[5], [5], [-100]]),
         case([[-1000, 1000, -1000, 1000]], [[1000, -1000, 1000, -1000], [0, 0, 0, 0]]),
     ]
+    cases = grouped("manual", cases)
     for _ in range(5):
         d, k = rng.randint(1, 4), rng.randint(1, 6)
         points = cloud(rng, rng.randint(1, 30), d, k, 50)
-        cases.append(case(points, cloud(rng, k, d, k, 300)))
+        cases.append(dict(case(points, cloud(rng, k, d, k, 300)), group="random"))
     d = rng.randint(2, 3)
     points = cloud(rng, params["points_max"], d, 6, 120)
-    cases.append(case(points, cloud(rng, 8, d, 8, 400)))
+    cases.append(dict(case(points, cloud(rng, 8, d, 8, 400)), group="stress"))
     return cases
 ```
 

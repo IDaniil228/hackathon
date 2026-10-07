@@ -113,6 +113,35 @@ async def test_code_instance_is_validated_by_reference():
     assert public.environment == describe_runtime("python")
 
 
+GROUPED_GENERATOR = (
+    "```python\n"
+    "def generate(params, rng):\n"
+    "    cases = []\n"
+    "    for i in range(params['count']):\n"
+    "        nums = [rng.randint(-10**6, 10**6) for _ in range(params['n'])]\n"
+    "        cases.append({'input': [nums, 1], 'expected': max(nums),\n"
+    "                      'group': 'manual' if i < 2 else 'stress'})\n"
+    "    return cases\n"
+    "```"
+)
+
+
+async def test_case_groups_go_to_hidden_payload_only():
+    groups = {"manual": {"weight": 1}, "stress": {"weight": 3, "required": True}}
+    spec = code_spec(case_groups=groups, sections={"Тесты": GROUPED_GENERATOR})
+    llm = FakeLLM(lambda _m, _s: legend())
+    instance = await generate_instance(spec, 7, deps(llm, LocalSandbox()))
+
+    hidden = instance.hidden
+    assert hidden.case_groups == spec.case_groups
+    assert {case.group for case in hidden.cases} == {"manual", "stress"}
+    # Группы и веса — скрытые данные: в публичной части и в промпте легенды их нет.
+    public = json.dumps(instance.public_dump(), ensure_ascii=False)
+    prompt = prompt_of(llm.calls[0])
+    for word in ("group", "manual", "stress", "weight", "required"):
+        assert word not in public and word not in prompt
+
+
 async def test_legend_prompt_names_environment():
     llm = FakeLLM(lambda _m, _s: legend())
     await generate_instance(code_spec(), 1, deps(llm, LocalSandbox()))

@@ -47,6 +47,7 @@ from taskgen.evaluation.grading import (
     Recommendation,
     TaskScore,
     assess_grade,
+    is_solved,
 )
 from taskgen.evaluation.judge import JudgeError, LLMJudge
 from taskgen.evaluation.languages import canonical_language
@@ -56,10 +57,12 @@ from taskgen.evaluation.scoring import (
     Components,
     SessionScore,
     code_task_score,
+    failed_required_groups,
     performance_score,
     quiz_score,
     resolve_weights,
     session_score,
+    weighted_pass_rate,
 )
 from taskgen.evaluation.summary import SessionFacts, fallback_text, summary_data, write_summary
 from taskgen.llm import limited_llm, state_embedder
@@ -149,6 +152,11 @@ class TestsSummary(BaseModel):
     passed: int
     total: int
     compile_error: bool
+    failed_required: list[str] = Field(
+        default=[],
+        description="Обязательные группы кейсов, в которых упал хотя бы один кейс: с ними "
+        "задание не решено при любом балле",
+    )
 
 
 class TaskOutcome(BaseModel):
@@ -165,6 +173,10 @@ class TaskOutcome(BaseModel):
     tests: TestsSummary | None = None
     judge: JudgeResult | None = None
     behavior: Behavior | None = None
+
+    @property
+    def required_passed(self) -> bool:
+        return self.tests is None or not self.tests.failed_required
 
 
 class JudgeCounts(BaseModel):
@@ -184,7 +196,9 @@ class TaskResult(BaseModel):
     answered: bool
     language: str | None
     score: float = Field(description="Балл задания от 0 до 1")
-    solved: bool = Field(description="Балл не ниже порога решённости")
+    solved: bool = Field(
+        description="Балл не ниже порога решённости, и пройдены все кейсы обязательных групп"
+    )
     components: Components | None = Field(
         description="Компоненты балла задания с кодом; null — компонент не измерен"
     )
@@ -283,6 +297,12 @@ async def evaluate_task(task: TaskInput, *, judge: Judge, scoring: ScoringSettin
         passed=sum(outcome.passed for outcome in report.outcomes),
         total=len(report.outcomes),
         compile_error=report.compile_error is not None,
+        failed_required=failed_required_groups(
+            report,
+            task.hidden.cases,
+            task.hidden.case_groups,
+            default=scoring.required_case_groups,
+        ),
     )
     reports = [AnalysisReport.model_validate(item) for item in answer.analysis or []]
     metric_rubric = load_rubric(answer.language or task.hidden.runtime)
@@ -310,7 +330,7 @@ async def evaluate_task(task: TaskInput, *, judge: Judge, scoring: ScoringSettin
             )
         )
     components = Components(
-        tests=report.pass_rate,
+        tests=weighted_pass_rate(report, task.hidden.cases, task.hidden.case_groups),
         rubric=judge_result.score if judge_result else None,
         quality=quality.score if quality else None,
         performance=performance_score(report, task.hidden.reference_report),
@@ -522,8 +542,8 @@ def _task_result(outcome: TaskOutcome, solved_threshold: float) -> TaskResult:
         answered=outcome.answered,
         language=outcome.language,
         score=outcome.score,
-        # Тот же допуск, что в оценке грейда: балл 0.7 может прийти как 0.6999999999999999.
-        solved=outcome.score >= solved_threshold - 1e-9,
+        # Та же функция, что в оценке грейда: решённость в задании и в уровне не расходится.
+        solved=is_solved(outcome.score, solved_threshold, required_passed=outcome.required_passed),
         components=outcome.components,
         tests=outcome.tests,
         judge=_judge_counts(outcome.judge),
@@ -587,7 +607,12 @@ async def score_session(ev: Evaluator, session_id: uuid.UUID) -> SessionResult:
     solved = ev.settings.scoring.solved_threshold
     assessment = assess_grade(
         [
-            TaskScore(grade=outcome.grade, score=outcome.score, kind=outcome.kind)
+            TaskScore(
+                grade=outcome.grade,
+                score=outcome.score,
+                kind=outcome.kind,
+                required_passed=outcome.required_passed,
+            )
             for outcome in outcomes
         ],
         [GradeLevel(code=grade.code, level=grade.level) for grade in grades],

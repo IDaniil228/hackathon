@@ -19,6 +19,10 @@ params:
       - модель распознавания жестов по данным акселерометра
       - классификатор сортов растений по снимкам листьев
       - модель, предсказывающая следующий токен в небольшой языковой модели
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 1, required: true}
 ---
 
 # Кросс-энтропия с label smoothing
@@ -118,6 +122,10 @@ def random_case(rng, batch, classes, scale, ignore_share):
     return case(logits, targets, rng.choice([0.0, 0.05, 0.1, 0.2]))
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     cases = [
         case([[2.0, 1.0, 0.1], [0.5, 2.5, 0.3]], [0, 1], 0.0),
@@ -129,9 +137,11 @@ def generate(params, rng):
         case([[0.0, 0.0, 0.0, 0.0]], [3], 1.0),
         case([[-800.0, -800.5, -799.0]], [1], 0.0),
     ]
+    cases = grouped("manual", cases)
     for _ in range(4):
-        cases.append(random_case(rng, rng.randint(1, 5), rng.randint(2, 6), 10, 0.2))
-    cases.append(random_case(rng, params["batch_max"], 6, 1000, 0.25))
+        random_one = random_case(rng, rng.randint(1, 5), rng.randint(2, 6), 10, 0.2)
+        cases.append(dict(random_one, group="random"))
+    cases.append(dict(random_case(rng, params["batch_max"], 6, 1000, 0.25), group="stress"))
     return cases
 ```
 

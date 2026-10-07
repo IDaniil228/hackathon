@@ -19,6 +19,10 @@ params:
       - оформление заказа в интернет-магазине
       - перевод между счетами в банковском приложении
       - создание заявки на возврат товара
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 1, required: true}
 ---
 
 # Ключи идемпотентности
@@ -91,6 +95,10 @@ def stream(rng, n, keys, bodies, max_gap):
     return result
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     cases = [
         case(
@@ -113,13 +121,14 @@ def generate(params, rng):
         case([[0, "a", "h", 400], [1, "a", "h", 201], [1, "b", "h", 201], [2, "b", "h", 500]], 30),
         case([[0, "a", "h", 201], [0, "a", "h", 201], [0, "A", "h", 201]], 1),
     ]
+    cases = grouped("manual", cases)
     for _ in range(6):
         keys = ["", "k1", "k2", "k3"][: rng.randint(2, 4)]
         requests = stream(rng, rng.randint(5, 60), keys, ["h1", "h2"], 15)
-        cases.append(case(requests, rng.randint(5, 60)))
+        cases.append(dict(case(requests, rng.randint(5, 60)), group="random"))
     keys = [""] + ["key-" + str(i) for i in range(40)]
     requests = stream(rng, params["n_max"], keys, ["h1", "h2", "h3"], 3)
-    cases.append(case(requests, rng.randint(30, 300)))
+    cases.append(dict(case(requests, rng.randint(30, 300)), group="stress"))
     return cases
 ```
 

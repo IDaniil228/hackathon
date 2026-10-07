@@ -1,7 +1,7 @@
 import pytest
 
 from taskgen.contracts import TaskKind
-from taskgen.evaluation.grading import GradeLevel, TaskScore, assess_grade
+from taskgen.evaluation.grading import GradeLevel, TaskScore, assess_grade, is_solved
 
 GRADES = [
     GradeLevel(code="senior", level=30),
@@ -91,6 +91,21 @@ def test_order_follows_level_even_when_names_sort_otherwise():
 def test_score_exactly_at_solved_threshold_counts_as_solved():
     result = _assess([("junior", SOLVED)], "junior")
     assert result.levels[0].solved == 1
+
+
+def test_failed_required_group_is_not_solved_whatever_the_score():
+    tasks = [TaskScore(grade="junior", score=1.0, required_passed=False)]
+    result = assess_grade(
+        tasks, GRADES, "junior", solved_threshold=SOLVED, pass_threshold=PASS, min_evidence=1
+    )
+    assert result.levels[0].solved == 0
+    assert result.outcome == "failed"
+
+
+def test_is_solved_needs_score_and_required_groups():
+    assert is_solved(SOLVED, SOLVED)
+    assert not is_solved(1.0, SOLVED, required_passed=False)
+    assert not is_solved(SOLVED - 0.01, SOLVED)
 
 
 def test_share_exactly_at_pass_threshold_passes_level():

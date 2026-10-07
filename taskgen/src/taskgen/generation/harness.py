@@ -13,16 +13,18 @@
 
 Кейс — {"input": [аргументы entrypoint], "expected": значение}. input — массив позиционных
 аргументов, для Python допустим и объект именованных; так его понимает песочница в run_tests.
+Если шаблон объявил группы кейсов, у каждого кейса есть ещё "group" — имя одной из них.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import Any
 
 from pydantic import ValidationError
 
-from taskgen.contracts import RunLimits, RunRequest, RunResult, TestCase
+from taskgen.contracts import CaseGroup, RunLimits, RunRequest, RunResult, TestCase
 
 HARNESS_FILE = "main.py"
 
@@ -66,7 +68,33 @@ def generator_request(
     )
 
 
-def parse_generator_output(result: RunResult) -> list[TestCase]:
+def parse_generator_output(
+    result: RunResult, groups: Mapping[str, CaseGroup] | None = None
+) -> list[TestCase]:
+    """Кейсы из вывода генератора; groups — TemplateSpec.case_groups шаблона."""
+    cases = _parse_cases(result)
+    _check_groups(cases, groups or {})
+    return cases
+
+
+def _check_groups(cases: list[TestCase], groups: Mapping[str, CaseGroup]) -> None:
+    for number, case in enumerate(cases, start=1):
+        if case.group is None:
+            if groups:
+                raise GeneratorError(f"кейс {number} без группы, а шаблон объявил группы кейсов")
+        elif case.group not in groups:
+            declared = ", ".join(groups) or "нет ни одной"
+            raise GeneratorError(
+                f"кейс {number}: группа {case.group} не объявлена в case_groups; "
+                f"объявлены: {declared}"
+            )
+    present = {case.group for case in cases}
+    empty = [name for name, group in groups.items() if group.required and name not in present]
+    if empty:
+        raise GeneratorError(f"обязательные группы без кейсов: {', '.join(empty)}")
+
+
+def _parse_cases(result: RunResult) -> list[TestCase]:
     if result.timed_out:
         raise GeneratorError("генератор тестов не уложился во время прогона")
     if result.exit_code != 0:
@@ -89,6 +117,8 @@ def parse_generator_output(result: RunResult) -> list[TestCase]:
                 f"кейс {number}: input — массив аргументов функции или объект "
                 "именованных аргументов"
             )
+        if not isinstance(item.get("group", ""), str):
+            raise GeneratorError(f"кейс {number}: group — имя группы строкой")
         try:
             cases.append(TestCase.model_validate(item))
         except ValidationError as error:

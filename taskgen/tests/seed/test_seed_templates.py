@@ -21,7 +21,7 @@ from sqlalchemy import select
 
 from taskgen.bank.importer import import_documents, read_directory
 from taskgen.bank.parser import find_phrases, parse_template
-from taskgen.config import SandboxSettings, SelectionSettings
+from taskgen.config import SandboxSettings, ScoringSettings, SelectionSettings
 from taskgen.contracts import (
     ParamSpec,
     RunLimits,
@@ -32,6 +32,14 @@ from taskgen.contracts import (
     TestRunRequest,
 )
 from taskgen.db import Area, AreaSkill, Grade
+from taskgen.evaluation.grading import is_solved
+from taskgen.evaluation.scoring import (
+    Components,
+    code_task_score,
+    failed_required_groups,
+    resolve_weights,
+    weighted_pass_rate,
+)
 from taskgen.generation.harness import GeneratorError, generator_request, parse_generator_output
 from taskgen.generation.params import draw_params, fill_placeholders
 from taskgen.sandbox.piston import PistonRunner
@@ -82,7 +90,7 @@ async def generate_cases(piston: PistonRunner, spec: TemplateSpec, seed: int) ->
     params = draw_params(spec.params, random.Random(seed))
     result = await piston.run(generator_request(spec.test_generator or "", params, seed, LIMITS))
     try:
-        cases = parse_generator_output(result)
+        cases = parse_generator_output(result, spec.case_groups)
     except GeneratorError as error:
         pytest.fail(f"{error}; параметры {params}")
     assert len(cases) >= MIN_CASES, (params, cases)
@@ -93,6 +101,26 @@ async def generate_cases(piston: PistonRunner, spec: TemplateSpec, seed: int) ->
     size = len(json.dumps([case.input for case in cases], ensure_ascii=False).encode())
     assert size <= MAX_INPUT_BYTES, f"входы кейсов занимают {size} байт"
     return cases
+
+
+def solved_at_best(spec: TemplateSpec, cases: list[TestCase], report: TestReport) -> bool:
+    """Решено ли задание, если судья, анализаторы и замер скорости поставят решению 1.
+
+    Это верхняя граница балла: неверное решение, которое не решено даже так, не станет
+    решённым ни при каком судье.
+    """
+    scoring = ScoringSettings()
+    components = Components(
+        tests=weighted_pass_rate(report, cases, spec.case_groups),
+        rubric=1.0,
+        quality=1.0,
+        performance=1.0,
+    )
+    score = code_task_score(components, resolve_weights(scoring, spec.scoring))
+    failed = failed_required_groups(
+        report, cases, spec.case_groups, default=scoring.required_case_groups
+    )
+    return is_solved(score, scoring.solved_threshold, required_passed=not failed)
 
 
 async def run_solution(
@@ -340,6 +368,7 @@ async def test_reference_passes_generated_cases(piston, path: Path, seed: int):
     assert report.compile_error is None, report.compile_error
     failed = [(i, o.error) for i, o in enumerate(report.outcomes) if not o.passed]
     assert not failed, failed
+    assert solved_at_best(spec, cases, report)
 
 
 def test_every_code_template_has_mutants():
@@ -348,10 +377,20 @@ def test_every_code_template_has_mutants():
     assert names == set(MUTANTS), names ^ set(MUTANTS)
 
 
+@pytest.mark.parametrize("path", CODE_PATHS, ids=_source)
+def test_code_template_weighs_case_groups_and_gates_on_one(path: Path):
+    # Без групп все кейсы равноценны, и решение, которое проходит частые простые кейсы,
+    # набирает балл решённого. Гейт нужен, потому что одна ошибка роняет один-два кейса
+    # из десятков, и никакой вес не опустит такой балл ниже порога.
+    groups = _spec(path).case_groups
+    assert groups, "шаблон не объявил группы кейсов"
+    assert any(group.required for group in groups.values()), "ни одна группа не обязательна"
+
+
 @pytest.mark.integration
 @pytest.mark.parametrize("seed", SEEDS)
 @pytest.mark.parametrize("path", CODE_PATHS, ids=_source)
-async def test_wrong_solutions_fail_some_case(piston, path: Path, seed: int):
+async def test_wrong_solutions_are_not_solved_at_best(piston, path: Path, seed: int):
     spec = _spec(path)
     cases = await generate_cases(piston, spec, seed)
 
@@ -359,6 +398,6 @@ async def test_wrong_solutions_fail_some_case(piston, path: Path, seed: int):
     for name, solution in wrong_solutions(spec, cases).items():
         report = await run_solution(piston, spec, solution, cases)
         assert report.compile_error is None, (name, report.compile_error)
-        if report.pass_rate == 1.0:
+        if solved_at_best(spec, cases, report):
             survivors.append(name)
-    assert not survivors, f"неверные решения прошли все кейсы: {survivors}"
+    assert not survivors, f"неверные решения засчитаны решёнными: {survivors}"

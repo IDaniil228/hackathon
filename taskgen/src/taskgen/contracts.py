@@ -7,9 +7,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, Literal, Protocol
+from typing import Annotated, Any, Literal, Protocol
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 # --- Жизненный цикл сессии ------------------------------------------------------------------
 
@@ -85,6 +85,23 @@ class QuizVariant(BaseModel):
     wrong: list[str]
 
 
+class CaseGroup(BaseModel):
+    """Группа тестовых кейсов задания с кодом: её доля в балле за тесты и гейт решённости.
+
+    weight — доля группы целиком, а не одного кейса: число кейсов в группе вес не меняет.
+    required — задание решено, только если пройдены все кейсы группы; None — решает
+    настройка ScoringSettings.required_case_groups.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    weight: float = Field(gt=0)
+    required: bool | None = None
+
+
+CaseGroupName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_-]*$")]
+
+
 class TemplateSpec(BaseModel):
     """Разобранный md-шаблон. Формат файла описан в taskgen/TEMPLATE_FORMAT.md."""
 
@@ -105,6 +122,9 @@ class TemplateSpec(BaseModel):
     entrypoint: str | None = None
     reference_solution: str | None = None
     test_generator: str | None = None
+    # Только для kind=code: группы, которые генератор тестов ставит кейсам в поле group.
+    # Пусто — все кейсы равноценны.
+    case_groups: dict[CaseGroupName, CaseGroup] = {}
     # Только для kind=essay: вопросы идут в условие дословно, ситуацию пишет LLM по фактам,
     # а запрещённые фразы не должны появиться в ситуации. Фразы действуют и для kind=quiz.
     questions: str | None = None
@@ -188,6 +208,8 @@ class TestCase(BaseModel):
 
     input: Any
     expected: Any
+    # Группа из TemplateSpec.case_groups; None — шаблон групп не объявил.
+    group: str | None = None
 
 
 class TestRunRequest(BaseModel):
@@ -240,7 +262,8 @@ class HiddenPayload(BaseModel):
 
     Для kind=code обязательны cases, entrypoint и runtime. reference_report — прогон эталона
     на тех же cases в той же песочнице: без него скорость и память не оцениваются.
-    scoring — переопределение весов балла из TemplateSpec.scoring.
+    scoring — переопределение весов балла из TemplateSpec.scoring, case_groups — группы
+    кейсов из TemplateSpec.case_groups: веса групп кандидат не видит.
     """
 
     cases: list[TestCase] = []
@@ -249,6 +272,7 @@ class HiddenPayload(BaseModel):
     rubric: list[RubricItem] = []
     reference_report: TestReport | None = None
     scoring: dict[str, float] = {}
+    case_groups: dict[str, CaseGroup] = {}
     # Для kind=quiz: id верного ответа среди публичных вариантов и вариант кейса шаблона.
     answer_key: str | None = None
     quiz_variant: str | None = None

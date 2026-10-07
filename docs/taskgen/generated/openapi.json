@@ -2395,7 +2395,7 @@
           "solved": {
             "type": "boolean",
             "title": "Solved",
-            "description": "Балл не ниже порога решённости"
+            "description": "Балл не ниже порога решённости, и пройдены все кейсы обязательных групп"
           },
           "components": {
             "anyOf": [
@@ -2571,6 +2571,15 @@
           "compile_error": {
             "type": "boolean",
             "title": "Compile Error"
+          },
+          "failed_required": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Failed Required",
+            "description": "Обязательные группы кейсов, в которых упал хотя бы один кейс: с ними задание не решено при любом балле",
+            "default": []
           }
         },
         "type": "object",

@@ -19,6 +19,10 @@ params:
       - рейтинг участников олимпиады по программированию
       - список продавцов маркетплейса по числу продаж за месяц
       - рейтинг авторов статей по числу лайков
+case_groups:
+  manual: {weight: 2, required: true}
+  random: {weight: 1}
+  stress: {weight: 3, required: true}
 ---
 
 # Лучшие k участников
@@ -92,6 +96,10 @@ def word(rng, low=3, high=8):
     return "".join(rng.choice(LETTERS) for _ in range(rng.randint(low, high)))
 
 
+def grouped(group, cases):
+    return [dict(item, group=group) for item in cases]
+
+
 def generate(params, rng):
     cases = [
         case(["anna", "boris", "vera", "gleb"], [70, 95, 70, 88], 3),
@@ -104,16 +112,17 @@ def generate(params, rng):
         case(["neg", "zero", "pos"], [-1000000, 0, 1000000], 2),
         case(["same", "same", "other"], [3, 3, 3], 3),
     ]
+    cases = grouped("manual", cases)
     for _ in range(6):
         n = rng.randint(1, 40)
         names = [word(rng, 1, 3) for _ in range(n)]
         scores = [rng.randint(-5, 5) for _ in range(n)]
-        cases.append(case(names, scores, rng.randint(-1, n + 2)))
+        cases.append(dict(case(names, scores, rng.randint(-1, n + 2)), group="random"))
     n = params["n_max"]
     names = [word(rng) for _ in range(n)]
     scores = [rng.randint(-100, 100) for _ in range(n)]
-    cases.append(case(names, scores, rng.randint(1, 25)))
-    cases.append(case(names[:600], scores[:600], 600))
+    cases.append(dict(case(names, scores, rng.randint(1, 25)), group="stress"))
+    cases.append(dict(case(names[:600], scores[:600], 600), group="stress"))
     return cases
 ```
 
