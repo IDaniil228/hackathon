@@ -151,7 +151,7 @@ def test_quote_pairs_cover_every_rubric_item_of_every_essay():
         for spec in (bench.load_spec(str(path.relative_to(bench.TEMPLATES))) for path in templates)
         for item in spec.rubric
     }
-    assert len(templates) == 9
+    assert len(templates) == 15
     assert honest == expected == aware
     assert {p["kind"] for p in pairs if p["group"] == "fact"} == {"carrier", "other", "negation"}
 

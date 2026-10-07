@@ -3,15 +3,15 @@
 > [!NOTE]
 > Файл собран командой `uv run python scripts/gen_docs.py` из каталога `taskgen/`. Не правьте его руками: правьте источник и пересоберите файл. Источник — шаблоны [`seed/templates`](../../../taskgen/seed/templates), разобранные `parse_template`, и вакансии [`seed/vacancies`](../../../taskgen/seed/vacancies)
 
-В банке 47 шаблонов. Формат шаблона описан в [`TEMPLATE_FORMAT.md`](../../../taskgen/TEMPLATE_FORMAT.md)
+В банке 53 шаблонов. Формат шаблона описан в [`TEMPLATE_FORMAT.md`](../../../taskgen/TEMPLATE_FORMAT.md)
 
 ## Сводка по ячейкам
 
 | Область | Грейд | С кодом | Эссе | Задачки | Сложность | Время, мин |
 |---|---|---|---|---|---|---|
-| `algo` | `junior` | 2 | 1 | 2 | 3 | 3–20 |
-| `algo` | `middle` | 2 | 1 | 2 | 5 | 3–30 |
-| `algo` | `senior` | 2 | 1 | 2 | 7 | 4–40 |
+| `algo` | `junior` | 2 | 3 | 2 | 3 | 3–20 |
+| `algo` | `middle` | 2 | 3 | 2 | 5 | 3–30 |
+| `algo` | `senior` | 2 | 3 | 2 | 7 | 4–40 |
 | `backend` | `junior` | 3 | 1 | 2 | 3 | 3–25 |
 | `backend` | `middle` | 3 | 1 | 2 | 4–5 | 4–30 |
 | `backend` | `senior` | 2 | 1 | 2 | 6–7 | 4–40 |
@@ -23,18 +23,24 @@
 
 | Шаблон | Грейд | Тип и вид io | Окружение | Сложность | Время, мин | Навыки | Пунктов рубрики или вариантов кейса | Описание |
 |---|---|---|---|---|---|---|---|---|
+| [`algo-binary-search-bounds-essay`](../../../taskgen/seed/templates/algo/junior/algo-binary-search-bounds-essay.md) | `junior` | essay |  | 3 | 15 | `binary-search`, `python` | 6 | Ревью двоичного поиска первой записи не раньше заданного момента: условие применимости, зацикливание и выход за границы, равные ключи, функции стандартной библиотеки |
+| [`algo-hash-lookup-essay`](../../../taskgen/seed/templates/algo/junior/algo-hash-lookup-essay.md) | `junior` | essay |  | 3 | 15 | `data-structures`, `python` | 6 | Вопрос о проверке вхождения: поиск по списку в цикле и его сложность, множество и словарь на хэш-таблице, худший случай, неизменяемые ключи |
 | [`algo-lookup-structure-quiz`](../../../taskgen/seed/templates/algo/junior/algo-lookup-structure-quiz.md) | `junior` | quiz |  | 3 | 3 | `data-structures`, `python` | 3 | Выбор структуры данных под операции: проверка принадлежности, запросы по диапазону значений, обработка в обратном порядке поступления |
 | [`algo-pairs-sum-at-most`](../../../taskgen/seed/templates/algo/junior/algo-pairs-sum-at-most.md) | `junior` | code, function | `python` | 3 | 20 | `python`, `two-pointers` | 5 | Подсчёт пар элементов отсортированного массива, сумма которых не превышает порог, быстрее квадратичного перебора: два указателя или бинарный поиск |
 | [`algo-sort-choice-quiz`](../../../taskgen/seed/templates/algo/junior/algo-sort-choice-quiz.md) | `junior` | quiz |  | 3 | 3 | `sorting`, `python` | 3 | Выбор алгоритма сортировки по свойствам данных и ограничениям: устойчивость, диапазон ключей, дополнительная память, худший случай |
 | [`algo-sorting-stability-essay`](../../../taskgen/seed/templates/algo/junior/algo-sorting-stability-essay.md) | `junior` | essay |  | 3 | 15 | `sorting`, `python` | 6 | Вопрос о сортировках: устойчивость и сортировка по нескольким ключам, нижняя оценка сортировок сравнением и сортировка подсчётом, поведение встроенной сортировки |
 | [`algo-top-k-ranking-cpp`](../../../taskgen/seed/templates/algo/junior/algo-top-k-ranking-cpp.md) | `junior` | code, function | `cpp` | 3 | 20 | `cpp`, `sorting` | 5 | Отбор k лучших участников рейтинга на C++: сортировка по убыванию баллов с разрешением ничьих по имени, частичная сортировка и обработка k вне диапазона |
+| [`algo-coin-change-greedy-essay`](../../../taskgen/seed/templates/algo/middle/algo-coin-change-greedy-essay.md) | `middle` | essay |  | 5 | 20 | `greedy`, `dynamic-programming`, `python` | 5 | Выдача суммы наименьшим числом номиналов: когда жадный выбор оптимален, решение динамическим программированием, восстановление ответа, ограниченный запас номиналов |
+| [`algo-dependency-order-essay`](../../../taskgen/seed/templates/algo/middle/algo-dependency-order-essay.md) | `middle` | essay |  | 5 | 20 | `graphs`, `python` | 7 | Порядок выполнения элементов с зависимостями: топологическая сортировка, обнаружение и вывод цикла, параллельные уровни, длина критического пути и расписание на ограниченном числе исполнителей |
 | [`algo-grid-weighted-path`](../../../taskgen/seed/templates/algo/middle/algo-grid-weighted-path.md) | `middle` | code, function | `python` | 5 | 30 | `python`, `graphs` | 6 | Кратчайший путь по клетчатому полю с двумя ценами клеток и стенами: алгоритм Дейкстры или его вариант для малых целых весов, недостижимая цель |
 | [`algo-max-meetings-cpp`](../../../taskgen/seed/templates/algo/middle/algo-max-meetings-cpp.md) | `middle` | code, function | `cpp` | 5 | 25 | `cpp`, `greedy`, `sorting` | 6 | Максимальное число непересекающихся полуинтервалов на C++: жадный выбор по раннему окончанию, касание концов, доказательство корректности жадного шага |
 | [`algo-range-structure-quiz`](../../../taskgen/seed/templates/algo/middle/algo-range-structure-quiz.md) | `middle` | quiz |  | 5 | 3 | `data-structures`, `python` | 3 | Выбор структуры данных под запросы: объединение групп и проверка связности, суммы на отрезке неизменного массива, суммы на отрезке при точечных изменениях |
 | [`algo-shortest-path-choice-essay`](../../../taskgen/seed/templates/algo/middle/algo-shortest-path-choice-essay.md) | `middle` | essay |  | 5 | 20 | `graphs`, `python` | 7 | Выбор алгоритма кратчайших путей по свойствам графа: BFS, 0-1 BFS, Дейкстра, Беллман — Форд, отрицательные веса и циклы, оценки сложности |
 | [`algo-shortest-path-quiz`](../../../taskgen/seed/templates/algo/middle/algo-shortest-path-quiz.md) | `middle` | quiz |  | 5 | 3 | `graphs`, `python` | 3 | Выбор алгоритма кратчайших путей от одной вершины по весам рёбер: нули и единицы, положительные веса, отрицательные веса без отрицательных циклов |
 | [`algo-cheapest-route-cpp`](../../../taskgen/seed/templates/algo/senior/algo-cheapest-route-cpp.md) | `senior` | code, function | `cpp` | 7 | 40 | `cpp`, `graphs`, `dynamic-programming` | 6 | Самый дешёвый маршрут с ограничением на число пересадок на C++: Беллман — Форд по слоям или Дейкстра по состояниям, вторичный критерий — наименьшее число рейсов |
+| [`algo-external-sort-essay`](../../../taskgen/seed/templates/algo/senior/algo-external-sort-essay.md) | `senior` | essay |  | 7 | 30 | `sorting`, `data-structures` | 7 | Проектирование сортировки данных, которые не помещаются в память: формирование серий и многопутевое слияние, оценка проходов по диску, распределённая сортировка по диапазонам ключей и перекос ключей |
 | [`algo-graph-problem-quiz`](../../../taskgen/seed/templates/algo/senior/algo-graph-problem-quiz.md) | `senior` | quiz |  | 7 | 4 | `graphs` | 4 | Распознать графовую задачу по постановке: минимальное остовное дерево, порядок с зависимостями, компоненты сильной связности, максимальный поток |
+| [`algo-nearest-objects-essay`](../../../taskgen/seed/templates/algo/senior/algo-nearest-objects-essay.md) | `senior` | essay |  | 7 | 30 | `data-structures` | 6 | Проектирование поиска ближайших движущихся объектов на карте: оценка перебора, пространственные индексы, частые обновления координат, расстояния на разных широтах, шардирование и задержка запроса |
 | [`algo-sketch-structure-quiz`](../../../taskgen/seed/templates/algo/senior/algo-sketch-structure-quiz.md) | `senior` | quiz |  | 7 | 4 | `data-structures` | 3 | Вероятностные структуры данных для потоков: проверка принадлежности с ложными срабатываниями, оценка частот, оценка числа различных элементов |
 | [`algo-streaming-top-k-essay`](../../../taskgen/seed/templates/algo/senior/algo-streaming-top-k-essay.md) | `senior` | essay |  | 7 | 30 | `data-structures` | 8 | Проектирование подсчёта самых частых элементов потока при ограниченной памяти: точное решение с кучей, Misra — Gries и Count-Min Sketch, гарантии ошибки, распределённое слияние |
 | [`algo-weighted-jobs`](../../../taskgen/seed/templates/algo/senior/algo-weighted-jobs.md) | `senior` | code, function | `python` | 7 | 35 | `python`, `dynamic-programming`, `binary-search` | 6 | Взвешенный выбор непересекающихся работ с обязательным перерывом между ними: динамика по отсортированным работам и бинарный поиск предшественника за O(n log n) |
