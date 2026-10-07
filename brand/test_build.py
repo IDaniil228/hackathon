@@ -18,10 +18,45 @@ import check_contrast  # noqa: E402
 
 DIST = HERE / "dist"
 COLOR_LITERAL = re.compile(r"#[0-9a-fA-F]{3,8}\b|\brgba?\([^)]*\)|\bhsla?\([^)]*\)")
+BRANDBOOK_PAGE = re.compile(r"^Брендбук ФСП\.pdf, стр\. \d+")
+# Брендбук называет эти серые цветами "для фона и шрифта", поэтому нейтральные роли тем берут их
+# прямой ссылкой, а не смесью
+OFFICIAL_NEUTRALS = {
+    "light": ("bg", "surface-hover", "border", "text", "neutral-soft"),
+    "dark": ("bg", "surface", "surface-hover", "border", "border-strong", "text", "text-muted", "neutral-soft"),
+}
 
 
 def load_tokens():
     return json.loads((HERE / "tokens.json").read_text(encoding="utf-8"))
+
+
+def palette_ref(value):
+    """Имя цвета палитры, если значение - прямая ссылка {palette.X}, иначе None."""
+    match = isinstance(value, str) and re.fullmatch(r"\{palette\.([a-z0-9-]+)\}", value)
+    return match.group(1) if match else None
+
+
+class PaletteTest(unittest.TestCase):
+    def test_every_palette_color_cites_a_brandbook_page_or_is_derived(self):
+        for name, node in load_tokens()["palette"].items():
+            if name.startswith("$"):
+                continue
+            with self.subTest(color=name):
+                if "$derived" in node:
+                    self.assertNotIn("$source", node)
+                else:
+                    self.assertRegex(node.get("$source", ""), BRANDBOOK_PAGE)
+
+    def test_neutral_roles_use_official_grays(self):
+        tokens = load_tokens()
+        palette = tokens["palette"]
+        for theme, keys in OFFICIAL_NEUTRALS.items():
+            for key in keys:
+                with self.subTest(theme=theme, key=key):
+                    name = palette_ref(tokens["theme"][theme][key]["$value"])
+                    self.assertIsNotNone(name, "ожидалась прямая ссылка на палитру, а не смесь")
+                    self.assertNotIn("$derived", palette[name], f"palette.{name} не из брендбука")
 
 
 class BuildTest(unittest.TestCase):

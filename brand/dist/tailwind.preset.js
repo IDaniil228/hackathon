@@ -45,6 +45,11 @@ module.exports = {
             "light": "color-mix(in srgb, var(--fsp-palette-light) calc(<alpha-value> * 100%), transparent)",
             "gray": "color-mix(in srgb, var(--fsp-palette-gray) calc(<alpha-value> * 100%), transparent)",
             "dark": "color-mix(in srgb, var(--fsp-palette-dark) calc(<alpha-value> * 100%), transparent)",
+            "gray-bright": "color-mix(in srgb, var(--fsp-palette-gray-bright) calc(<alpha-value> * 100%), transparent)",
+            "gray-middle": "color-mix(in srgb, var(--fsp-palette-gray-middle) calc(<alpha-value> * 100%), transparent)",
+            "gray-light-2": "color-mix(in srgb, var(--fsp-palette-gray-light-2) calc(<alpha-value> * 100%), transparent)",
+            "gray-light": "color-mix(in srgb, var(--fsp-palette-gray-light) calc(<alpha-value> * 100%), transparent)",
+            "digital": "color-mix(in srgb, var(--fsp-palette-digital) calc(<alpha-value> * 100%), transparent)",
             "white": "color-mix(in srgb, var(--fsp-palette-white) calc(<alpha-value> * 100%), transparent)"
           }
         }
