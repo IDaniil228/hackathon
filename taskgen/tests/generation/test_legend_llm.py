@@ -2,43 +2,37 @@
 
 import os
 
-import httpx
 import pytest
 
-from taskgen.config import GenerationSettings, LLMSettings, SandboxSettings
+from taskgen.config import GenerationSettings, SandboxSettings, Settings
 from taskgen.contracts import RunLimits
 from taskgen.generation.instance import InstanceDeps, generate_instance
-from taskgen.llm import LimitedLLM, OpenAICompatibleClient
 from tests.generation.fakes import LocalSandbox
 from tests.generation.templates import ENTRYPOINT, code_spec
+from tests.live_llm import live_router
 
 pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
 async def llm():
-    # Одна легенда на локальной qwen3.5:9b пишется минуты, поэтому тест запускается явно.
+    # Одна легенда на локальной модели пишется минуты, поэтому тест запускается явно.
     if not os.environ.get("TASKGEN_LLM_SMOKE"):
         pytest.skip("smoke-тест на настоящей модели включает TASKGEN_LLM_SMOKE=1")
-    settings = LLMSettings()
-    try:
-        async with httpx.AsyncClient(timeout=3) as http:
-            (await http.get(f"{settings.base_url}/models")).raise_for_status()
-    except httpx.HTTPError:
-        pytest.skip(f"LLM недоступна по адресу {settings.base_url}")
-    # Модель с рассуждениями пишет условие дольше таймаута по умолчанию.
-    client = OpenAICompatibleClient(settings.model_copy(update={"timeout_seconds": 600}))
-    yield LimitedLLM(client, limit=1), settings.generator_model
-    await client.aclose()
+    settings = Settings().llm
+    router = await live_router(settings, ("generator",))
+    yield router, settings.generator
+    await router.aclose()
 
 
 async def test_real_model_writes_checked_legend(llm):
-    client, model = llm
+    client, role = llm
     sandbox = SandboxSettings()
     deps = InstanceDeps(
         llm=client,
         sandbox=LocalSandbox(),
-        model=model,
+        model=role.model,
+        reasoning_effort=role.reasoning_effort,
         options=GenerationSettings(),
         limits=RunLimits(
             timeout_ms=sandbox.run_timeout_ms, memory_bytes=sandbox.run_memory_limit_bytes

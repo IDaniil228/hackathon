@@ -380,18 +380,18 @@ class Evaluator:
         )
         judge = getattr(state, "judge", None) or LLMJudge(
             llm,
-            model=settings.llm.judge_model,
+            model=settings.llm.judge.model,
             samples=settings.scoring.judge_samples,
             temperature=settings.scoring.judge_temperature,
-            reasoning_effort=settings.llm.judge_reasoning_effort,
+            reasoning_effort=settings.llm.judge.reasoning_effort,
             relevance=relevance,
         )
         detector = None
         if settings.ai_detector_enabled:
             detector = getattr(state, "ai_detector", None) or LLMAIDetector(
                 llm,
-                model=settings.llm.judge_model,
-                reasoning_effort=settings.llm.judge_reasoning_effort,
+                model=settings.llm.detector.model,
+                reasoning_effort=settings.llm.detector.reasoning_effort,
             )
         analyzers = getattr(state, "analyzers", None)
         return cls(
@@ -706,8 +706,8 @@ async def refresh_summary(ev: Evaluator, candidate_ref: str) -> None:
         text = await write_summary(
             ev.llm,
             data,
-            model=ev.settings.llm.generator_model,
-            reasoning_effort=ev.settings.llm.generator_reasoning_effort,
+            model=ev.settings.llm.generator.model,
+            reasoning_effort=ev.settings.llm.generator.reasoning_effort,
         )
     except httpx.HTTPError:
         # Summary не должен срывать оценку: при недоступной модели — текст по шаблону.

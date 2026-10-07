@@ -1,13 +1,13 @@
-"""Общий ограничитель вызовов LLM: генерация и оценка делят один лимит."""
+"""Ограничитель вызовов LLM: генерация и оценка делят лимиты провайдеров."""
 
 import asyncio
 from types import SimpleNamespace
 
-from taskgen.config import LLMSettings, Settings
+from taskgen.config import LLMSettings, ProviderSettings, Settings
 from taskgen.contracts import ChatMessage
 from taskgen.evaluation.service import Evaluator
 from taskgen.generation.service import Generator
-from taskgen.llm import LimitedLLM, limited_llm
+from taskgen.llm import LimitedLLM, ProviderRouter, limited_llm
 
 
 class SlowLLM:
@@ -26,8 +26,9 @@ class SlowLLM:
 
 
 def _state(**fields):
+    providers = {"ollama": ProviderSettings(base_url="http://local", concurrency=3)}
     return SimpleNamespace(
-        settings=Settings(llm=LLMSettings(concurrency=3)), sessionmaker=None, **fields
+        settings=Settings(llm=LLMSettings(providers=providers)), sessionmaker=None, **fields
     )
 
 
@@ -39,15 +40,23 @@ async def test_limited_llm_caps_concurrent_calls():
     assert inner.peak == 2
 
 
-def test_one_limiter_in_state_until_llm_is_replaced():
+async def test_one_router_in_state_until_llm_is_replaced():
     state = _state(llm=SlowLLM())
     first = limited_llm(state)
-    assert isinstance(first, LimitedLLM)
-    assert state.limited_llm is first
+    assert isinstance(first, ProviderRouter)
     assert limited_llm(state) is first
-    assert first._semaphore._value == 3
+    message = [ChatMessage(role="user", content="x")]
+    model = state.settings.llm.generator.model
+    await asyncio.gather(*(first.complete(message, model=model) for _ in range(7)))
+    assert state.llm.peak == 3
     state.llm = SlowLLM()
-    assert limited_llm(state).inner is state.llm
+    assert limited_llm(state) is not first
+
+
+def test_own_router_is_used_as_is():
+    state = _state(llm=None)
+    state.llm = ProviderRouter(state.settings.llm, {"ollama": SlowLLM(), "deepseek": SlowLLM()})
+    assert limited_llm(state) is state.llm
 
 
 def test_generation_and_evaluation_share_the_limiter():

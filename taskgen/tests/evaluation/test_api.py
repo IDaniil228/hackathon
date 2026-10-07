@@ -37,7 +37,8 @@ class Responder:
         if "sentences" in properties or (schema is None and "справку" in messages[0].content):
             return json.dumps({"sentences": ["Кандидат молодец."]}, ensure_ascii=False)
         self.judge_calls += 1
-        user = messages[-1].content
+        # Провайдер без json_schema получает схему последним сообщением, после промпта судьи.
+        user = "\n".join(message.content for message in messages)
         answer = re.search(r"<<<ОТВЕТ-\w+>>>\n(.*?)\n<<<КОНЕЦ", user, re.DOTALL).group(1)
         quote = next(line for line in answer.splitlines() if line.strip())
         ids = properties["items"]["items"]["properties"]["item_id"]["enum"]

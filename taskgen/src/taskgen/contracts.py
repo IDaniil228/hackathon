@@ -148,6 +148,10 @@ class ChatMessage(BaseModel):
 
 ReasoningEffort = Literal["none", "minimal", "low", "medium", "high"]
 
+# Как провайдер принимает просьбу об ответе по схеме; смысл значений описан у поля
+# structured_output в config.py.
+StructuredOutput = Literal["json_schema", "json_object", "text"]
+
 # Способ проверки ситуации эссе; что делает каждый, описано в generation/essay.py.
 EssayCheckMethod = Literal["llm", "embeddings", "both"]
 

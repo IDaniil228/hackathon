@@ -9,76 +9,221 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from taskgen.contracts import EssayCheckMethod, ReasoningEffort, TaskKind
+from taskgen.contracts import EssayCheckMethod, ReasoningEffort, StructuredOutput, TaskKind
 
-_REASONING = (
-    "Поле reasoning_effort запроса к модели {role}; null — поле не передаётся, и модель "
-    'рассуждает как обычно. Значение зависит от модели: на слабой машине "none" сокращает '
-    "ответ в разы, рассуждение qwen3.5:4b на простой запрос занимало тысячи токенов и иногда "
-    "не оставляло места самому ответу"
-)
+ENV_PREFIX = "TASKGEN_"
+ENV_DELIMITER = "__"
+
+LOCAL_MODEL = "ollama/hf.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF:q4_K_M"
+CLOUD_MODEL = "deepseek/deepseek-flash"
 
 
-class LLMSettings(BaseModel):
-    """OpenAI-совместимый провайдер: Ollama, vLLM или облачный шлюз."""
+class ProviderSettings(BaseModel):
+    """OpenAI-совместимый провайдер: Ollama, vLLM, облачный API или шлюз к нему."""
 
     base_url: str = Field(
-        default="http://localhost:11434/v1",
-        description="Адрес OpenAI-совместимого API: /chat/completions и /embeddings",
+        description="Адрес OpenAI-совместимого API: /chat/completions и /embeddings"
     )
-    api_key: str = Field(
-        default="ollama",
-        description="Ключ провайдера, уходит в заголовке Authorization: Bearer; "
-        "Ollama его не проверяет",
-    )
-    generator_model: str = Field(
-        default="qwen3.5:9b",
-        description="Модель, которая пишет легенды, ситуации эссе и текст machine summary",
-    )
-    judge_model: str = Field(
-        default="qwen3.5:4b",
-        description="Модель судьи по рубрике и детектора ИИ. Судья другой модели снижает "
-        "завышение оценок собственного текста генератора",
-    )
-    embedding_model: str = Field(
-        default="bge-m3", description="Модель эмбеддингов описаний шаблонов и навыков кандидата"
-    )
-    generator_reasoning_effort: ReasoningEffort | None = Field(
-        default=None, description=_REASONING.format(role="генерации")
-    )
-    judge_reasoning_effort: ReasoningEffort | None = Field(
-        default=None, description=_REASONING.format(role="судьи и детектора ИИ")
-    )
-    checker_model: str | None = Field(
+    api_key: SecretStr | None = Field(
         default=None,
-        description="Проверяльщик ситуации эссе: ищет в ней факты шаблона и цитирует их; "
-        "null — та же модель, что пишет ситуацию",
+        description="Ключ провайдера, уходит в заголовке Authorization: Bearer. Задаётся "
+        "только переменной окружения и не попадает ни в журнал, ни в документацию; null — "
+        "заголовок не передаётся",
     )
-    checker_reasoning_effort: ReasoningEffort | None = Field(
-        default=None, description=_REASONING.format(role="проверяльщика ситуации эссе")
-    )
-    solver_model: str | None = Field(
-        default=None,
-        description="Слепой решатель: решает экземпляр по тому, что увидит кандидат, до "
-        "выдачи. null — модель проверяльщика, а без неё — модель генерации. Слабая модель "
-        "решателя чаще отклоняет годные экземпляры",
-    )
-    solver_reasoning_effort: ReasoningEffort | None = Field(
-        default=None, description=_REASONING.format(role="слепого решателя")
+    requires_key: bool = Field(
+        default=False,
+        description="Провайдеру нужен ключ. Без ключа сервис всё равно стартует: он пишет "
+        "предупреждение в журнал, а вызов роли на этом провайдере завершается ошибкой с именем "
+        "переменной ключа и не уходит в сеть",
     )
     timeout_seconds: float = Field(
-        default=120.0, description="Таймаут одного HTTP-запроса к провайдеру, секунды"
+        default=120.0, gt=0, description="Таймаут одного HTTP-запроса к провайдеру, секунды"
     )
     concurrency: int = Field(
         default=1,
         ge=1,
-        description="Сколько запросов к модели идут одновременно, общий лимит генерации и "
-        "оценки. Локальная модель отвечает по очереди; облачному провайдеру можно больше",
+        description="Сколько запросов к провайдеру идут одновременно, общий лимит генерации и "
+        "оценки на этом провайдере. Локальная модель отвечает по очереди; облачному провайдеру "
+        "можно больше",
     )
+    structured_output: StructuredOutput = Field(
+        default="json_schema",
+        description="Как просить у провайдера ответ по схеме. json_schema — response_format со "
+        "схемой, а при отказе 4xx или ответе не по схеме — повтор со схемой в тексте запроса. "
+        "json_object и text — сразу схема в тексте запроса и одна попытка; json_object "
+        'добавляет response_format {"type": "json_object"}, и провайдер отвечает только '
+        "валидным JSON. DeepSeek отвечает 400 на json_schema, а json_object принимает",
+    )
+
+
+def provider_key_variable(provider: str) -> str:
+    """Переменная окружения, которая задаёт ключ провайдера."""
+    return ENV_DELIMITER.join([f"{ENV_PREFIX}LLM", "PROVIDERS", provider, "API_KEY"]).upper()
+
+
+# Провайдеры по умолчанию. Переменная окружения поля провайдера дополняет его, а не заменяет:
+# LLMSettings._merge_defaults.
+DEFAULT_PROVIDERS: dict[str, dict[str, Any]] = {
+    "ollama": {"base_url": "http://localhost:11434/v1"},
+    "deepseek": {
+        "base_url": "https://api.deepseek.com",
+        "requires_key": True,
+        "concurrency": 4,
+        "structured_output": "json_object",
+    },
+}
+
+
+def _merged(default: dict[str, Any], value: Any) -> Any:
+    """value поверх default, если value — словарь полей; иначе value как есть."""
+    return {**default, **value} if isinstance(value, dict) else value
+
+
+def split_model(model: str) -> tuple[str, str]:
+    """Провайдер и имя модели у него из строки провайдер/модель.
+
+    Провайдер — часть до первого /: в именах моделей Ollama бывают свои /.
+    """
+    provider, _, name = model.partition("/")
+    if not provider or not name:
+        raise ValueError(f"модель {model!r} не в форме провайдер/модель, например ollama/bge-m3")
+    return provider, name
+
+
+class ModelRole(BaseModel):
+    """Модель роли вместе с провайдером, у которого она запрашивается."""
+
+    model: str = Field(
+        description="Модель в форме провайдер/модель: часть до первого / — имя провайдера из "
+        "llm.providers, остальное — имя модели у провайдера, и в нём бывают свои /"
+    )
+
+    @field_validator("model")
+    @classmethod
+    def _has_provider(cls, value: str) -> str:
+        split_model(value)
+        return value
+
+    @property
+    def provider(self) -> str:
+        return split_model(self.model)[0]
+
+    @property
+    def provider_model(self) -> str:
+        """Имя модели у провайдера, без префикса."""
+        return split_model(self.model)[1]
+
+
+class ChatRole(ModelRole):
+    reasoning_effort: ReasoningEffort | None = Field(
+        default="none",
+        description="Поле reasoning_effort запроса к модели роли; null — поле не передаётся, и "
+        'модель рассуждает как обычно. "none" сокращает ответ в разы: рассуждение qwen3.5:4b '
+        "на простой запрос занимало тысячи токенов и иногда не оставляло места самому ответу. "
+        'Модель без рассуждений, как GigaChat 3.1 в Ollama, принимает только "none", а на '
+        'другое значение отвечает HTTP 400 "does not support thinking"',
+    )
+
+
+class LLMSettings(BaseModel):
+    """Провайдеры моделей и роли, которые их используют.
+
+    Роль называет модель строкой провайдер/модель, и вызов уходит провайдеру из префикса.
+    """
+
+    providers: dict[str, ProviderSettings] = Field(
+        default={
+            name: ProviderSettings.model_validate(fields)
+            for name, fields in DEFAULT_PROVIDERS.items()
+        },
+        description="Провайдеры по имени. Поле провайдера из окружения дополняет провайдера по "
+        "умолчанию, а новое имя добавляет провайдера, и тогда base_url обязателен",
+    )
+    generator: ChatRole = Field(
+        default=ChatRole(model=LOCAL_MODEL),
+        description="Пишет легенды, ситуации эссе, кейсы задачек и текст machine summary",
+    )
+    checker: ChatRole = Field(
+        default=ChatRole(model=CLOUD_MODEL),
+        description="Проверяльщик ситуации эссе и кейса задачки: ищет в тексте факты шаблона "
+        "и цитирует их",
+    )
+    solver: ChatRole = Field(
+        default=ChatRole(model=LOCAL_MODEL),
+        description="Слепой решатель: решает экземпляр по тому, что увидит кандидат, до "
+        "выдачи. Работает при generation.solver_enabled. Слабая модель решателя чаще "
+        "отклоняет годные экземпляры",
+    )
+    judge: ChatRole = Field(
+        default=ChatRole(model=CLOUD_MODEL),
+        description="Судья по рубрике. Судья другой модели снижает завышение оценок "
+        "собственного текста генератора",
+    )
+    detector: ChatRole = Field(
+        default=ChatRole(model=CLOUD_MODEL),
+        description="Детектор ИИ; работает при ai_detector_enabled",
+    )
+    embedding: ModelRole = Field(
+        default=ModelRole(model="ollama/bge-m3"),
+        description="Модель эмбеддингов описаний шаблонов, навыков кандидата и ситуаций эссе. "
+        "Векторы в БД помечены именем модели без провайдера: векторы задаёт модель, и смена "
+        "провайдера той же модели не требует пересчёта",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _merge_defaults(cls, data: Any) -> Any:
+        # pydantic-settings собирает из TASKGEN_LLM__PROVIDERS__DEEPSEEK__API_KEY словарь только
+        # с этим полем и заменяет им провайдера по умолчанию целиком. То же с ролью и
+        # TASKGEN_LLM__GENERATOR__MODEL. Поэтому частичный словарь дополняется умолчанием.
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        for name, value in data.items():
+            if name == "providers" and isinstance(value, dict):
+                data[name] = {
+                    provider: _merged(DEFAULT_PROVIDERS.get(provider, {}), fields)
+                    for provider, fields in {**DEFAULT_PROVIDERS, **value}.items()
+                }
+            elif name in cls.model_fields and isinstance(
+                default := cls.model_fields[name].default, BaseModel
+            ):
+                data[name] = _merged(default.model_dump(), value)
+        return data
+
+    def roles(self) -> dict[str, ModelRole]:
+        """Все роли по имени поля; новая роль — новое поле типа ModelRole."""
+        return {
+            name: value
+            for name in type(self).model_fields
+            if isinstance(value := getattr(self, name), ModelRole)
+        }
+
+    def chat_roles(self) -> dict[str, ChatRole]:
+        return {name: role for name, role in self.roles().items() if isinstance(role, ChatRole)}
+
+    def with_timeout(self, seconds: float) -> LLMSettings:
+        """Копия, где у каждого провайдера таймаут seconds: для замеров и smoke-тестов."""
+        providers = {
+            name: provider.model_copy(update={"timeout_seconds": seconds})
+            for name, provider in self.providers.items()
+        }
+        return self.model_copy(update={"providers": providers})
+
+    @model_validator(mode="after")
+    def _roles_reach_their_providers(self) -> LLMSettings:
+        for name, role in self.roles().items():
+            if role.provider not in self.providers:
+                raise ValueError(
+                    f"модель {role.model} роли {name} ссылается на провайдера {role.provider}, "
+                    f"а в llm.providers есть только {', '.join(sorted(self.providers))}"
+                )
+        return self
 
 
 class SelectionSettings(BaseModel):
@@ -352,7 +497,10 @@ class Settings(BaseSettings):
     """Корень настроек; переменные окружения и файл .env читаются при старте."""
 
     model_config = SettingsConfigDict(
-        env_prefix="TASKGEN_", env_nested_delimiter="__", env_file=".env", extra="ignore"
+        env_prefix=ENV_PREFIX,
+        env_nested_delimiter=ENV_DELIMITER,
+        env_file=".env",
+        extra="ignore",
     )
 
     database_url: str = Field(
