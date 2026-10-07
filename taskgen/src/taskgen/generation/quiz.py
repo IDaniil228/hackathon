@@ -8,7 +8,11 @@
 
 Неверный ответ не становится верным из-за кейса только тогда, когда факты варианта
 исключают его. Код этого не доказывает: это обязанность автора шаблона, а слепой решатель
-(solver.py) ловит неоднозначный кейс, если включён.
+(solver.py) ловит неоднозначный кейс, если включён. Лишнюю деталь, которая может сменить
+ответ, код ловит только в виде числа: в кейсе не должно быть чисел, которых нет в фактах,
+инструкции, вопросе и параметрах. У эссе такой проверки нет: в честных ситуациях эссе из
+бенчмарка проверки (tests/generation/bench) есть числа для примера, и проверка отклоняла
+бы их.
 """
 
 from __future__ import annotations
@@ -21,9 +25,10 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from taskgen.contracts import LLMClient, QuizVariant, ReasoningEffort, SolverRecord, TemplateSpec
-from taskgen.generation.essay import EssayScenarioError, generate_essay
+from taskgen.generation.essay import EssayScenarioError, filled_facts, generate_essay
 from taskgen.generation.params import fill_placeholders
 from taskgen.generation.solver import SolverConfig, solve_quiz
+from taskgen.generation.textcheck import foreign_numbers
 
 
 class QuizOption(BaseModel):
@@ -35,7 +40,8 @@ QUIZ_WRITER_RULES = (
     " Это кейс к вопросу с выбором ответа. Не называй ни одного решения, алгоритма или "
     "подхода, который мог бы быть ответом, и не рассуждай о том, что подойдёт. Факты "
     "записаны общими словами вроде «объект» или «запись»: назови их тем, чем они являются "
-    "в домене кейса."
+    "в домене кейса. Не добавляй чисел, объёмов, сроков и условий, которых нет в фактах: "
+    "лишняя деталь может поменять ответ на вопрос."
 )
 
 
@@ -63,8 +69,18 @@ def case_spec(spec: TemplateSpec, variant: QuizVariant) -> TemplateSpec:
     return spec.model_copy(update={"questions": spec.question, "scenario_facts": variant.facts})
 
 
+def case_sources(derived: TemplateSpec, params: dict[str, Any]) -> list[str]:
+    """Тексты, из которых кейс может брать числа: инструкция, вопрос, факты и параметры."""
+    return [
+        fill_placeholders(derived.generator_prompt, params),
+        fill_placeholders(derived.questions or "", params),
+        *(fact.text for fact in filled_facts(derived, params)),
+        *(str(value) for value in params.values()),
+    ]
+
+
 class QuizCaseError(Exception):
-    """Ни один кейс не прошёл проверку фактов, запрещённых фраз или решателя."""
+    """Ни один кейс не прошёл проверку фактов, запрещённых фраз, чисел или решателя."""
 
 
 @dataclass(frozen=True)
@@ -124,6 +140,13 @@ async def write_case(
             )
         except EssayScenarioError as error:
             reason = "; ".join(error.check.reasons) if error.check else str(error)
+            continue
+        invented = foreign_numbers(draft.situation, case_sources(derived, params))
+        if invented:
+            reason = (
+                f"в кейсе есть числа, которых нет в фактах: {', '.join(invented)}; "
+                "убери их, а числа бери только из фактов"
+            )
             continue
         if solver is None:
             return QuizDraft(draft.title, draft.statement, None)

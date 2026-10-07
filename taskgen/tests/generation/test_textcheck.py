@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from taskgen.generation.textcheck import text_problems
+from taskgen.generation.textcheck import foreign_numbers, text_problems
 from taskgen.markers import markers, new_nonce
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -144,3 +144,64 @@ def test_formula_spoiled_by_json_escape_is_rejected(text):
 @pytest.mark.parametrize("text", HONEST_FORMULAS.values(), ids=HONEST_FORMULAS.keys())
 def test_honest_formulas_and_code_are_not_rejected(text):
     assert text_problems(text) == []
+
+
+# --- Числа кейса задачки, которых нет в фактах ----------------------------------------------
+
+PER_PERSON = [
+    "у каждого человека в данных от пяти до тридцати строк, и строки одного человека сильно "
+    "похожи друг на друга",
+    "в работе модель будет применяться к людям, которых не было в обучении",
+]
+
+
+def test_numbers_invented_by_writer_are_foreign():
+    # Настоящий вывод GigaChat на ml-validation-split-quiz: объёмы и сроки сверх фактов.
+    case = (
+        "У каждого клиента от пяти до тридцати транзакций. Для обучения используется часть "
+        "клиентов — их не более трёх тысяч из миллиона. Всего есть около ста тысяч разных "
+        "клиентов и более двадцати миллионов операций за пять лет."
+    )
+    foreign = foreign_numbers(case, PER_PERSON)
+    assert {"трёх тысяч", "миллиона", "ста тысяч", "двадцати миллионов"} <= set(foreign)
+    assert "пяти" not in foreign and "тридцати" not in foreign
+
+
+HONEST_NUMBERS = {
+    # Настоящий вывод Saiga: числа фактов записаны цифрами.
+    "digits-for-words": ("Данные содержат от 5 до 30 визиток каждого пациента", PER_PERSON),
+    "digits-with-scale": ("веса от 1 до 10 миллионов", ["вес от 1 до 10 миллионов"]),
+    "grouped-digits": ("в наборе 10 000 000 записей", ["в наборе десять миллионов записей"]),
+    "words-for-digits": ("сто тысяч строк", ["100 тысяч строк"]),
+    "compound-words": ("двадцать пять сервисов", ["25 сервисов"]),
+    # Настоящий вывод qwen3.8: неопределённое количество — не число.
+    "vague-amounts": ("несколько сотен тысяч вершин, миллионы рёбер и тысячи путей", []),
+    "ordinal": ("после 10-й эпохи потери растут", ["после десятой эпохи потери растут"]),
+    "one-and-zero": ("одна транзакция прочитала ноль строк, а другая — одну", []),
+    # Порядковое слово в кейсе — приём рассказа, а не новое условие.
+    "ordinal-words": ("вторая транзакция, третий сервис и пятый шаг", []),
+    "percent": ("класс встречается в 2 % строк", ["класс встречается в 2 % строк"]),
+    "glued-to-letters": ("модель в fp32, ошибки 5xx, тип int64", []),
+    # Настоящие выводы qwen3.5:9b на задачках банка: нумерация пунктов, счёт в рассказе,
+    # кратность и класс кодов ответа, развёрнутый в диапазон.
+    "list-numbers": (
+        "Требования:\n1. Проверять у сервера.\n2) Не передавать тело.\n 3. Хранить минуту.",
+        [],
+    ),
+    "narrative-two": ("выдвинула два требования: сумма между двумя позициями", []),
+    "multiple-word": (
+        "к концу ошибка примерно в три раза выше, чем на обучении",
+        ["к концу втрое выше, чем на обучении"],
+    ),
+    "status-class": (
+        "запросов, завершившихся с кодом ответа от 500 до 599",
+        ["сколько запросов завершилось ошибкой 5xx в секунду"],
+    ),
+    "from-other-source": ("версия 13 и версия 12", ["версия 12", "сохранил версию 13"]),
+}
+
+
+@pytest.mark.parametrize("case", HONEST_NUMBERS.values(), ids=HONEST_NUMBERS.keys())
+def test_numbers_present_in_sources_are_not_foreign(case):
+    text, sources = case
+    assert foreign_numbers(text, sources) == []
