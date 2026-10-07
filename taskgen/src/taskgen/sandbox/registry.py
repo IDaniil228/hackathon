@@ -1,8 +1,8 @@
 """Реестр окружений: имя runtime сервиса -> язык и версия пакета Piston.
 
 Данные лежат в runtimes.yaml рядом с модулем, поэтому окружение добавляется без правки кода.
-Код нужен только для нового языка обвязки, и поле harness ограничено языками, для которых
-она написана.
+Задачи stdio доступны любому окружению реестра. Код нужен только для драйвера задач-функций
+нового языка, и поле driver ограничено языками, для которых драйвер написан.
 """
 
 from __future__ import annotations
@@ -27,7 +27,9 @@ REQUIREMENTS_FILE = "requirements.txt"
 class RuntimeSpec(BaseModel):
     language: str
     version: str
-    harness: Literal["python", "cpp"]
+    # Драйвер задач-функций из taskgen/sandbox/drivers; None — окружению доступны только
+    # задачи io=stdio.
+    driver: Literal["python", "cpp"] | None = None
     # Описание для человека; {version} и {standard} подставляются из полей ниже, чтобы
     # версия была записана один раз.
     description: str

@@ -25,10 +25,12 @@ from taskgen.contracts import (
     AnalysisReport,
     Analyzer,
     HiddenPayload,
+    IOKind,
     Judge,
     JudgeRequest,
     JudgeResult,
     LLMClient,
+    OutputCheck,
     RunLimits,
     SandboxRunner,
     SessionStatus,
@@ -449,9 +451,11 @@ async def check_code(
         raise SandboxUnavailableError("Песочница для прогона тестов не настроена")
     request = TestRunRequest(
         runtime=hidden.runtime or "",
+        io=IOKind.FUNCTION,
         entrypoint=hidden.entrypoint or "",
         solution=content,
         cases=hidden.cases,
+        check=OutputCheck(mode="json"),
         limits=RunLimits(
             timeout_ms=ev.settings.sandbox.run_timeout_ms,
             memory_bytes=ev.settings.sandbox.run_memory_limit_bytes,

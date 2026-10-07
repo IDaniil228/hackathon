@@ -115,6 +115,36 @@ class CaseGroup(BaseModel):
 CaseGroupName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_-]*$")]
 
 
+class IOKind(StrEnum):
+    """Как решение задания с кодом получает вход и отдаёт ответ."""
+
+    # Кандидат пишет функцию; драйвер языка вызывает её на аргументах кейса.
+    FUNCTION = "function"
+    # Кандидат пишет программу: вход в stdin и файлах, ответ — её stdout.
+    STDIO = "stdio"
+
+
+# Как ответ решения сверяется с ожидаемым; смысл режимов описан в taskgen/sandbox/checkers.py.
+CheckMode = Literal["tokens", "exact", "float", "json", "checker"]
+
+
+class Checker(BaseModel):
+    """Свой проверяльщик шаблона: программа, которая исполняется в песочнице.
+
+    Контракт программы описан в taskgen/sandbox/cases.py. Кандидат проверяльщика не видит.
+    """
+
+    runtime: str
+    code: str
+
+
+class OutputCheck(BaseModel):
+    """Режим проверки ответа; checker задан только при mode=checker."""
+
+    mode: CheckMode
+    checker: Checker | None = None
+
+
 class TemplateSpec(BaseModel):
     """Разобранный md-шаблон. Формат файла описан в taskgen/TEMPLATE_FORMAT.md."""
 
@@ -198,9 +228,6 @@ class Embedder(Protocol):
 
 # --- Песочница --------------------------------------------------------------------------
 
-# Как вывод решения сверяется с ожидаемым; смысл режимов описан в taskgen/sandbox/checkers.py.
-CheckMode = Literal["tokens", "exact", "float", "json", "checker"]
-
 
 class RunLimits(BaseModel):
     timeout_ms: int
@@ -242,9 +269,12 @@ class TestRunRequest(BaseModel):
     __test__ = False
 
     runtime: str
-    entrypoint: str
+    io: IOKind
+    # Только для io=function: имя функции кандидата.
+    entrypoint: str | None = None
     solution: str
     cases: list[TestCase]
+    check: OutputCheck
     limits: RunLimits
 
 

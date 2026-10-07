@@ -22,7 +22,9 @@ from pydantic import BaseModel
 
 from taskgen.contracts import (
     ChatMessage,
+    IOKind,
     LLMClient,
+    OutputCheck,
     ReasoningEffort,
     RunLimits,
     SandboxRunner,
@@ -203,9 +205,11 @@ async def solve_code(
             continue
         request = TestRunRequest(
             runtime=runtime,
+            io=IOKind.FUNCTION,
             entrypoint=entrypoint,
             solution=reply.solution,
             cases=cases,
+            check=OutputCheck(mode="json"),
             limits=limits,
         )
         try:

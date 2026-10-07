@@ -1,4 +1,4 @@
-// Обвязка тестов taskgen для C++. Исполняется внутри песочницы, а не в сервисе.
+// Драйвер задач-функций taskgen для C++. Исполняется внутри песочницы, а не в сервисе.
 //
 // Сервис склеивает prologue.hpp, решение, строку #define TASKGEN_ENTRYPOINT и этот файл
 // в одну единицу трансляции. Протокол описан в taskgen/sandbox/protocol.py. Вход кейса —
@@ -9,7 +9,7 @@
 // bool, целые, вещественные, char, std::string, std::vector, std::pair, std::map и
 // std::unordered_map со строковым ключом, в любой вложенности.
 
-namespace taskgen_harness {
+namespace taskgen_driver {
 
 struct Json {
     enum Kind { Null, Bool, Number, String, Array, Object };
@@ -411,10 +411,10 @@ inline std::string run_isolated(size_t index, const Json& args) {
     return out + "}";
 }
 
-}  // namespace taskgen_harness
+}  // namespace taskgen_driver
 
 int main() {
-    using namespace taskgen_harness;
+    using namespace taskgen_driver;
     std::string nonce, line;
     std::getline(std::cin, nonce);
     std::getline(std::cin, line);

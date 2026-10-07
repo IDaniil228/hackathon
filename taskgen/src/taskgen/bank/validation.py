@@ -28,6 +28,8 @@ import httpx
 from taskgen.bank.parser import TemplateIssue
 from taskgen.config import ImportCheckSettings, ScoringSettings, Settings
 from taskgen.contracts import (
+    IOKind,
+    OutputCheck,
     RunLimits,
     SandboxRunner,
     TaskKind,
@@ -80,9 +82,11 @@ async def run_solution(
 ) -> TestReport:
     request = TestRunRequest(
         runtime=spec.runtime or "",
+        io=IOKind.FUNCTION,
         entrypoint=spec.entrypoint or "",
         solution=solution,
         cases=cases,
+        check=OutputCheck(mode="json"),
         limits=limits,
     )
     return await _call(sandbox.run_tests(request))

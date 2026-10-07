@@ -1,5 +1,6 @@
-# Окружения песочницы: имя runtime из шаблона задания -> пакет Piston и обвязка тестов.
-# Новое окружение для уже поддержанного языка добавляется записью сюда, без правки кода.
+# Окружения песочницы: имя runtime из шаблона задания -> пакет Piston и драйвер задач-функций.
+# Новое окружение добавляется записью сюда, без правки кода: задачи stdio ему доступны сразу,
+# а задачам-функциям нужен ещё драйвер языка в taskgen/sandbox/drivers.
 # Поля и допустимые значения задаёт RuntimeSpec в registry.py. Отсюда же скрипт
 # taskgen/sandbox/piston-packages.sh узнаёт, какие пакеты ставить в Piston.
 #
@@ -8,13 +9,13 @@
 python:
   language: python
   version: 3.12.0
-  harness: python
+  driver: python
   description: Python {version}
 
 python-ml:
   language: python-ml
   version: 3.12.0
-  harness: python
+  driver: python
   description: Python {version} для задач машинного обучения
   # У Piston нет такого пакета, он собирается из taskgen/sandbox/packages/python-ml.
   source: local
@@ -26,7 +27,7 @@ python-ml:
 cpp:
   language: c++
   version: 10.2.0
-  harness: cpp
+  driver: cpp
   package: gcc
   description: GCC {version}, стандарт {standard}
   # Стандарт задаёт скрипт compile пакета gcc в Piston (g++ -std=c++17); совпадение

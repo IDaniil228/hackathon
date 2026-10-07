@@ -1,8 +1,8 @@
-"""Обвязки тестов Python и C++ против реального Piston."""
+"""Драйверы задач-функций Python и C++ против реального Piston."""
 
 import pytest
 
-from taskgen.contracts import RunLimits, TestCase, TestRunRequest
+from taskgen.contracts import IOKind, OutputCheck, RunLimits, TestCase, TestRunRequest
 
 pytestmark = pytest.mark.integration
 
@@ -17,7 +17,13 @@ SUM_CASES = [
 
 def make_request(runtime, solution, cases, entrypoint="f", limits=LIMITS):
     return TestRunRequest(
-        runtime=runtime, entrypoint=entrypoint, solution=solution, cases=cases, limits=limits
+        runtime=runtime,
+        io=IOKind.FUNCTION,
+        entrypoint=entrypoint,
+        solution=solution,
+        cases=cases,
+        check=OutputCheck(mode="json"),
+        limits=limits,
     )
 
 
