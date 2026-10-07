@@ -17,7 +17,7 @@ def test_new_runtime_is_added_by_data_only(tmp_path):
     path = tmp_path / "runtimes.yaml"
     path.write_text(
         "python-old:\n  language: python\n  version: 3.10.0\n  driver: python\n"
-        "  description: Python {version}\n",
+        "  source_file: solution.py\n  description: Python {version}\n",
         encoding="utf-8",
     )
 
@@ -29,7 +29,8 @@ def test_new_runtime_is_added_by_data_only(tmp_path):
 def test_runtime_without_driver_is_stdio_only(tmp_path):
     path = tmp_path / "runtimes.yaml"
     path.write_text(
-        "ruby:\n  language: ruby\n  version: 3.0.1\n  description: Ruby {version}\n",
+        "ruby:\n  language: ruby\n  version: 3.0.1\n  source_file: solution.rb\n"
+        "  description: Ruby {version}\n",
         encoding="utf-8",
     )
 

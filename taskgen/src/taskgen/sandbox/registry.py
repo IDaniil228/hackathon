@@ -30,6 +30,11 @@ class RuntimeSpec(BaseModel):
     # Драйвер задач-функций из taskgen/sandbox/drivers; None — окружению доступны только
     # задачи io=stdio.
     driver: Literal["python", "cpp"] | None = None
+    # Имя файла программы кандидата в задаче stdio; по нему же анализаторы узнают язык.
+    source_file: str
+    # Можно ли положить рядом с программой файлы кейса. Скрипт compile пакета gcc собирает
+    # каждый файл запуска как исходник, поэтому C++ файлов данных не принимает.
+    data_files: bool = True
     # Описание для человека; {version} и {standard} подставляются из полей ниже, чтобы
     # версия была записана один раз.
     description: str

@@ -32,6 +32,7 @@ class PistonRunner:
     ) -> None:
         self._http = http or httpx.AsyncClient(base_url=settings.piston_url.rstrip("/"))
         self._registry = registry or RuntimeRegistry.load()
+        self._stdio_concurrency = settings.stdio_concurrency
 
     async def run(self, request: RunRequest) -> RunResult:
         spec = self._registry.get(request.runtime)
@@ -50,7 +51,9 @@ class PistonRunner:
 
     async def run_tests(self, request: TestRunRequest) -> TestReport:
         """Прогоняет решение на кейсах поверх run; устройство описано в cases.py."""
-        return await cases.run_tests(self.run, self._registry, request)
+        return await cases.run_tests(
+            self.run, self._registry, request, concurrency=self._stdio_concurrency
+        )
 
     async def aclose(self) -> None:
         await self._http.aclose()

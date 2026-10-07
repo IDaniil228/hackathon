@@ -117,6 +117,7 @@
 | `sandbox.piston_url` | `TASKGEN_SANDBOX__PISTON_URL` | string | `"http://localhost:2000"` | Адрес Piston API |
 | `sandbox.run_timeout_ms` | `TASKGEN_SANDBOX__RUN_TIMEOUT_MS` | integer | `3000` | Лимит времени одного запуска, миллисекунды; окружение может поднять его до своего минимума |
 | `sandbox.run_memory_limit_bytes` | `TASKGEN_SANDBOX__RUN_MEMORY_LIMIT_BYTES` | integer | `268435456` | Лимит памяти одного запуска, байты; окружение может поднять его до своего минимума |
+| `sandbox.stdio_concurrency` | `TASKGEN_SANDBOX__STDIO_CONCURRENCY` | integer, ≥ 1 | `4` | Сколько кейсов задачи stdio исполняется одновременно: программа кандидата запускается на каждом кейсе отдельно. Меньшее значение снижает нагрузку на Piston, большее ускоряет прогон |
 
 ## import_check
 

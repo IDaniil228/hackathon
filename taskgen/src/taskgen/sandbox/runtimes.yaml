@@ -10,12 +10,14 @@ python:
   language: python
   version: 3.12.0
   driver: python
+  source_file: solution.py
   description: Python {version}
 
 python-ml:
   language: python-ml
   version: 3.12.0
   driver: python
+  source_file: solution.py
   description: Python {version} для задач машинного обучения
   # У Piston нет такого пакета, он собирается из taskgen/sandbox/packages/python-ml.
   source: local
@@ -28,6 +30,8 @@ cpp:
   language: c++
   version: 10.2.0
   driver: cpp
+  source_file: solution.cpp
+  data_files: false
   package: gcc
   description: GCC {version}, стандарт {standard}
   # Стандарт задаёт скрипт compile пакета gcc в Piston (g++ -std=c++17); совпадение

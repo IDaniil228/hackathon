@@ -257,9 +257,18 @@ class RunResult(BaseModel):
 
 
 class TestCase(BaseModel):
+    """Кейс задания с кодом. У io=function вход — input, у io=stdio — stdin и files.
+
+    expected у io=function — значение JSON, у io=stdio — ожидаемый вывод строкой.
+    """
+
     __test__ = False  # Иначе pytest примет класс за набор тестов.
 
-    input: Any
+    # Аргументы функции: массив позиционных или объект именованных.
+    input: Any = None
+    stdin: str | None = None
+    # Файлы, которые лежат рядом с программой: имя → содержимое.
+    files: dict[str, str] = {}
     expected: Any
     # Группа из TemplateSpec.case_groups; None — шаблон групп не объявил.
     group: str | None = None

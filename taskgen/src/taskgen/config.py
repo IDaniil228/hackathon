@@ -491,6 +491,13 @@ class SandboxSettings(BaseModel):
         description="Лимит памяти одного запуска, байты; окружение может поднять его до "
         "своего минимума",
     )
+    stdio_concurrency: int = Field(
+        default=4,
+        ge=1,
+        description="Сколько кейсов задачи stdio исполняется одновременно: программа "
+        "кандидата запускается на каждом кейсе отдельно. Меньшее значение снижает нагрузку на "
+        "Piston, большее ускоряет прогон",
+    )
 
 
 class ImportCheckSettings(BaseModel):

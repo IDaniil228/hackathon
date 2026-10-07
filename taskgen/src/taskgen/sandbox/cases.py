@@ -1,15 +1,23 @@
 """Прогон решения на тестовых кейсах поверх ядра песочницы.
 
 Ядро — запуск программы (SandboxRunner.run): stdin и файлы на вход; stdout, stderr, код
-выхода, время, память и ошибка компиляции на выход. Задача-функция — адаптер над ним:
-драйвер языка (taskgen/sandbox/drivers) вызывает функцию кандидата на входах всех кейсов
-одним запуском и печатает ответы JSON по протоколу protocol.py.
+выхода, время, память и ошибка компиляции на выход. Над ним два вида задач:
+
+- io=stdio — программа кандидата запускается на каждом кейсе отдельным запуском: stdin
+  кейса — её stdin, файлы кейса лежат рядом, stdout — ответ. Время и память меряются на
+  каждом кейсе. Весь stdout принадлежит программе, служебных строк в нём нет, поэтому метка
+  запуска не нужна. Первый кейс идёт один: если программа не собралась, остальные не
+  запускаются;
+- io=function — адаптер: драйвер языка (taskgen/sandbox/drivers) вызывает функцию
+  кандидата на входах всех кейсов одним запуском и печатает ответы JSON по протоколу
+  protocol.py.
 
 Ответ кейса сверяется с ожидаемым режимом OutputCheck: встроенные режимы — checkers.py.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import secrets
@@ -60,13 +68,18 @@ class Execution:
     compile_error: str | None = None
 
 
-async def run_tests(run: Run, registry: RuntimeRegistry, request: TestRunRequest) -> TestReport:
-    """Исполняет решение на кейсах и сверяет ответы режимом request.check."""
+async def run_tests(
+    run: Run, registry: RuntimeRegistry, request: TestRunRequest, *, concurrency: int
+) -> TestReport:
+    """Исполняет решение на кейсах и сверяет ответы режимом request.check.
+
+    concurrency — сколько запусков кейсов stdio идёт одновременно.
+    """
     spec = registry.get(request.runtime)
     if request.io is IOKind.FUNCTION:
         execution = await _function(run, spec, request)
     else:
-        raise SandboxError(f"вид задания {request.io} не поддерживается")
+        execution = await _stdio(run, spec, request, concurrency)
     if execution.compile_error is not None:
         return failed_report(request.cases, execution.compile_error)
     outcomes = [
@@ -101,6 +114,74 @@ def failure_reason(result: RunResult, limits: RunLimits, fallback: str) -> str:
         return "превышен лимит памяти"
     tail = result.stderr.strip()[-STDERR_TAIL:]
     return fallback + (f": {tail}" if tail else "")
+
+
+# --- Задача stdio: запуск программы на каждом кейсе ---------------------------------------
+
+
+async def _stdio(
+    run: Run, spec: RuntimeSpec, request: TestRunRequest, concurrency: int
+) -> Execution:
+    for case in request.cases:
+        check_case_files(spec, case)
+    if not request.cases:
+        return Execution([])
+    limits = spec.effective_limits(request.limits)
+
+    def launch(case: TestCase) -> Awaitable[RunResult]:
+        files = {spec.source_file: request.solution, **case.files}
+        return run(
+            RunRequest(
+                runtime=request.runtime,
+                files=files,
+                stdin=case.stdin or "",
+                limits=request.limits,
+            )
+        )
+
+    first = await launch(request.cases[0])
+    if first.compile_error is not None:
+        return Execution([], compile_error=first.compile_error)
+    gate = asyncio.Semaphore(concurrency)
+
+    async def bounded(case: TestCase) -> RunResult:
+        async with gate:
+            return await launch(case)
+
+    rest = await asyncio.gather(*(bounded(case) for case in request.cases[1:]))
+    results = [first, *rest]
+    memory = [r.memory_bytes for r in results if r.memory_bytes is not None]
+    return Execution(
+        [_program_output(result, limits) for result in results],
+        max_memory_bytes=max(memory) if memory else None,
+    )
+
+
+def check_case_files(spec: RuntimeSpec, case: TestCase) -> None:
+    """Файлы кейса допустимы для окружения: SandboxError — ошибка шаблона, а не решения."""
+    if not case.files:
+        return
+    if not spec.data_files:
+        raise SandboxError(
+            f"окружение {spec.language} не принимает файлы рядом с программой: его пакет "
+            "собирает каждый файл запуска как исходник"
+        )
+    if spec.source_file in case.files:
+        raise SandboxError(f"файл кейса {spec.source_file} заменил бы программу кандидата")
+
+
+def _program_output(result: RunResult, limits: RunLimits) -> Produced:
+    if result.compile_error is not None:
+        # Тот же исходник собрался на первом кейсе; повторный отказ — сбой сборки, а не ответ.
+        return Produced(error=f"ошибка компиляции: {result.compile_error[-STDERR_TAIL:]}")
+    if result.exit_code == 0 and not (result.timed_out or result.output_limited):
+        return Produced(output=result.stdout, wall_ms=result.wall_ms)
+    if result.signal is not None:
+        fallback = f"аварийное завершение по сигналу {result.signal}"
+    else:
+        fallback = f"программа завершилась с кодом {result.exit_code}"
+    # Время кейса без ответа не учитывается, как и у задачи-функции.
+    return Produced(error=failure_reason(result, limits, fallback))
 
 
 # --- Задача-функция: адаптер над ядром ---------------------------------------------------
