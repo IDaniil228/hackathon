@@ -131,13 +131,42 @@ async def test_ordinary_error_exit_has_no_signal():
 
 
 async def test_compile_failure_returns_compiler_output():
+    # Piston при ошибке компиляции повторяет стадию compile в стадии run.
     failed = stage(code=1, stderr="main.cpp:1: error: expected ';'\n", status="RE")
     runner = runner_answering(ok(failed, compile_stage=failed))
 
     result = await runner.run(RunRequest(runtime="cpp", files={"main.cpp": "x"}, limits=LIMITS))
 
+    assert "expected ';'" in result.compile_error
     assert result.exit_code == 1
-    assert "expected ';'" in result.stderr
+
+
+async def test_compile_timeout_is_named():
+    slow = stage(code=None, signal="SIGKILL", status="TO")
+    runner = runner_answering(ok(slow, compile_stage=slow))
+
+    result = await runner.run(RunRequest(runtime="cpp", files={"main.cpp": "x"}, limits=LIMITS))
+
+    assert result.compile_error == "превышено время компиляции"
+
+
+async def test_successful_compile_is_not_an_error():
+    runner = runner_answering(ok(stage(stdout="7\n"), compile_stage=stage()))
+
+    result = await runner.run(RunRequest(runtime="cpp", files={"main.cpp": "x"}, limits=LIMITS))
+
+    assert result.compile_error is None
+    assert result.stdout == "7\n"
+
+
+@pytest.mark.parametrize("status", ["OL", "EL"])
+async def test_output_limit_is_reported(status):
+    runner = runner_answering(ok(stage(code=None, signal="SIGKILL", status=status)))
+
+    result = await runner.run(RunRequest(runtime="python", files={"m.py": ""}, limits=LIMITS))
+
+    assert result.output_limited
+    assert not result.timed_out
 
 
 async def test_piston_refusal_is_a_sandbox_error():

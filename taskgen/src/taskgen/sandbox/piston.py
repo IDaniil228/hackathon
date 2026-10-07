@@ -44,7 +44,11 @@ class PistonRunner:
             args=request.args,
             limits=spec.effective_limits(request.limits),
         )
-        return stage_result(response["run"])
+        result = stage_result(response["run"])
+        compiled = response.get("compile")
+        if compiled is not None and compiled.get("code") != 0:
+            result.compile_error = _compile_error(compiled)
+        return result
 
     async def run_tests(self, request: TestRunRequest) -> TestReport:
         """Прогоняет решение на кейсах одним запуском; протокол описан в protocol.py."""
@@ -128,6 +132,8 @@ def stage_result(stage: dict[str, Any]) -> RunResult:
         signal=signal,
         # Статус TO Piston ставит и при лимите по стенным часам, и при лимите CPU.
         timed_out=stage.get("status") == "TO",
+        # OL — лимит stdout, EL — лимит stderr.
+        output_limited=stage.get("status") in ("OL", "EL"),
         wall_ms=round(wall) if wall is not None else None,
         memory_bytes=stage.get("memory"),
     )

@@ -221,8 +221,12 @@ class RunResult(BaseModel):
     exit_code: int | None
     signal: str | None = None
     timed_out: bool = False
+    # Вывод превысил лимит песочницы, и процесс остановлен.
+    output_limited: bool = False
     wall_ms: int | None = None
     memory_bytes: int | None = None
+    # Сообщение компилятора; не None — программа не собралась и не запускалась.
+    compile_error: str | None = None
 
 
 class TestCase(BaseModel):
