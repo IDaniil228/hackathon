@@ -30,6 +30,7 @@ from taskgen.contracts import (
     TestRunRequest,
 )
 from taskgen.evaluation.jsonout import StructuredOutputError, complete_structured
+from taskgen.sandbox.errors import SandboxServiceError
 
 # Немного случайности: при solver_attempts > 1 повторная попытка не повторяет первую.
 SOLVER_TEMPERATURE = 0.3
@@ -209,7 +210,8 @@ async def solve_code(
         )
         try:
             report = await sandbox.run_tests(request)
-        except httpx.HTTPError as error:
+        # PistonRunner сообщает об отказе Piston через SandboxServiceError, а не через httpx.
+        except (httpx.HTTPError, SandboxServiceError) as error:
             raise SolverSandboxError("Песочница недоступна для решения решателя") from error
         failed = sum(not outcome.passed for outcome in report.outcomes)
         if report.compile_error is None and report.outcomes and failed == 0:
