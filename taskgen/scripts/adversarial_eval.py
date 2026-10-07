@@ -47,6 +47,7 @@ from taskgen.evaluation.analyzers import default_analyzers  # noqa: E402
 from taskgen.evaluation.evidence import split_spans  # noqa: E402
 from taskgen.evaluation.jsonout import extract_json_object  # noqa: E402
 from taskgen.evaluation.judge import JudgeError, LLMJudge  # noqa: E402
+from taskgen.evaluation.quotes import EmbeddingCache  # noqa: E402
 from taskgen.evaluation.service import (  # noqa: E402
     AnswerInput,
     Evaluator,
@@ -54,6 +55,7 @@ from taskgen.evaluation.service import (  # noqa: E402
     check_code,
     evaluate_task,
     judge_evidence,
+    judge_relevance,
 )
 from taskgen.generation.instance import (  # noqa: E402
     GenerationError,
@@ -268,6 +270,8 @@ async def main() -> int:
         temperature=settings.scoring.judge_temperature,
         reasoning_effort=args.judge_reasoning_effort or settings.llm.judge_reasoning_effort,
         evidence=judge_evidence(settings.scoring),
+        # Эмбеддинги для проверки смысла доказательств даёт провайдер генерации из настроек.
+        relevance=judge_relevance(settings.scoring, generator_client, EmbeddingCache()),
     )
     piston = PistonRunner(settings.sandbox)
     ev = Evaluator(
@@ -337,7 +341,8 @@ async def main() -> int:
                     "class": answer.cls,
                     "expect": list(answer.expect),
                     "judge_model": judge_model,
-                    "evidence": vars(judge_evidence(settings.scoring)),
+                    "evidence": vars(judge_evidence(settings.scoring))
+                    | {"quote_threshold": settings.scoring.judge_quote_threshold},
                     "kind": instance["kind"],
                     "content": answer.content,
                     "seconds": seconds,
