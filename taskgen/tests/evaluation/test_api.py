@@ -26,7 +26,8 @@ QUIZ_OPTIONS = [{"id": i, "text": f"Ответ {i}"} for i in ("a", "b", "c", "d
 
 
 class Responder:
-    """Судья цитирует первую строку ответа; summary отвечает текстом без опоры на числа."""
+    """Судья цитирует первую строку ответа; summary пишет текст без опоры на факты, и
+    проверяльщик его отклоняет."""
 
     def __init__(self, verdict: str = "yes") -> None:
         self.verdict = verdict
@@ -34,8 +35,13 @@ class Responder:
 
     def __call__(self, messages, schema):
         properties = schema["properties"] if schema else {}
-        if "sentences" in properties or (schema is None and "справку" in messages[0].content):
+        if "sentences" in properties or (
+            schema is None and "пишешь краткую справку" in messages[0].content
+        ):
             return json.dumps({"sentences": ["Кандидат молодец."]}, ensure_ascii=False)
+        if "verdicts" in properties:
+            refused = {"sentence": 1, "supported": False, "reason": "оценка без факта"}
+            return json.dumps({"verdicts": [refused]}, ensure_ascii=False)
         self.judge_calls += 1
         # Провайдер без json_schema получает схему последним сообщением, после промпта судьи.
         user = "\n".join(message.content for message in messages)
@@ -311,7 +317,7 @@ def test_score_session_end_to_end(world):
     assert summary.status_code == 200
     body = summary.json()
     assert body["data"]["sessions"][0]["outcome"] == "passed"
-    # Модель ответила текстом без чисел, поэтому в summary — текст по шаблону.
+    # Проверяльщик не подтвердил текст модели, поэтому в summary — текст по шаблону.
     assert "молодец" not in body["text"]
     assert "Тест 1 из 1" in body["text"]
 

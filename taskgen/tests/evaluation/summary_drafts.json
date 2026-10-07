@@ -1,0 +1,57 @@
+{
+ "facts": {
+  "A": {"candidate_ref": "cand-A", "sessions_count": 2, "sessions": [
+   {"number": 1, "session_id": "s1", "area": "backend", "skills": ["python", "django"], "scored_at": "2026-10-07T18:40:00+00:00", "claimed_grade": "middle", "assigned_grade": null, "outcome": "failed",
+    "levels": [{"grade": "middle", "total": 2, "solved": 0, "share": 0.0}],
+    "quiz": {"correct": 0, "total": 1},
+    "tasks": [
+     {"position": 1, "kind": "code", "grade": "middle", "score": 0.0, "solved": false, "answered": false, "language": "python", "behavior": {"paste_count": 0, "focus_lost_count": 0, "time_spent_sec": null}},
+     {"position": 2, "kind": "essay", "grade": "middle", "score": 0.0, "solved": false, "answered": true, "language": null, "behavior": {"paste_count": 0, "focus_lost_count": 1, "time_spent_sec": 45}},
+     {"position": 3, "kind": "quiz", "grade": "middle", "score": 0.0, "solved": false, "answered": false, "language": null, "behavior": {"paste_count": 0, "focus_lost_count": 0, "time_spent_sec": null}}]},
+   {"number": 2, "session_id": "s2", "area": "algo", "skills": ["python", "cpp"], "scored_at": "2026-10-07T18:40:00+00:00", "claimed_grade": "junior", "assigned_grade": "junior", "outcome": "passed",
+    "levels": [{"grade": "junior", "total": 2, "solved": 2, "share": 1.0}],
+    "quiz": {"correct": 1, "total": 1},
+    "tasks": [
+     {"position": 1, "kind": "code", "grade": "junior", "score": 0.94, "solved": true, "answered": true, "language": "python", "behavior": {"paste_count": 0, "focus_lost_count": 0, "time_spent_sec": 480}, "tests": {"passed": 17, "total": 17}},
+     {"position": 2, "kind": "essay", "grade": "junior", "score": 1.0, "solved": true, "answered": true, "language": null, "behavior": {"paste_count": 0, "focus_lost_count": 2, "time_spent_sec": 600}},
+     {"position": 3, "kind": "quiz", "grade": "junior", "score": 1.0, "solved": true, "answered": true, "language": null, "behavior": {"paste_count": 0, "focus_lost_count": 0, "time_spent_sec": null}}]}]},
+  "B": {"candidate_ref": "cand-B", "sessions_count": 1, "sessions": [
+   {"number": 1, "session_id": "s1", "area": "ml", "skills": ["python", "numpy"], "scored_at": "2026-10-07T18:40:00+00:00", "claimed_grade": "junior", "assigned_grade": null, "outcome": "failed",
+    "levels": [{"grade": "junior", "total": 2, "solved": 0, "share": 0.0}],
+    "quiz": {"correct": 0, "total": 1},
+    "tasks": [
+     {"position": 1, "kind": "code", "grade": "junior", "score": 0.33, "solved": false, "answered": true, "language": "python", "behavior": {"paste_count": 2, "focus_lost_count": 4, "time_spent_sec": 120}, "tests": {"passed": 5, "total": 13}},
+     {"position": 2, "kind": "code", "grade": "junior", "score": 0.08, "solved": false, "answered": true, "language": "python", "behavior": {"paste_count": 0, "focus_lost_count": 0, "time_spent_sec": 60}, "tests": {"passed": 1, "total": 10}},
+     {"position": 3, "kind": "quiz", "grade": "junior", "score": 0.0, "solved": false, "answered": true, "language": null, "behavior": {"paste_count": 0, "focus_lost_count": 0, "time_spent_sec": null}}]}]},
+  "C": {"candidate_ref": "cand-C", "sessions_count": 1, "sessions": [
+   {"number": 1, "session_id": "s1", "area": "backend", "skills": ["python", "docker"], "scored_at": "2026-10-07T18:40:00+00:00", "claimed_grade": "senior", "assigned_grade": null, "outcome": "failed",
+    "levels": [{"grade": "senior", "total": 2, "solved": 1, "share": 0.5}, {"grade": "middle", "total": 0, "solved": 0, "share": null}],
+    "quiz": {"correct": 1, "total": 1},
+    "tasks": [
+     {"position": 1, "kind": "code", "grade": "senior", "score": 0.89, "solved": true, "answered": true, "language": "python", "behavior": {"paste_count": 1, "focus_lost_count": 0, "time_spent_sec": 900}, "tests": {"passed": 12, "total": 12}},
+     {"position": 2, "kind": "essay", "grade": "senior", "score": 0.0, "solved": false, "answered": true, "language": null, "behavior": {"paste_count": 3, "focus_lost_count": 1, "time_spent_sec": 30}},
+     {"position": 3, "kind": "quiz", "grade": "senior", "score": 1.0, "solved": true, "answered": true, "language": null, "behavior": {"paste_count": 0, "focus_lost_count": 0, "time_spent_sec": null}}]}]},
+  "D": {"candidate_ref": "cand-D", "sessions_count": 1, "sessions": [
+   {"number": 1, "session_id": "s1", "area": "algo", "skills": ["python"], "scored_at": "2026-10-07T18:40:00+00:00", "claimed_grade": "middle", "assigned_grade": null, "outcome": "failed",
+    "levels": [{"grade": "middle", "total": 3, "solved": 1, "share": 0.3333333333333333}],
+    "quiz": null,
+    "tasks": [
+     {"position": 1, "kind": "code", "grade": "middle", "score": 0.95, "solved": true, "answered": true, "language": "python", "behavior": {"paste_count": 0, "focus_lost_count": 0, "time_spent_sec": 700}, "tests": {"passed": 9, "total": 9}},
+     {"position": 2, "kind": "code", "grade": "middle", "score": 0.2, "solved": false, "answered": true, "language": "python", "behavior": {"paste_count": 1, "focus_lost_count": 2, "time_spent_sec": 400}, "tests": {"passed": 1, "total": 8}},
+     {"position": 3, "kind": "essay", "grade": "middle", "score": 0.1, "solved": false, "answered": true, "language": null, "behavior": {"paste_count": 0, "focus_lost_count": 0, "time_spent_sec": 90}}]}]}
+ },
+ "drafts": [
+  {"source": "deepseek/deepseek-flash", "facts": "A", "grounded": true, "draft": "Кандидат cand-A прошёл 2 сессии технического теста. В первой сессии по направлению backend с заявленным грейдом middle решено 0 из 2 заданий, доля решённых составила 0.0. В первой сессии квиз дал 0 правильных ответов из 1, а по эссе зафиксировано 1 потеря фокуса и 45 секунд. Во второй сессии по направлению algo с заявленным грейдом junior решено 2 из 2 заданий, доля решённых составила 1.0. Во второй сессии код-задание выполнено на 0.94 балла с 17 пройденными тестами из 17 за 480 секунд, эссе — на 1.0 балла с 2 потерями фокуса за 600 секунд, квиз — 1 правильный ответ из 1. По итогам второй сессии присвоен грейд junior, результат — passed."},
+  {"source": "deepseek/deepseek-flash", "facts": "B", "grounded": true, "checker_miss": "deepseek-flash отклоняет 'В квизе дан 1 ответ': не связывает quiz.total с answered задания kind quiz", "draft": "Кандидат cand-B прошёл 1 сессию по направлению ml с навыками python и numpy. Заявленный грейд junior, назначенный грейд не выставлен, итог сессии — failed. На уровне junior решено 0 из 2 заданий, доля решённых составила 0.0. В квизе дан 1 ответ, правильных ответов 0. В задании 1 на python набрано 0.33 балла, пройдено 5 из 13 тестов, зафиксировано 2 вставки из буфера, 4 потери фокуса и 120 секунд. В задании 2 на python набрано 0.08 балла, пройден 1 из 10 тестов, зафиксировано 0 вставок, 0 потерь фокуса и 60 секунд. В задании 3 типа quiz набрано 0.0 балла, зафиксировано 0 вставок и 0 потерь фокуса."},
+  {"source": "deepseek/deepseek-flash", "facts": "C", "grounded": true, "draft": "Кандидат cand-C прошёл 1 сессию по направлению backend с навыками python и docker. Заявленный грейд — senior, назначенный грейд не выставлен, итог сессии — failed. На уровне senior решено 1 задание из 2, доля решённых составила 0.5. Квиз выполнен верно: 1 правильный ответ из 1. В задании 1 (code, python) набрано 0.89 балла, пройдено 12 тестов из 12, зафиксированы 1 вставка из буфера, 0 потерь фокуса и 900 секунд. В задании 2 (essay) набрано 0.0 балла, зафиксированы 3 вставки из буфера, 1 потеря фокуса и 30 секунд. В задании 3 (quiz) набрано 1.0 балла, зафиксированы 0 вставок из буфера и 0 потерь фокуса."},
+  {"source": "ollama/hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS", "facts": "A", "grounded": true, "draft": "Кандидат cand-A прошёл 2 сессии технического тестирования. В первой сессии по backend заявлен грейд middle, но решено 0 из 2 заданий уровня middle. Во второй сессии по algo присвоен грейд junior при решении 2 из 2 заданий данного уровня. На кодовом задании во второй сессии пройдено 17 из 17 тестов за 480 секунд. В первой сессии на эссе зафиксировано 1 потеря фокуса и время 45 секунд, а во второй — 2 потери фокуса и 600 секунд."},
+  {"source": "ollama/hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS", "facts": "B", "grounded": true, "draft": "Кандидат c-B провёл 1 сессию в области ml на уровне junior. В итоге тестирования он не решил ни одного задания из 2 возможных. На первом коде-задаче он потратил 120 секунд, совершил 2 вставки и потерял фокус 4 раза. Тесты первого задания прошли успешно на 5 из 13 проверок. Второе задание заняло 60 секунд без вставок и потерь фокуса, пройдя 1 тест из 10."},
+  {"source": "ollama/hf.co/unsloth/Qwen3.8-27B-GGUF:UD-IQ4_XS", "facts": "C", "grounded": true, "draft": "Кандидат c-C прошёл 1 сессию по бэкенду на Python и Docker, заявив уровень senior. В итоге кандидат не прошёл тестирование, так как решил только 1 из 2 заданий уровня senior. По кодовому заданию он получил балл 0.89, успешно пройдя 12 из 12 тестов за 900 секунд с 1 вставкой текста. Эссе-задание осталось нерешённым с нулевым баллом, при этом кандидат потратил на него 30 секунд и совершил 3 вставки текста. Викторину из 1 вопроса он ответил верно, получив максимальный балл 1.0 без потери фокуса."},
+  {"source": "ollama/hf.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF:q4_K_M", "facts": "C", "grounded": true, "draft": "Кандидат не прошёл технический тест: решён только один из двух заданий на грейде senior. В задании по коду кандидат набрал 0.89 балла из возможных, тесты пройдены полностью (12/12). В эссе кандидат ответил, но получил 0 баллов; время на задание — 30 секунд."},
+  {"source": "ollama/hf.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF:q4_K_M", "facts": "A", "grounded": false, "false_claims": "прошёл два теста при провале backend; ни одного задания из трёх при 2 заданиях уровня; оба задания на 1.0 балла при 0.94", "draft": "Кандидат прошёл два технических теста: по бэкенду (backend) не сдано, по алгоритмам — успешно. В тесте по backend кандидат не решил ни одного задания из трёх, получил балл 0/2. По алго-тесту кандидат выполнил оба задания на 1.0 балла из двух, результат passed."},
+  {"source": "ollama/hf.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF:q4_K_M", "facts": "B", "grounded": false, "false_claims": "из 2 задач по коду решён 1 при 0 из 2", "draft": "Кандидат не справился с тестом: из 2 задач по коду решён только 1, балл — 0.33. В тесте на знание ML кандидат ответил верно на 0 из 1 вопроса (0%). Выполнено 5 тестов из 13, время выполнения задачи — 120 секунд."},
+  {"source": "e2e", "facts": "D", "grounded": false, "false_claims": "прошёл тест при исходе failed", "draft": "Кандидат прошёл один алго-тест, решив задачу на 0.95 балла."},
+  {"source": "e2e", "facts": "A", "grounded": false, "false_claims": "1 из 2 решённых при 0 из 2", "draft": "Кандидат не справился с заданием по backend (1 из 2 решённых, балл 0.0)."},
+  {"source": "e2e", "facts": "C", "grounded": false, "false_claims": "получил senior-грейд при assigned_grade null", "draft": "По итогам теста кандидат получил senior-грейд, балл 0.89."}
+ ]
+}
