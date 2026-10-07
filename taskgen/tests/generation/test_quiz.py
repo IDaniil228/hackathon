@@ -18,6 +18,7 @@ from taskgen.generation.instance import (
 )
 from taskgen.generation.params import draw_params, fill_placeholders
 from taskgen.generation.quiz import choose_variant
+from tests.bank.factory import QUIZ_VARIANTS
 from tests.evaluation.fakes import FakeLLM, http_error
 from tests.generation.fakes import essay_reply, quiz_solver_reply
 from tests.generation.templates import quiz_spec
@@ -149,6 +150,36 @@ async def test_case_with_formula_spoiled_by_json_escape_is_rewritten():
     assert len(attempts) == 2
     assert "обратные слэши" in attempts[1][-1].content
     assert "eta" not in instance.statement
+
+
+async def test_case_with_number_beyond_facts_is_rewritten():
+    spec = quiz_spec()
+    attempts = []
+
+    def respond(messages, schema):
+        reply = essay_reply(messages, schema)
+        if "situation" in (schema or {}).get("properties", {}):
+            attempts.append(messages)
+            if len(attempts) == 1:
+                # Лишний объём может сменить верный ответ, а проверка фактов его не видит.
+                data = json.loads(reply)
+                data["situation"] += " За день приходит двадцать миллионов заказов."
+                return json.dumps(data, ensure_ascii=False)
+        return reply
+
+    instance = await generate_instance(spec, 3, deps(FakeLLM(respond)))
+    assert len(attempts) == 2
+    assert "двадцать миллионов" in attempts[1][-1].content
+    assert "миллионов" not in instance.statement
+
+
+async def test_case_with_numbers_of_facts_is_accepted_at_once():
+    spec = quiz_spec(sections={"Варианты": QUIZ_VARIANTS.replace("{n}", "120")})
+    llm = FakeLLM(honest(spec, 3))
+    instance = await generate_instance(spec, 3, deps(llm, solver_enabled=False))
+    assert "120" in instance.statement
+    # Кейс и проверка фактов одной попытки: числа фактов отказа не вызывают.
+    assert len(llm.calls) == 2
 
 
 async def test_case_prompt_has_facts_of_chosen_variant_only_and_no_answers():
