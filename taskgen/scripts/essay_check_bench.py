@@ -39,7 +39,7 @@ from typing import Any
 import yaml
 
 from taskgen.bank.parser import find_phrases, normalize_phrase, parse_template
-from taskgen.config import Settings
+from taskgen.config import LLMSettings, Settings
 from taskgen.contracts import ChatMessage, TemplateSpec
 from taskgen.evaluation.quotes import EmbeddingCache, QuoteRelevance
 from taskgen.generation.essay import (
@@ -50,7 +50,7 @@ from taskgen.generation.essay import (
     filled_facts,
     split_sentences,
 )
-from taskgen.llm import OpenAICompatibleClient
+from taskgen.llm import ProviderRouter
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / "seed" / "templates"
@@ -459,10 +459,16 @@ async def run(args: argparse.Namespace) -> int:
     )
     log(f"tune: {tune}\ntest: {test}")
 
-    settings = Settings().llm.model_copy(update={"timeout_seconds": args.timeout})
-    client = OpenAICompatibleClient(settings)
+    # Проверяльщик из --checker-model работает у провайдера роли checker из настроек.
+    base = Settings().llm.with_timeout(args.timeout)
+    checker = base.checker.model_copy(update={"model": args.checker_model})
+    settings = LLMSettings.model_validate({**dict(base), "checker": checker})
+    client = ProviderRouter.from_settings(settings, roles=("checker", "embedding"))
     llm = CountingLLM(client)
-    log(f"эмбеддер {client.model_name} по адресу {settings.base_url}")
+    log(
+        f"эмбеддер {client.model_name} у провайдера {settings.embedding.provider}, "
+        f"проверяльщик у провайдера {settings.checker.provider}"
+    )
 
     started = time.perf_counter()
     scores = await all_scores(cases, client)
@@ -788,7 +794,7 @@ def quote_table(report: dict[str, Any], marks: list[float]) -> str:
 
 async def run_quotes(args: argparse.Namespace) -> int:
     pairs = quote_pairs()
-    client = OpenAICompatibleClient(Settings().llm.model_copy(update={"timeout_seconds": 600.0}))
+    client = ProviderRouter.from_settings(Settings().llm.with_timeout(600.0), roles=("embedding",))
     log(f"пар {len(pairs)}, эмбеддер {client.model_name}")
     # Сходство считает тот же код, что и сервис: склейка цитат и векторы пунктов из кэша.
     relevance = QuoteRelevance(threshold=0.0, embedder=client)

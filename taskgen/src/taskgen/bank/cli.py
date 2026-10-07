@@ -13,17 +13,19 @@ from taskgen.bank.parser import TemplateError
 from taskgen.config import Settings
 from taskgen.contracts import Embedder
 from taskgen.db import make_sessionmaker
-from taskgen.llm import OpenAICompatibleClient
+from taskgen.llm import ProviderRouter
 
 EXIT_INVALID = 1
 EXIT_USAGE = 2
 
 
 async def import_command(directory: Path, settings: Settings, *, embeddings: bool) -> int:
-    """Точка входа из taskgen.cli: эмбеддер — OpenAI-совместимый клиент из настроек."""
+    """Точка входа из taskgen.cli: эмбеддер — провайдер роли embedding из настроек."""
     # Без настройки логирования ошибка эмбеддера из refresh_embeddings_safely не видна.
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
-    client = OpenAICompatibleClient(settings.llm) if embeddings else None
+    client = (
+        ProviderRouter.from_settings(settings.llm, roles=("embedding",)) if embeddings else None
+    )
     try:
         return await run_import(
             directory, settings, embedder=client, out=sys.stdout, err=sys.stderr

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import httpx
 
-from taskgen.config import LLMSettings, Settings
+from taskgen.config import ChatRole, LLMSettings, ProviderSettings, Settings
 from taskgen.contracts import ChatMessage, JudgeRequest, RubricItem, TaskKind
 from taskgen.evaluation.service import Evaluator
 from taskgen.generation.service import Generator
@@ -22,8 +22,13 @@ def _client(content):
         bodies.append(json.loads(request.content))
         return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
 
-    http = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://llm")
-    return OpenAICompatibleClient(LLMSettings(), http=http), bodies
+    return _over(httpx.MockTransport(handler)), bodies
+
+
+def _over(transport: httpx.MockTransport) -> OpenAICompatibleClient:
+    return OpenAICompatibleClient(
+        ProviderSettings(base_url="http://llm"), name="llm", transport=transport
+    )
 
 
 async def test_reasoning_effort_is_sent_only_when_set():
@@ -37,7 +42,7 @@ async def test_reasoning_effort_is_sent_only_when_set():
 async def test_missing_content_after_reasoning_is_empty_string():
     # Модель с рассуждениями может истратить ответ на них и вернуть content: null.
     client, _ = _client(None)
-    assert await client.complete(MESSAGES) == ""
+    assert await client.complete(MESSAGES, model="m") == ""
 
 
 async def test_reply_cut_by_length_is_logged_with_token_counts(caplog):
@@ -47,8 +52,7 @@ async def test_reply_cut_by_length_is_logged_with_token_counts(caplog):
         usage = {"prompt_tokens": 3979, "completion_tokens": 117, "total_tokens": 4096}
         return httpx.Response(200, json={"choices": [choice], "usage": usage})
 
-    http = httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://llm")
-    client = OpenAICompatibleClient(LLMSettings(), http=http)
+    client = _over(httpx.MockTransport(handler))
     with caplog.at_level("WARNING", logger="taskgen.llm"):
         assert await client.complete(MESSAGES, model="m") == '{"items": ['
     (record,) = [r for r in caplog.records if r.name == "taskgen.llm"]
@@ -69,7 +73,10 @@ async def test_limiter_passes_reasoning_effort_through():
 
 
 async def test_roles_take_their_own_reasoning_effort():
-    llm = LLMSettings(generator_reasoning_effort="none", judge_reasoning_effort="high")
+    llm = LLMSettings(
+        generator=ChatRole(provider="ollama", model="writer", reasoning_effort="none"),
+        judge=ChatRole(provider="deepseek", model="judge", reasoning_effort="high"),
+    )
     state = SimpleNamespace(settings=Settings(llm=llm), sessionmaker=None, llm=FakeLLM([]))
     assert Generator.from_state(state).instance_deps().reasoning_effort == "none"
 
