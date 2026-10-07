@@ -285,6 +285,8 @@ def _check_frontmatter(meta: dict[str, Any], *, is_code: bool, out: _Collector) 
         out.add("runtime", "заданию с кодом нужно окружение песочницы")
     if meta.get("kind") in (TaskKind.ESSAY.value, TaskKind.QUIZ.value) and runtime is not None:
         out.add("runtime", "окружение песочницы задаётся только заданиям kind=code")
+    if meta.get("case_groups") and not is_code:
+        out.add("case_groups", "группы тестовых кейсов задаются только заданиям kind=code")
     runtime_limit = Template.__table__.c.runtime.type.length
     if isinstance(runtime, str) and len(runtime) > runtime_limit:
         out.add("runtime", f"имя окружения длиннее {runtime_limit} символов")

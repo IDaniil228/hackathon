@@ -476,6 +476,7 @@ async def _code(
             rubric=spec.rubric,
             reference_report=report,
             scoring=spec.scoring,
+            case_groups=spec.case_groups,
             solver=record,
         ),
         validated=True,
@@ -496,7 +497,7 @@ async def _generate_cases(
         result = await sandbox.run(request)
     except httpx.HTTPError as error:
         raise SandboxUnavailableError("Песочница недоступна, повторите позже") from error
-    return parse_generator_output(result)
+    return parse_generator_output(result, spec.case_groups)
 
 
 async def _run_reference(
