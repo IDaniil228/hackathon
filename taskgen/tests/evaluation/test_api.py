@@ -240,6 +240,15 @@ def test_language_mismatch_is_422(world):
     assert _answer(world, task_id, language="c++").status_code == 422
 
 
+def test_answer_names_the_task_runtime_not_its_language(world):
+    # Окружение python-ml пишется на Python, но ответ называет окружение задания: иначе один
+    # ответ значил бы два разных окружения.
+    spec = {"grade": "middle", "kind": "code", "hidden": {"runtime": "python-ml"}}
+    _, (task_id,) = world.make_session([spec])
+    assert _answer(world, task_id, language="python").status_code == 422
+    assert _answer(world, task_id, language="python-ml").status_code == 200
+
+
 def test_no_sandbox_is_503(world):
     _, (task_id,) = world.make_session([{"grade": "middle", "kind": "code"}])
     world.state.sandbox = None

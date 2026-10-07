@@ -26,7 +26,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from taskgen.contracts import AnalysisReport
-from taskgen.evaluation.languages import canonical_language
+from taskgen.evaluation.languages import source_language
 
 _HEADING = re.compile(r"^##\s+`?([^`\s]+)`?\s*$")
 _RULE = re.compile(r"^-\s+([^:]+):\s*(.+?)\s*$")
@@ -113,7 +113,7 @@ def parse_rubric(text: str) -> MetricRubric:
 @cache
 def load_rubric(language: str | None) -> MetricRubric | None:
     """Рубрика для языка из пакета или None, если для языка рубрики нет."""
-    name = canonical_language(language)
+    name = source_language(language)
     if name is None:
         return None
     path = resources.files("taskgen.evaluation") / "rubrics" / f"{name}.md"

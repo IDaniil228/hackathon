@@ -19,7 +19,7 @@ import httpx
 from pydantic import ValidationError
 
 from taskgen.contracts import AnalysisReport, RunLimits, RunRequest, SandboxRunner
-from taskgen.evaluation.languages import canonical_language
+from taskgen.evaluation.languages import source_language
 from taskgen.sandbox.drivers import analysis_files
 from taskgen.sandbox.errors import SandboxError
 from taskgen.sandbox.registry import RuntimeRegistry
@@ -56,7 +56,7 @@ class SandboxAnalyzer:
 
     async def analyze(self, code: str, language: str) -> list[AnalysisReport]:
         """Отчёты инструментов языка; язык без анализаторов — пустой список."""
-        name = canonical_language(language)
+        name = source_language(language)
         if name not in LANGUAGE_RUNTIMES:
             return []
         source = self.registry.get(LANGUAGE_RUNTIMES[name]).source_file
