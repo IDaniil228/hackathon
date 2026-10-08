@@ -1,17 +1,28 @@
 [project]
-name = "hackathon"
+name = "fsp-platform-api"
 version = "0.1.0"
-description = ""
+description = "Платформа-агрегатор ИТ-вакансий с верифицированным профилем участника ФСП"
 authors = [
-    {name = "IDaniil228",email = "99666220+IDaniil228@users.noreply.github.com"}
+    {name = "IDaniil228", email = "99666220+IDaniil228@users.noreply.github.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi (>=0.142.2,<0.143.0)",
-    "uvicorn (>=0.54.0,<0.55.0)"
+    "uvicorn[standard] (>=0.54.0,<0.55.0)",
+    "sqlalchemy[asyncio] (>=2.0.36,<3.0.0)",
+    # psycopg 3 умеет и синхронно (Alembic), и асинхронно (FastAPI) — один драйвер на оба режима
+    "psycopg[binary] (>=3.2.3,<4.0.0)",
+    "alembic (>=1.14.0,<2.0.0)",
+    "pgvector (>=0.3.6,<0.4.0)",
+    "pydantic-settings (>=2.7.0,<3.0.0)",
 ]
 
+[project.scripts]
+fspdb = "app.db.cli:main"
+
+[tool.poetry]
+packages = [{ include = "app" }]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
