@@ -1,17 +1,30 @@
-# Сервис поднимается автономно: своя БД, своя песочница. LLM — на хосте или в профиле ollama.
+# Сервис поднимается автономно: своя песочница, своя база на общем сервере Postgres из db/.
+# LLM — на хосте или в профиле ollama. Корневой docker-compose.yml подключает этот файл,
+# и тогда taskgen работает в сети платформы; порт на хосте 8001, потому что 8000 занят api.
+include:
+  - ../db/docker-compose.yml
+
 services:
-  db:
-    image: pgvector/pgvector:pg17
+  # Роль, база и расширение для taskgen: db-init.sql. Другое имя базы, например для тестов
+  # своего worktree: docker compose run --rm -e TASKGEN_DB_NAME=<имя> taskgen-db-init.
+  # Роль и пароль совпадают с адресом базы у сервиса taskgen ниже.
+  taskgen-db-init:
+    image: pgvector/pgvector:pg18
+    depends_on:
+      postgres: {condition: service_healthy}
+    # Суперпользователь сервера базы
+    env_file: ../.env
     environment:
-      POSTGRES_USER: taskgen
-      POSTGRES_PASSWORD: taskgen
-      POSTGRES_DB: taskgen
-    ports: ["5432:5432"]
-    volumes: [db-data:/var/lib/postgresql/data]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U taskgen"]
-      interval: 2s
-      retries: 30
+      PGHOST: postgres
+    volumes: ["./db-init.sql:/db-init.sql:ro"]
+    command:
+      - sh
+      - -c
+      - >-
+        PGUSER="$$POSTGRES_USER" PGPASSWORD="$$POSTGRES_PASSWORD"
+        exec psql -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1
+        -v role=taskgen -v password=taskgen -v db="$${TASKGEN_DB_NAME:-taskgen}"
+        -f /db-init.sql
 
   piston:
     image: ghcr.io/engineer-man/piston
@@ -41,12 +54,12 @@ services:
   taskgen:
     build: .
     depends_on:
-      db: {condition: service_healthy}
+      taskgen-db-init: {condition: service_completed_successfully}
       piston: {condition: service_started}
-    ports: ["8000:8000"]
+    ports: ["8001:8000"]
     env_file: [{path: .env, required: false}]
     environment:
-      TASKGEN_DATABASE_URL: postgresql+asyncpg://taskgen:taskgen@db:5432/taskgen
+      TASKGEN_DATABASE_URL: postgresql+asyncpg://taskgen:taskgen@postgres:5432/taskgen
       TASKGEN_SANDBOX__PISTON_URL: http://piston:2000
       # Ключ облачного провайдера приходит из .env: docs/taskgen/deployment.md.
       TASKGEN_LLM__PROVIDERS__OLLAMA__BASE_URL: >-
@@ -54,6 +67,5 @@ services:
     extra_hosts: ["host.docker.internal:host-gateway"]
 
 volumes:
-  db-data:
   piston-packages:
   ollama-data:

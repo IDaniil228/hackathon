@@ -19,7 +19,7 @@ def main(argv: list[str] | None = None) -> int:
 
     serve = sub.add_parser("serve", help="запустить HTTP-сервис")
     serve.add_argument("--host", default="0.0.0.0")
-    serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--port", type=int, default=8001)
 
     import_ = sub.add_parser(
         "import",

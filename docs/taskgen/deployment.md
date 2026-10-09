@@ -67,10 +67,13 @@ TASKGEN_LLM__DETECTOR__MODEL=ollama/hf.co/ai-sage/GigaChat3.1-10B-A1.8B-GGUF:q4_
 ## 2. Контейнеры
 
 ```sh
+cp -n ../.env.example ../.env
 docker compose up -d --build
 ```
 
-Поднимаются Postgres с pgvector, Piston и сервис. Сервис при старте применяет миграции (`alembic upgrade head`), они же создают справочники областей, грейдов и навыков
+Сервер Postgres с pgvector — отдельный сервис платформы из [db/docker-compose.yml](../../db/docker-compose.yml), и `taskgen` подключает его через `include`. Суперпользователя сервера задаёт корневой `.env`, поэтому его копия из `.env.example` нужна и при автономном запуске. У `taskgen` на этом сервере своя база `taskgen` со своей ролью: их и расширение `vector` создаёт одноразовый контейнер `taskgen-db-init` по [db-init.sql](../../taskgen/db-init.sql) при каждом старте. Поэтому базу `taskgen` можно удалить и создать заново, не трогая базы платформы
+
+Поднимаются Postgres, `taskgen-db-init`, Piston и сервис. Сервис при старте применяет миграции (`alembic upgrade head`), они же создают справочники областей, грейдов и навыков
 
 ## 3. Пакеты песочницы
 
@@ -95,13 +98,13 @@ docker compose exec taskgen taskgen import seed/templates
 ## 5. Проверка
 
 ```sh
-curl localhost:8000/health
+curl localhost:8001/health
 ```
 
-Ответ `{"status":"ok"}` значит, что сервис запущен. Swagger UI открывается по адресу `http://localhost:8000/docs`. Ключ роли `client` для основного бэкенда выпускает admin:
+Ответ `{"status":"ok"}` значит, что сервис запущен. Swagger UI открывается по адресу `http://localhost:8001/docs`. На хосте сервис слушает порт 8001, потому что 8000 занимает `api` платформы; внутри сети Compose это `taskgen:8000`. Ключ роли `client` для основного бэкенда выпускает admin:
 
 ```sh
-curl -X POST localhost:8000/keys \
+curl -X POST localhost:8001/keys \
   -H "Authorization: Bearer $(sed -n 's/^TASKGEN_BOOTSTRAP_ADMIN_KEY=//p' .env)" \
   -H 'Content-Type: application/json' \
   -d '{"name": "backend", "role": "client"}'
@@ -114,12 +117,24 @@ docker compose exec taskgen python -c \
   "import httpx; print(httpx.get('http://host.docker.internal:11434/v1/models', timeout=5).status_code)"
 ```
 
+## В составе платформы
+
+Корневой `docker-compose.yml` подключает compose сервиса через `include`, поэтому `docker compose up -d` в корне репозитория поднимает `taskgen` вместе с платформой в одной сети. Основной бэкенд достаёт сервис по адресу `http://taskgen:8000`. Шаги 1–4 те же, но команды выполняются в корне, а имя проекта Compose там `fsp-platform`:
+
+```sh
+taskgen/sandbox/piston-packages.sh install -c fsp-platform-piston-1
+docker compose exec taskgen taskgen import seed/templates
+```
+
+Ключи и настройки сервис берёт из `taskgen/.env`, как и при автономном запуске. Том базы `fsp-pgdata` общий для обоих запусков, поэтому банк, импортированный автономно, виден и в платформе. Том пакетов Piston у каждого проекта Compose свой, и пакеты ставятся в каждый отдельно. Автономный стек и платформу одновременно не запускайте: у них общий контейнер базы и одни и те же порты на хосте
+
 ## Запуск сервиса на хосте
 
 Для разработки сервис запускается из исходников, а Postgres и Piston — в контейнерах:
 
 ```sh
-docker compose up -d db piston
+docker compose up -d --wait postgres piston
+docker compose run --rm taskgen-db-init
 sandbox/piston-packages.sh install
 uv sync
 uv run alembic upgrade head

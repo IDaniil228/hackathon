@@ -18,10 +18,9 @@ cp .env.example .env     # пароль поменять
 docker compose up -d
 ```
 
-Поднимается два контейнера: `postgres` (образ `pgvector/pgvector:pg18` с Docker
-Hub) и `api` (официальный `python:3.13-slim`, без своего Dockerfile). Контейнер
-`api` при старте доустанавливает зависимости в `api/.venv-docker`, накатывает
-`alembic upgrade head` и поднимает uvicorn на `localhost:8000`.
+Поднимаются `postgres` (образ `pgvector/pgvector:pg18` с Docker Hub) и `api` (официальный `python:3.13-slim`, без своего Dockerfile). Контейнер `api` при старте доустанавливает зависимости в `api/.venv-docker`, накатывает `alembic upgrade head` и поднимает uvicorn на `localhost:8000`
+
+Сервер базы — отдельный сервис: [db/docker-compose.yml](docker-compose.yml), его подключает корневой `docker-compose.yml`. Суперпользователь и база `api` задаются в корневом `.env`. Другие сервисы платформы живут на этом сервере в своих базах: сервис заданий `taskgen` сам создаёт себе роль и базу `taskgen` одноразовым контейнером `taskgen-db-init`. Корень поднимает и `taskgen`, его первый запуск описан в [docs/taskgen/deployment.md](../docs/taskgen/deployment.md#в-составе-платформы). Только сервер базы и `api` без `taskgen` поднимает `docker compose up -d postgres api`
 
 Наполнение:
 

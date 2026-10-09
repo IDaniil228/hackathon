@@ -116,7 +116,7 @@ Python сервиса — `3.12` (`.python-version`), проект требуе�
 
 | Образ | Тег | Где |
 |---|---|---|
-| `pgvector/pgvector` | `pg17` | db |
 | `ollama/ollama` | тег не задан, `latest` | ollama |
 | `ghcr.io/engineer-man/piston` | тег не задан, `latest` | piston |
+| `pgvector/pgvector` | `pg18` | taskgen-db-init |
 | `ghcr.io/astral-sh/uv` | `latest` | образ taskgen |

@@ -7,9 +7,7 @@ from taskgen.app import create_app
 from taskgen.config import GenerationSettings, SelectionSettings, Settings
 
 ADMIN_KEY = "test-admin-key"
-DATABASE_URL = os.environ.get(
-    "TASKGEN_DATABASE_URL", "postgresql+asyncpg://taskgen:taskgen@localhost:5432/taskgen"
-)
+DATABASE_URL = os.environ.get("TASKGEN_DATABASE_URL", Settings.model_fields["database_url"].default)
 
 
 @pytest.fixture

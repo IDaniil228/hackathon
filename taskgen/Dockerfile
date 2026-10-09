@@ -11,4 +11,4 @@ RUN uv sync --frozen --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
-CMD ["sh", "-c", "alembic upgrade head && taskgen serve"]
+CMD ["sh", "-c", "alembic upgrade head && taskgen serve --port 8000"]
