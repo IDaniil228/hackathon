@@ -4,3 +4,4 @@
 - [Материалы фирменного стиля ФСП](fsp-brand-materials.md) — диск организаторов, разрешение хранить логотипы в репозитории
 - [БД для тестов taskgen](taskgen-test-db.md) — перед любым pytest в taskgen: без своей БД тесты падают ложно
 - [Совместимость российских LLM](llm-provider-compat.md) — YandexGPT и GigaChat через OpenAI-API, нужен запасной разбор JSON
+- [Ветку psql не трогать](psql-branch-hands-off.md) — её ведёт коллега: не пушить, не перематывать, не сливать в неё
