@@ -44,7 +44,10 @@ services:
 
   api:
     # Официальный python с Docker Hub, без своего Dockerfile и без локальной сборки.
-    # Зависимости ставятся в volume /opt/venv и переживают перезапуск контейнера.
+    # Зависимости ставятся в api/.venv-docker и переживают перезапуск контейнера.
+    # venv лежит внутри смонтированного /app, а не в своём монтировании: именованный том
+    # и отсутствующий в клоне bind-каталог Docker создаёт от root, и непривилегированный
+    # процесс в них не запишет.
     image: python:3.13-slim
     container_name: fsp-api
     restart: unless-stopped
@@ -59,7 +62,7 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      PATH: /opt/venv/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
+      PATH: /app/.venv-docker/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
       PYTHONUNBUFFERED: "1"
       PYTHONDONTWRITEBYTECODE: "1"
       # Не root — значит и HOME другой; сюда pip кладёт кэш
@@ -67,28 +70,36 @@ services:
     volumes:
       - ./api:/app
       - ./db:/sql
-      # venv — bind-каталог, а не именованный том: именованный создаётся от
-      # root, и непривилегированный процесс в него не запишет
-      - ./api/.venv-docker:/opt/venv
     ports:
       - "${API_PORT:-8000}:8000"
     # bash -c, а не -lc: логин-шелл перечитывает /etc/profile и затирает PATH,
     # после чего python берётся системный, а не из venv.
     # Зависимости ставятся один раз: маркер хранит хеш pyproject.toml.
+    # Инструменты вызываются через python -m: шебанги скриптов venv привязаны к пути,
+    # под которым venv создан, а ссылка bin/python от него не зависит.
     command: >
       bash -c "
         set -e;
-        test -x /opt/venv/bin/python || python -m venv /opt/venv;
-        STAMP=/opt/venv/.deps-sha;
+        VENV=/app/.venv-docker;
+        test -x $$VENV/bin/python || python -m venv $$VENV;
+        STAMP=$$VENV/.deps-sha;
         SHA=$$(sha256sum pyproject.toml | cut -d' ' -f1);
         if [ \"$$(cat $$STAMP 2>/dev/null)\" != \"$$SHA\" ]; then
-          /opt/venv/bin/pip install -q --upgrade pip;
-          /opt/venv/bin/pip install -q -e .;
+          $$VENV/bin/python -m pip install -q --upgrade pip;
+          $$VENV/bin/python -m pip install -q -e .;
           echo $$SHA > $$STAMP;
         fi;
-        /opt/venv/bin/alembic upgrade head;
-        exec /opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+        $$VENV/bin/python -m alembic upgrade head;
+        exec $$VENV/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
       "
+    # Без проверки docker compose up --wait считает здоровым и контейнер, который падает
+    # в цикле. Первый старт ставит зависимости, отсюда долгий start_period.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 300s
 
   adminer:
     image: adminer:5

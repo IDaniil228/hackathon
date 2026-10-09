@@ -153,6 +153,6 @@ PyPI из контейнера — venv останется пустым и uvico
 
 ```bash
 docker run --rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp \
-  -v "$PWD/api/.venv-docker":/opt/venv -v "$PWD/api":/app -w /app \
-  python:3.13-slim bash -c '/opt/venv/bin/pip install -e . || (python -m venv /opt/venv && /opt/venv/bin/pip install -e .)'
+  -v "$PWD/api":/app -w /app \
+  python:3.13-slim bash -c 'test -x .venv-docker/bin/python || python -m venv .venv-docker; .venv-docker/bin/python -m pip install -e .'
 ```
