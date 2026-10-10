@@ -1,0 +1,16 @@
+.git
+.agents
+.claude
+**/.env
+**/.venv
+**/.venv-docker
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.storage
+.test-logs
+api/tests
+taskgen
+matcher
+docs
+db

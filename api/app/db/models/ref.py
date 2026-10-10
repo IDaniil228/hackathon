@@ -16,7 +16,6 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
-    ForeignKeyConstraint,
     Identity,
     Index,
     SmallInteger,
@@ -48,7 +47,9 @@ class Industry(Base):
     code: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500))
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -78,8 +79,12 @@ class Specialization(Base):
     code: Mapped[str] = mapped_column(String(40), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500))
-    sort_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0, server_default="0")
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    sort_order: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, default=0, server_default="0"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
 
 
 class Grade(Base):
@@ -144,7 +149,9 @@ class Category(Base):
         ForeignKey("ref.grades.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     slug: Mapped[str] = mapped_column(String(90), nullable=False, unique=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
 
 
 class SkillArea(Base):
@@ -159,10 +166,14 @@ class SkillArea(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    parent_id: Mapped[int | None] = mapped_column(ForeignKey("ref.skill_areas.id", ondelete="RESTRICT"))
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ref.skill_areas.id", ondelete="RESTRICT")
+    )
     code: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String(80), nullable=False)
-    sort_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0, server_default="0")
+    sort_order: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, default=0, server_default="0"
+    )
 
 
 class Skill(Base):
@@ -183,7 +194,9 @@ class Skill(Base):
     kind: Mapped[enums.SkillKind] = mapped_column(enums.skill_kind, nullable=False, index=True)
     code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String(60), nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
 
 
 class SkillAlias(Base):
@@ -224,7 +237,9 @@ class SpecializationSkill(Base):
         ForeignKey("ref.skills.id", ondelete="CASCADE"), primary_key=True, index=True
     )
     #: профильный навык специализации, а не сопутствующий
-    is_core: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    is_core: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
 
 class AttributeDef(Base):
@@ -256,13 +271,23 @@ class AttributeDef(Base):
     )
     code: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    data_type: Mapped[enums.AttributeDataType] = mapped_column(enums.attribute_data_type, nullable=False)
+    data_type: Mapped[enums.AttributeDataType] = mapped_column(
+        enums.attribute_data_type, nullable=False
+    )
     unit: Mapped[str | None] = mapped_column(String(20))
-    is_multi: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
-    is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    is_multi: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    is_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     #: видно ли работодателю по умолчанию
-    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
-    sort_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0, server_default="0")
+    is_public: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    sort_order: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, default=0, server_default="0"
+    )
 
 
 class AttributeOption(Base):
@@ -286,9 +311,16 @@ class AttributeOption(Base):
     )
     code: Mapped[str] = mapped_column(String(50), nullable=False)
     label: Mapped[str] = mapped_column(String(100), nullable=False)
-    sort_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0, server_default="0")
+    sort_order: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, default=0, server_default="0"
+    )
 
 
 # --- индексы -----------------------------------------------------------------
 #: Автодополнение по подстроке в названии навыка
-Index("skills_name_trgm_idx", Skill.name, postgresql_using="gin", postgresql_ops={"name": "gin_trgm_ops"})
+Index(
+    "skills_name_trgm_idx",
+    Skill.name,
+    postgresql_using="gin",
+    postgresql_ops={"name": "gin_trgm_ops"},
+)

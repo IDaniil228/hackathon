@@ -20,7 +20,7 @@ from sqlalchemy.dialects.postgresql import ENUM
 from app.db.base import metadata
 
 
-class StrEnum(str, enum.Enum):
+class StrEnum(enum.StrEnum):
     """Значение в БД совпадает со значением в Python."""
 
     def __str__(self) -> str:
@@ -320,13 +320,37 @@ message_role = _pg(MessageRole, "message_role", "match")
 
 #: Полный список типов в порядке создания. Миграция проходит по нему явно.
 ALL_ENUMS: tuple[ENUM, ...] = (
-    user_status, user_role, token_purpose, consent_kind,
-    skill_kind, attribute_scope, attribute_data_type,
-    work_format, employment_type, link_kind, skill_source, resume_kind,
-    parse_status, fsp_link_status, fsp_event_level, achievement_source,
-    question_format, template_source, session_status, session_outcome,
-    checked_by, grade_source, assignment_status,
-    company_size, vacancy_status, skill_importance, invitation_status,
-    application_status, contact_method, disclosure_reason,
-    match_stage, run_status, message_role,
+    user_status,
+    user_role,
+    token_purpose,
+    consent_kind,
+    skill_kind,
+    attribute_scope,
+    attribute_data_type,
+    work_format,
+    employment_type,
+    link_kind,
+    skill_source,
+    resume_kind,
+    parse_status,
+    fsp_link_status,
+    fsp_event_level,
+    achievement_source,
+    question_format,
+    template_source,
+    session_status,
+    session_outcome,
+    checked_by,
+    grade_source,
+    assignment_status,
+    company_size,
+    vacancy_status,
+    skill_importance,
+    invitation_status,
+    application_status,
+    contact_method,
+    disclosure_reason,
+    match_stage,
+    run_status,
+    message_role,
 )

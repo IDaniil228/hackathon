@@ -58,8 +58,12 @@ class SurveyTemplate(Base):
     )
     code: Mapped[str] = mapped_column(String(40), nullable=False, unique=True)
     title: Mapped[str] = mapped_column(String(120), nullable=False)
-    version: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1, server_default="1")
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    version: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, default=1, server_default="1"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -81,7 +85,9 @@ class SurveyQuestion(Base):
     order_no: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     format: Mapped[enums.QuestionFormat] = mapped_column(enums.question_format, nullable=False)
     text: Mapped[str] = mapped_column(String(500), nullable=False)
-    is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    is_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
 
 
 class SurveyOption(Base):
@@ -137,7 +143,9 @@ class SurveySession(Base):
     specialization_id: Mapped[int | None] = mapped_column(
         ForeignKey("ref.specializations.id", ondelete="SET NULL")
     )
-    claimed_grade_id: Mapped[int | None] = mapped_column(ForeignKey("ref.grades.id", ondelete="SET NULL"))
+    claimed_grade_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ref.grades.id", ondelete="SET NULL")
+    )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -152,7 +160,9 @@ class SurveyAnswer(Base):
     __tablename__ = "survey_answers"
     __table_args__ = (
         UniqueConstraint(
-            "session_id", "question_id", "option_id",
+            "session_id",
+            "question_id",
+            "option_id",
             name="survey_answers_unique",
             postgresql_nulls_not_distinct=True,
         ),
@@ -167,7 +177,9 @@ class SurveyAnswer(Base):
     question_id: Mapped[int] = mapped_column(
         ForeignKey("assess.survey_questions.id", ondelete="CASCADE"), nullable=False
     )
-    option_id: Mapped[int | None] = mapped_column(ForeignKey("assess.survey_options.id", ondelete="CASCADE"))
+    option_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assess.survey_options.id", ondelete="CASCADE")
+    )
     free_text: Mapped[str | None] = mapped_column(String(1000))
     answered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -203,8 +215,12 @@ class TaskTemplate(Base):
     specialization_id: Mapped[int] = mapped_column(
         ForeignKey("ref.specializations.id", ondelete="CASCADE"), nullable=False
     )
-    grade_id: Mapped[int] = mapped_column(ForeignKey("ref.grades.id", ondelete="CASCADE"), nullable=False)
-    skill_id: Mapped[int | None] = mapped_column(ForeignKey("ref.skills.id", ondelete="SET NULL"), index=True)
+    grade_id: Mapped[int] = mapped_column(
+        ForeignKey("ref.grades.id", ondelete="CASCADE"), nullable=False
+    )
+    skill_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ref.skills.id", ondelete="SET NULL"), index=True
+    )
     code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     format: Mapped[enums.QuestionFormat] = mapped_column(enums.question_format, nullable=False)
@@ -220,8 +236,12 @@ class TaskTemplate(Base):
     source: Mapped[enums.TemplateSource] = mapped_column(
         enums.template_source, nullable=False, server_default=text("'manual'")
     )
-    version: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1, server_default="1")
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    version: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, default=1, server_default="1"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     #: накопленная статистика калибровки
     usage_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     avg_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
@@ -379,7 +399,9 @@ class TaskAnswer(Base):
         ),
         CheckConstraint("time_spent_sec IS NULL OR time_spent_sec >= 0", name="time_non_negative"),
         CheckConstraint("paste_count IS NULL OR paste_count >= 0", name="paste_non_negative"),
-        CheckConstraint("focus_lost_count IS NULL OR focus_lost_count >= 0", name="focus_non_negative"),
+        CheckConstraint(
+            "focus_lost_count IS NULL OR focus_lost_count >= 0", name="focus_non_negative"
+        ),
         {"schema": "assess"},
     )
 
@@ -439,8 +461,12 @@ class GradeAssignment(Base):
     assigned_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    next_change_allowed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    next_change_allowed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    is_current: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     note: Mapped[str | None] = mapped_column(String(300))
 
 
@@ -505,7 +531,11 @@ Index(
     postgresql_where=TestSession.status.in_(["created", "in_progress"]),
 )
 #: Очередь на проверку
-Index("task_answers_unchecked_idx", TaskAnswer.submitted_at, postgresql_where=TaskAnswer.checked_at.is_(None))
+Index(
+    "task_answers_unchecked_idx",
+    TaskAnswer.submitted_at,
+    postgresql_where=TaskAnswer.checked_at.is_(None),
+)
 
 #: Ровно одна действующая категория на кандидата — партиальным UNIQUE,
 #: а не триггером-сторожем
@@ -515,10 +545,22 @@ Index(
     unique=True,
     postgresql_where=text("is_current"),
 )
-Index("grade_assignments_candidate_idx", GradeAssignment.candidate_id, GradeAssignment.assigned_at.desc())
-Index("grade_assignments_category_idx", GradeAssignment.category_id, postgresql_where=text("is_current"))
+Index(
+    "grade_assignments_candidate_idx",
+    GradeAssignment.candidate_id,
+    GradeAssignment.assigned_at.desc(),
+)
+Index(
+    "grade_assignments_category_idx",
+    GradeAssignment.category_id,
+    postgresql_where=text("is_current"),
+)
 
-Index("regular_assignments_candidate_idx", RegularAssignment.candidate_id, RegularAssignment.issued_at.desc())
+Index(
+    "regular_assignments_candidate_idx",
+    RegularAssignment.candidate_id,
+    RegularAssignment.issued_at.desc(),
+)
 Index(
     "regular_assignments_open_idx",
     RegularAssignment.due_at,

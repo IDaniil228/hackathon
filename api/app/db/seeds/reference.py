@@ -51,7 +51,13 @@ SPECIALIZATIONS = {
         ("data_analyst", "Аналитика данных", "Витрины, метрики, визуализация", 60, None),
         ("devops", "DevOps / SRE", "CI/CD, инфраструктура, надёжность", 70, None),
         ("qa", "Тестирование", "Ручное и автоматизированное тестирование", 80, None),
-        ("security", "Информационная безопасность", "AppSec, инфраструктурная безопасность", 90, None),
+        (
+            "security",
+            "Информационная безопасность",
+            "AppSec, инфраструктурная безопасность",
+            90,
+            None,
+        ),
         ("systems_analyst", "Системный анализ", "Требования, интеграции, документация", 100, None),
         # подобласти через parent
         ("backend_python", "Backend / Python", None, 11, "backend"),
@@ -135,11 +141,18 @@ SKILLS = [
 ]
 
 SKILL_ALIASES = [
-    ("python", "питон"), ("python", "py"),
-    ("postgresql", "Postgres"), ("postgresql", "постгрес"), ("postgresql", "psql"),
-    ("javascript", "JS"), ("typescript", "TS"),
-    ("kubernetes", "k8s"), ("docker", "докер"),
-    ("fastapi", "фастапи"), ("rest_api", "REST"), ("ci_cd", "CICD"),
+    ("python", "питон"),
+    ("python", "py"),
+    ("postgresql", "Postgres"),
+    ("postgresql", "постгрес"),
+    ("postgresql", "psql"),
+    ("javascript", "JS"),
+    ("typescript", "TS"),
+    ("kubernetes", "k8s"),
+    ("docker", "докер"),
+    ("fastapi", "фастапи"),
+    ("rest_api", "REST"),
+    ("ci_cd", "CICD"),
     ("code_review", "ревью"),
 ]
 
@@ -174,19 +187,52 @@ ATTRIBUTE_DEFS = [
     # (scope, отрасль|None, код, название, тип, единица, обязательный, публичный, порядок)
     ("candidate", None, "english_level", "Уровень английского", "option", None, False, True, 10),
     ("candidate", None, "available_from", "Готов приступить с", "date", None, False, True, 20),
-    ("candidate", None, "business_trips", "Готовность к командировкам", "boolean", None, False, True, 30),
-    ("candidate", None, "preferred_team_size", "Комфортный размер команды", "integer", "человек", False, False, 40),
+    (
+        "candidate",
+        None,
+        "business_trips",
+        "Готовность к командировкам",
+        "boolean",
+        None,
+        False,
+        True,
+        30,
+    ),
+    (
+        "candidate",
+        None,
+        "preferred_team_size",
+        "Комфортный размер команды",
+        "integer",
+        "человек",
+        False,
+        False,
+        40,
+    ),
     ("candidate", None, "oss_contributions", "Вклад в open source", "text", None, False, True, 50),
     ("vacancy", None, "has_probation", "Испытательный срок", "boolean", None, False, True, 10),
     # Отраслевой атрибут: существует только у маркетинга и подтверждает, что
     # расширение в другую нишу — это вставка строк, а не ALTER TABLE
-    ("candidate", "marketing", "portfolio_cases", "Кейсов в портфолио", "integer", "шт", False, True, 60),
+    (
+        "candidate",
+        "marketing",
+        "portfolio_cases",
+        "Кейсов в портфолио",
+        "integer",
+        "шт",
+        False,
+        True,
+        60,
+    ),
 ]
 
 ENGLISH_LEVELS = [
-    ("a1", "A1 — Beginner", 10), ("a2", "A2 — Elementary", 20),
-    ("b1", "B1 — Intermediate", 30), ("b2", "B2 — Upper-Int.", 40),
-    ("c1", "C1 — Advanced", 50), ("c2", "C2 — Proficient", 60),
+    ("a1", "A1 — Beginner", 10),
+    ("a2", "A2 — Elementary", 20),
+    ("b1", "B1 — Intermediate", 30),
+    ("b2", "B2 — Upper-Int.", 40),
+    ("c1", "C1 — Advanced", 50),
+    ("c2", "C2 — Proficient", 60),
 ]
 
 
@@ -209,15 +255,20 @@ async def seed_reference(session: AsyncSession) -> dict[str, int]:
     # грейды: одна лестница на каждую отрасль
     await session.execute(
         insert(Grade)
-        .values([
-            {
-                "industry_id": industries[ind],
-                "code": code, "name": name, "level": level,
-                "min_experience_months": min_exp, "cooldown_days": cooldown,
-            }
-            for ind in industries
-            for code, name, level, min_exp, cooldown in GRADES
-        ])
+        .values(
+            [
+                {
+                    "industry_id": industries[ind],
+                    "code": code,
+                    "name": name,
+                    "level": level,
+                    "min_experience_months": min_exp,
+                    "cooldown_days": cooldown,
+                }
+                for ind in industries
+                for code, name, level, min_exp, cooldown in GRADES
+            ]
+        )
         .on_conflict_do_nothing(constraint="grades_industry_code_uq")
     )
 
@@ -237,19 +288,30 @@ async def seed_reference(session: AsyncSession) -> dict[str, int]:
                 if (pass_no == 1) != (parent is None):
                     continue
                 parent_id = existing.get((industries[ind_code], parent)) if parent else None
-                rows.append({
-                    "industry_id": industries[ind_code], "parent_id": parent_id,
-                    "code": code, "name": name, "description": desc, "sort_order": order,
-                })
+                rows.append(
+                    {
+                        "industry_id": industries[ind_code],
+                        "parent_id": parent_id,
+                        "code": code,
+                        "name": name,
+                        "description": desc,
+                        "sort_order": order,
+                    }
+                )
         if rows:
             await session.execute(
-                insert(Specialization).values(rows)
+                insert(Specialization)
+                .values(rows)
                 .on_conflict_do_nothing(constraint="specializations_industry_code_uq")
             )
         await session.flush()
 
     # категории: полное декартово произведение специализаций и грейдов отрасли
-    specs = (await session.execute(select(Specialization.id, Specialization.code, Specialization.industry_id))).all()
+    specs = (
+        await session.execute(
+            select(Specialization.id, Specialization.code, Specialization.industry_id)
+        )
+    ).all()
     grades = (await session.execute(select(Grade.id, Grade.code, Grade.industry_id))).all()
     cat_rows = [
         {"specialization_id": s_id, "grade_id": g_id, "slug": f"{s_code}.{g_code}"}
@@ -258,7 +320,9 @@ async def seed_reference(session: AsyncSession) -> dict[str, int]:
         if s_ind == g_ind
     ]
     await session.execute(
-        insert(Category).values(cat_rows).on_conflict_do_nothing(constraint="categories_spec_grade_uq")
+        insert(Category)
+        .values(cat_rows)
+        .on_conflict_do_nothing(constraint="categories_spec_grade_uq")
     )
     counts["categories"] = len(cat_rows)
 
@@ -266,8 +330,12 @@ async def seed_reference(session: AsyncSession) -> dict[str, int]:
     for pass_no in (1, 2):
         existing = await _ids_by_code(session, SkillArea)
         rows = [
-            {"code": code, "name": name, "sort_order": order,
-             "parent_id": existing.get(parent) if parent else None}
+            {
+                "code": code,
+                "name": name,
+                "sort_order": order,
+                "parent_id": existing.get(parent) if parent else None,
+            }
             for code, name, order, parent in SKILL_AREAS
             if (pass_no == 1) == (parent is None)
         ]
@@ -280,10 +348,12 @@ async def seed_reference(session: AsyncSession) -> dict[str, int]:
     areas = await _ids_by_code(session, SkillArea)
     await session.execute(
         insert(Skill)
-        .values([
-            {"area_id": areas[area], "kind": kind, "code": code, "name": name}
-            for area, kind, code, name in SKILLS
-        ])
+        .values(
+            [
+                {"area_id": areas[area], "kind": kind, "code": code, "name": name}
+                for area, kind, code, name in SKILLS
+            ]
+        )
         .on_conflict_do_nothing(index_elements=["code"])
     )
     skills = await _ids_by_code(session, Skill)
@@ -298,36 +368,50 @@ async def seed_reference(session: AsyncSession) -> dict[str, int]:
     spec_ids = {code: pk for pk, code, _ in specs}
     await session.execute(
         insert(SpecializationSkill)
-        .values([
-            {"specialization_id": spec_ids[spec], "skill_id": skills[skill], "is_core": is_core}
-            for spec, skill, is_core in SPECIALIZATION_SKILLS
-        ])
+        .values(
+            [
+                {"specialization_id": spec_ids[spec], "skill_id": skills[skill], "is_core": is_core}
+                for spec, skill, is_core in SPECIALIZATION_SKILLS
+            ]
+        )
         .on_conflict_do_nothing(index_elements=["specialization_id", "skill_id"])
     )
 
     await session.execute(
         insert(AttributeDef)
-        .values([
-            {
-                "scope": scope, "industry_id": industries[ind] if ind else None,
-                "code": code, "name": name, "data_type": dtype, "unit": unit,
-                "is_required": req, "is_public": pub, "sort_order": order,
-            }
-            for scope, ind, code, name, dtype, unit, req, pub, order in ATTRIBUTE_DEFS
-        ])
+        .values(
+            [
+                {
+                    "scope": scope,
+                    "industry_id": industries[ind] if ind else None,
+                    "code": code,
+                    "name": name,
+                    "data_type": dtype,
+                    "unit": unit,
+                    "is_required": req,
+                    "is_public": pub,
+                    "sort_order": order,
+                }
+                for scope, ind, code, name, dtype, unit, req, pub, order in ATTRIBUTE_DEFS
+            ]
+        )
         .on_conflict_do_nothing(constraint="attribute_defs_scope_code_uq")
     )
     await session.flush()
 
     english = await session.scalar(
-        select(AttributeDef.id).where(AttributeDef.scope == "candidate", AttributeDef.code == "english_level")
+        select(AttributeDef.id).where(
+            AttributeDef.scope == "candidate", AttributeDef.code == "english_level"
+        )
     )
     await session.execute(
         insert(AttributeOption)
-        .values([
-            {"attribute_id": english, "code": code, "label": label, "sort_order": order}
-            for code, label, order in ENGLISH_LEVELS
-        ])
+        .values(
+            [
+                {"attribute_id": english, "code": code, "label": label, "sort_order": order}
+                for code, label, order in ENGLISH_LEVELS
+            ]
+        )
         .on_conflict_do_nothing(constraint="attribute_options_attr_code_uq")
     )
 

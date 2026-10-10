@@ -85,7 +85,9 @@ class Candidate(Base):
     birth_date: Mapped[date | None] = mapped_column(Date)
     phone: Mapped[str | None] = mapped_column(String(20))
     city: Mapped[str | None] = mapped_column(String(100), index=True)
-    relocation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    relocation: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     work_format: Mapped[enums.WorkFormat | None] = mapped_column(enums.work_format)
     employment_type: Mapped[enums.EmploymentType | None] = mapped_column(enums.employment_type)
     experience_months: Mapped[int] = mapped_column(
@@ -139,7 +141,9 @@ class CandidateLink(Base):
     kind: Mapped[enums.LinkKind] = mapped_column(enums.link_kind, nullable=False)
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
     label: Mapped[str | None] = mapped_column(String(60))
-    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    is_public: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -158,7 +162,8 @@ class CandidateSkill(Base):
     __table_args__ = (
         CheckConstraint("self_level BETWEEN 0 AND 5", name="self_level_range"),
         CheckConstraint(
-            "confirmed_level IS NULL OR confirmed_level BETWEEN 0 AND 5", name="confirmed_level_range"
+            "confirmed_level IS NULL OR confirmed_level BETWEEN 0 AND 5",
+            name="confirmed_level_range",
         ),
         CheckConstraint("years IS NULL OR (years >= 0 AND years <= 70)", name="years_range"),
         {"schema": "profile"},
@@ -170,7 +175,9 @@ class CandidateSkill(Base):
     skill_id: Mapped[int] = mapped_column(
         ForeignKey("ref.skills.id", ondelete="RESTRICT"), primary_key=True
     )
-    self_level: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0, server_default="0")
+    self_level: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, default=0, server_default="0"
+    )
     #: NULL = не проверялось. Именно это видит работодатель как «подтверждённое»
     confirmed_level: Mapped[int | None] = mapped_column(SmallInteger)
     years: Mapped[Decimal | None] = mapped_column(Numeric(3, 1))
@@ -191,10 +198,17 @@ class CandidatePreferences(Base):
 
     __tablename__ = "candidate_preferences"
     __table_args__ = (
-        CheckConstraint("salary_min IS NULL OR (salary_min > 0 AND salary_min <= 100000000)", name="salary_min_range"),
-        CheckConstraint("salary_max IS NULL OR (salary_max > 0 AND salary_max <= 100000000)", name="salary_max_range"),
         CheckConstraint(
-            "salary_max IS NULL OR salary_min IS NULL OR salary_max >= salary_min", name="salary_range"
+            "salary_min IS NULL OR (salary_min > 0 AND salary_min <= 100000000)",
+            name="salary_min_range",
+        ),
+        CheckConstraint(
+            "salary_max IS NULL OR (salary_max > 0 AND salary_max <= 100000000)",
+            name="salary_max_range",
+        ),
+        CheckConstraint(
+            "salary_max IS NULL OR salary_min IS NULL OR salary_max >= salary_min",
+            name="salary_range",
         ),
         CheckConstraint(r"currency ~ '^[A-Z]{3}$'", name="currency_format"),
         {"schema": "profile"},
@@ -217,12 +231,7 @@ class CandidatePreferences(Base):
 
 
 class CandidatePrivacy(Base):
-    """Что кандидат разрешает показывать работодателю.
-
-    ``show_contacts = true`` не означает, что контакты видно: это согласие
-    кандидата в принципе. Фактический доступ даёт hire.contact_disclosures.
-    Два независимых условия: кандидат не против — и у компании есть основание.
-    """
+    """Обычное раскрытие и экспериментальная публикация контактов независимы"""
 
     __tablename__ = "candidate_privacy"
     __table_args__ = {"schema": "profile"}
@@ -230,11 +239,27 @@ class CandidatePrivacy(Base):
     candidate_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("profile.candidates.user_id", ondelete="CASCADE"), primary_key=True
     )
-    is_searchable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
-    show_contacts: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
-    show_salary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
-    show_fsp: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
-    show_github: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    is_searchable: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    show_contacts: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    show_salary: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    show_fsp: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    show_github: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    show_name: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    show_city: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    show_experience: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    show_about: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    public_contacts: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    public_contacts_consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -292,7 +317,9 @@ class CandidateAttributeValue(Base):
             name="cav_exactly_one_value",
         ),
         UniqueConstraint(
-            "candidate_id", "attribute_id", "option_id",
+            "candidate_id",
+            "attribute_id",
+            "option_id",
             name="cav_unique_value",
             postgresql_nulls_not_distinct=True,
         ),
@@ -304,7 +331,9 @@ class CandidateAttributeValue(Base):
         ForeignKey("profile.candidates.user_id", ondelete="CASCADE"), nullable=False, index=True
     )
     attribute_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
-    data_type: Mapped[enums.AttributeDataType] = mapped_column(enums.attribute_data_type, nullable=False)
+    data_type: Mapped[enums.AttributeDataType] = mapped_column(
+        enums.attribute_data_type, nullable=False
+    )
 
     value_string: Mapped[str | None] = mapped_column(String(255))
     value_text: Mapped[str | None] = mapped_column(Text)
@@ -330,7 +359,9 @@ class ResumeDocument(Base):
     __tablename__ = "resume_documents"
     __table_args__ = (
         CheckConstraint("char_length(btrim(storage_key)) > 0", name="key_not_blank"),
-        CheckConstraint("size_bytes IS NULL OR (size_bytes > 0 AND size_bytes <= 20971520)", name="size_range"),
+        CheckConstraint(
+            "size_bytes IS NULL OR (size_bytes > 0 AND size_bytes <= 20971520)", name="size_range"
+        ),
         CheckConstraint("char_length(raw_text) <= 200000", name="raw_text_len"),
         CheckConstraint("kind <> 'generated' OR parse_status = 'done'", name="generated_is_done"),
         {"schema": "profile"},
@@ -371,7 +402,9 @@ class ResumeParseResult(Base):
 
     __tablename__ = "resume_parse_results"
     __table_args__ = (
-        CheckConstraint("confidence IS NULL OR confidence BETWEEN 0 AND 1", name="confidence_range"),
+        CheckConstraint(
+            "confidence IS NULL OR confidence BETWEEN 0 AND 1", name="confidence_range"
+        ),
         {"schema": "profile"},
     )
 
@@ -427,7 +460,9 @@ class FspEvent(Base):
     __tablename__ = "fsp_events"
     __table_args__ = (
         CheckConstraint("char_length(btrim(title)) > 0", name="title_not_blank"),
-        CheckConstraint("ends_on IS NULL OR starts_on IS NULL OR ends_on >= starts_on", name="period"),
+        CheckConstraint(
+            "ends_on IS NULL OR starts_on IS NULL OR ends_on >= starts_on", name="period"
+        ),
         {"schema": "profile"},
     )
 
@@ -513,7 +548,9 @@ class GithubRepo(Base):
     __table_args__ = (
         CheckConstraint("stars >= 0", name="stars_non_negative"),
         CheckConstraint("forks >= 0", name="forks_non_negative"),
-        CheckConstraint("commits_by_owner IS NULL OR commits_by_owner >= 0", name="commits_non_negative"),
+        CheckConstraint(
+            "commits_by_owner IS NULL OR commits_by_owner >= 0", name="commits_non_negative"
+        ),
         {"schema": "profile"},
     )
 
@@ -526,8 +563,12 @@ class GithubRepo(Base):
     github_repo_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True)
     full_name: Mapped[str] = mapped_column(String(140), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500))
-    is_private: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
-    is_fork: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    is_private: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    is_fork: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     stars: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     forks: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     commits_by_owner: Mapped[int | None] = mapped_column(Integer)
@@ -600,7 +641,9 @@ Index(
     CandidateSkill.confirmed_level.desc().nullslast(),
 )
 
-Index("resume_documents_candidate_idx", ResumeDocument.candidate_id, ResumeDocument.uploaded_at.desc())
+Index(
+    "resume_documents_candidate_idx", ResumeDocument.candidate_id, ResumeDocument.uploaded_at.desc()
+)
 #: Очередь на разбор
 Index(
     "resume_documents_pending_idx",

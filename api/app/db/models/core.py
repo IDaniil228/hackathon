@@ -151,7 +151,9 @@ class UserConsent(Base):
     __tablename__ = "user_consents"
     __table_args__ = (
         CheckConstraint("char_length(btrim(document_version)) > 0", name="doc_version_not_blank"),
-        CheckConstraint("revoked_at IS NULL OR revoked_at >= granted_at", name="revoked_after_granted"),
+        CheckConstraint(
+            "revoked_at IS NULL OR revoked_at >= granted_at", name="revoked_after_granted"
+        ),
         {"schema": "core"},
     )
 

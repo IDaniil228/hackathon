@@ -13,60 +13,55 @@ include:
 
 services:
   api:
-    # Официальный python с Docker Hub, без своего Dockerfile и без локальной сборки.
-    # Зависимости ставятся в api/.venv-docker и переживают перезапуск контейнера.
-    # venv лежит внутри смонтированного /app, а не в своём монтировании: именованный том
-    # и отсутствующий в клоне bind-каталог Docker создаёт от root, и непривилегированный
-    # процесс в них не запишет.
-    image: python:3.13-slim
-    container_name: fsp-api
+    build: {context: ., dockerfile: api/Dockerfile}
+    image: fsp-platform-api:local
     restart: unless-stopped
-    working_dir: /app
-    # Контейнер работает от UID хозяина: файлы, которые создаёт alembic
-    # (новые ревизии) и fspdb dump-schema, остаются доступными на правку,
-    # а не появляются от root
-    user: "${UID:-1000}:${GID:-1000}"
     depends_on:
-      postgres:
-        condition: service_healthy
+      api-db-init: {condition: service_completed_successfully}
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      PATH: /app/.venv-docker/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
-      PYTHONUNBUFFERED: "1"
-      PYTHONDONTWRITEBYTECODE: "1"
-      # Не root — значит и HOME другой; сюда pip кладёт кэш
-      HOME: /tmp
+      DATABASE_URL: postgresql+psycopg://fsp_api:${API_DB_PASSWORD:?Set API_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TASKGEN_URL: http://taskgen:8000
+      MATCHER_URL: http://matcher:8000
     volumes:
-      - ./api:/app
-      - ./db:/sql
+      - api-documents:/storage
     ports:
       - "${API_PORT:-8000}:8000"
-    # bash -c, а не -lc: логин-шелл перечитывает /etc/profile и затирает PATH,
-    # после чего python берётся системный, а не из venv.
-    # Зависимости ставятся один раз: маркер хранит хеш pyproject.toml.
-    # Инструменты вызываются через python -m: шебанги скриптов venv привязаны к пути,
-    # под которым venv создан, а ссылка bin/python от него не зависит.
-    command: >
-      bash -c "
-        set -e;
-        VENV=/app/.venv-docker;
-        test -x $$VENV/bin/python || python -m venv $$VENV;
-        STAMP=$$VENV/.deps-sha;
-        SHA=$$(sha256sum pyproject.toml | cut -d' ' -f1);
-        if [ \"$$(cat $$STAMP 2>/dev/null)\" != \"$$SHA\" ]; then
-          $$VENV/bin/python -m pip install -q --upgrade pip;
-          $$VENV/bin/python -m pip install -q -e .;
-          echo $$SHA > $$STAMP;
-        fi;
-        $$VENV/bin/python -m alembic upgrade head;
-        exec $$VENV/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-      "
-    # Без проверки docker compose up --wait считает здоровым и контейнер, который падает
-    # в цикле. Первый старт ставит зависимости, отсюда долгий start_period.
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
       interval: 5s
       timeout: 5s
       retries: 3
-      start_period: 300s
+      start_period: 30s
+
+  api-migrate:
+    build: {context: ., dockerfile: api/Dockerfile}
+    image: fsp-platform-api:local
+    depends_on:
+      postgres: {condition: service_healthy}
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes: ["./db:/sql"]
+    command: ["alembic", "upgrade", "head"]
+
+  api-db-init:
+    image: pgvector/pgvector:pg18
+    depends_on:
+      api-migrate: {condition: service_completed_successfully}
+    env_file: .env
+    environment:
+      PGHOST: postgres
+    volumes: ["./api/db-init.sql:/api-db-init.sql:ro"]
+    command:
+      - sh
+      - -ec
+      - >-
+        export PGUSER="$$POSTGRES_USER" PGPASSWORD="$$POSTGRES_PASSWORD";
+        exec psql -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1
+        -v role=fsp_api -v password="$$API_DB_PASSWORD" -v db="$$POSTGRES_DB"
+        -v owner="$$POSTGRES_USER" -f /api-db-init.sql
+
+volumes:
+  api-documents:

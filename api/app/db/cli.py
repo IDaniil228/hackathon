@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import create_mock_engine, select, text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.schema import CreateIndex, CreateTable
 
 from app.db.base import SCHEMAS, metadata
@@ -34,10 +34,15 @@ from app.db.relevance import recompute_skill_relevance
 from app.db.seeds.demo import seed_demo
 from app.db.seeds.reference import seed_reference
 from app.db.seeds.task_bank import seed_task_bank
-from app.db.session import SessionFactory, engine
+from app.db.session import build_engine
+
+engine = build_engine()
+SessionFactory = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
 
 #: Каталог бэкапов. В контейнере ./db смонтирован как /sql.
-BACKUP_DIR = Path("/sql/backup") if Path("/sql").is_dir() else Path(__file__).parents[3] / "db" / "backup"
+BACKUP_DIR = (
+    Path("/sql/backup") if Path("/sql").is_dir() else Path(__file__).parents[3] / "db" / "backup"
+)
 
 EXTENSIONS = ("vector", "citext", "pg_trgm")
 
@@ -114,12 +119,16 @@ def cmd_dump_schema() -> None:
     ]
 
     for table in metadata.sorted_tables:
-        chunks.append(str(CreateTable(table).compile(dialect=mock.dialect)).strip().rstrip(";") + ";")
+        chunks.append(
+            str(CreateTable(table).compile(dialect=mock.dialect)).strip().rstrip(";") + ";"
+        )
 
     index_ddl = ["", "-- Индексы"]
     for table in metadata.sorted_tables:
         for index in sorted(table.indexes, key=lambda i: i.name or ""):
-            index_ddl.append(str(CreateIndex(index).compile(dialect=mock.dialect)).strip().rstrip(";") + ";")
+            index_ddl.append(
+                str(CreateIndex(index).compile(dialect=mock.dialect)).strip().rstrip(";") + ";"
+            )
 
     body = "\n\n".join(chunks)
     text_out = "\n".join(header) + "\n\n" + body + "\n" + "\n".join(index_ddl) + "\n\nCOMMIT;\n"
@@ -127,8 +136,10 @@ def cmd_dump_schema() -> None:
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     out = BACKUP_DIR / "schema.sql"
     out.write_text(text_out, encoding="utf-8")
-    print(f"{out}: {len(metadata.sorted_tables)} таблиц, {len(ALL_ENUMS)} типов, "
-          f"{sum(len(t.indexes) for t in metadata.sorted_tables)} индексов")
+    print(
+        f"{out}: {len(metadata.sorted_tables)} таблиц, {len(ALL_ENUMS)} типов, "
+        f"{sum(len(t.indexes) for t in metadata.sorted_tables)} индексов"
+    )
 
 
 # --- бэкап данных ------------------------------------------------------------
@@ -228,16 +239,21 @@ async def cmd_stats() -> None:
         # ":schemas::text[]" в text() не писать: двойное двоеточие сразу за
         # именем параметра сбивает разбор bind-параметров SQLAlchemy
         rows = await session.execute(
-            text("SELECT schemaname, count(*) FROM pg_tables WHERE schemaname = ANY(:schemas) GROUP BY 1"),
+            text(
+                "SELECT schemaname, count(*) FROM pg_tables WHERE schemaname = ANY(:schemas) GROUP BY 1"
+            ),
             {"schemas": list(SCHEMAS)},
         )
         by_schema = dict(rows.all())
         print("таблиц по схемам:", {s: by_schema.get(s, 0) for s in SCHEMAS})
         print("всего таблиц:", sum(by_schema.values()))
         for label, model in [
-            ("кандидатов", profile.Candidate), ("компаний", hire.Company),
-            ("вакансий", hire.Vacancy), ("приглашений", hire.Invitation),
-            ("категорий", ref.Category), ("навыков", ref.Skill),
+            ("кандидатов", profile.Candidate),
+            ("компаний", hire.Company),
+            ("вакансий", hire.Vacancy),
+            ("приглашений", hire.Invitation),
+            ("категорий", ref.Category),
+            ("навыков", ref.Skill),
             ("шаблонов заданий", assess.TaskTemplate),
             ("весов навыков", matching.SkillRelevance),
         ]:

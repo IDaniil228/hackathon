@@ -49,7 +49,9 @@ class Company(Base):
     __table_args__ = (
         CheckConstraint("char_length(btrim(name)) > 0", name="name_not_blank"),
         # 10 цифр у юрлица, 12 у ИП
-        CheckConstraint(r"inn IS NULL OR inn ~ '^[0-9]{10}$' OR inn ~ '^[0-9]{12}$'", name="inn_format"),
+        CheckConstraint(
+            r"inn IS NULL OR inn ~ '^[0-9]{10}$' OR inn ~ '^[0-9]{12}$'", name="inn_format"
+        ),
         CheckConstraint("char_length(description) <= 5000", name="description_len"),
         CheckConstraint(f"website IS NULL OR website ~ '{URL_RE}'", name="website_format"),
         {"schema": "hire"},
@@ -61,14 +63,18 @@ class Company(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     legal_name: Mapped[str | None] = mapped_column(String(200))
     inn: Mapped[str | None] = mapped_column(String(12), unique=True)
-    industry_id: Mapped[int | None] = mapped_column(ForeignKey("ref.industries.id", ondelete="SET NULL"))
+    industry_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ref.industries.id", ondelete="SET NULL")
+    )
     description: Mapped[str | None] = mapped_column(Text)
     website: Mapped[str | None] = mapped_column(String(2048))
     logo_url: Mapped[str | None] = mapped_column(String(2048))
     size: Mapped[enums.CompanySize | None] = mapped_column(enums.company_size)
     city: Mapped[str | None] = mapped_column(String(100))
     #: задел под защиту от недобросовестных работодателей (за рамками MVP)
-    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    is_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -83,8 +89,12 @@ class Employer(Base):
     __tablename__ = "employers"
     __table_args__ = (
         CheckConstraint("char_length(btrim(full_name)) > 0", name="full_name_not_blank"),
-        CheckConstraint(f"contact_email IS NULL OR contact_email ~ '{EMAIL_RE}'", name="contact_email_format"),
-        CheckConstraint(f"contact_phone IS NULL OR contact_phone ~ '{PHONE_RE}'", name="contact_phone_format"),
+        CheckConstraint(
+            f"contact_email IS NULL OR contact_email ~ '{EMAIL_RE}'", name="contact_email_format"
+        ),
+        CheckConstraint(
+            f"contact_phone IS NULL OR contact_phone ~ '{PHONE_RE}'", name="contact_phone_format"
+        ),
         {"schema": "hire"},
     )
 
@@ -98,7 +108,9 @@ class Employer(Base):
     position: Mapped[str | None] = mapped_column(String(100))
     contact_email: Mapped[str | None] = mapped_column(CITEXT)
     contact_phone: Mapped[str | None] = mapped_column(String(20))
-    is_owner: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    is_owner: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -120,7 +132,9 @@ class Vacancy(Base):
         CheckConstraint("salary_max > 0 AND salary_max <= 100000000", name="salary_max_range"),
         CheckConstraint("salary_max >= salary_min", name="salary_range"),
         CheckConstraint(r"currency ~ '^[A-Z]{3}$'", name="currency_format"),
-        CheckConstraint("status <> 'published' OR published_at IS NOT NULL", name="published_has_ts"),
+        CheckConstraint(
+            "status <> 'published' OR published_at IS NOT NULL", name="published_has_ts"
+        ),
         {"schema": "hire"},
     )
 
@@ -197,7 +211,8 @@ class EmployerNeed(Base):
         CheckConstraint("salary_min IS NULL OR salary_min > 0", name="salary_min_positive"),
         CheckConstraint("salary_max IS NULL OR salary_max > 0", name="salary_max_positive"),
         CheckConstraint(
-            "salary_max IS NULL OR salary_min IS NULL OR salary_max >= salary_min", name="salary_range"
+            "salary_max IS NULL OR salary_min IS NULL OR salary_max >= salary_min",
+            name="salary_range",
         ),
         CheckConstraint(r"currency ~ '^[A-Z]{3}$'", name="currency_format"),
         {"schema": "hire"},
@@ -221,14 +236,18 @@ class EmployerNeed(Base):
         ForeignKey("ref.specializations.id", ondelete="SET NULL")
     )
     grade_id: Mapped[int | None] = mapped_column(ForeignKey("ref.grades.id", ondelete="SET NULL"))
-    category_id: Mapped[int | None] = mapped_column(ForeignKey("ref.categories.id", ondelete="SET NULL"))
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("ref.categories.id", ondelete="SET NULL")
+    )
     #: свободные предпочтения: идут в эмбеддинг и в системный промт LLM-отбора
     positive_prompt: Mapped[str | None] = mapped_column(String(2000))
     negative_prompt: Mapped[str | None] = mapped_column(String(2000))
     salary_min: Mapped[int | None] = mapped_column(Integer)
     salary_max: Mapped[int | None] = mapped_column(Integer)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default=text("'RUB'"))
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -273,7 +292,9 @@ class Invitation(Base):
         CheckConstraint("salary_max >= salary_min", name="salary_range"),
         CheckConstraint(r"currency ~ '^[A-Z]{3}$'", name="currency_format"),
         CheckConstraint("viewed_at IS NULL OR viewed_at >= sent_at", name="viewed_after_sent"),
-        CheckConstraint("responded_at IS NULL OR responded_at >= sent_at", name="responded_after_sent"),
+        CheckConstraint(
+            "responded_at IS NULL OR responded_at >= sent_at", name="responded_after_sent"
+        ),
         CheckConstraint(
             "status NOT IN ('accepted', 'declined') OR responded_at IS NOT NULL",
             name="final_has_response",
@@ -341,7 +362,9 @@ class InvitationEvent(Base):
         ForeignKey("hire.invitations.id", ondelete="CASCADE"), nullable=False
     )
     from_status: Mapped[enums.InvitationStatus | None] = mapped_column(enums.invitation_status)
-    to_status: Mapped[enums.InvitationStatus] = mapped_column(enums.invitation_status, nullable=False)
+    to_status: Mapped[enums.InvitationStatus] = mapped_column(
+        enums.invitation_status, nullable=False
+    )
     actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("core.users.id", ondelete="SET NULL")
     )
@@ -394,7 +417,9 @@ class ApplicationEvent(Base):
         ForeignKey("hire.applications.id", ondelete="CASCADE"), nullable=False
     )
     from_status: Mapped[enums.ApplicationStatus | None] = mapped_column(enums.application_status)
-    to_status: Mapped[enums.ApplicationStatus] = mapped_column(enums.application_status, nullable=False)
+    to_status: Mapped[enums.ApplicationStatus] = mapped_column(
+        enums.application_status, nullable=False
+    )
     actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("core.users.id", ondelete="SET NULL")
     )
@@ -423,7 +448,9 @@ class ContactDisclosure(Base):
             " OR (reason = 'application_sent' AND application_id IS NOT NULL AND invitation_id IS NULL)",
             name="source_matches_reason",
         ),
-        CheckConstraint("revoked_at IS NULL OR revoked_at >= granted_at", name="revoked_after_granted"),
+        CheckConstraint(
+            "revoked_at IS NULL OR revoked_at >= granted_at", name="revoked_after_granted"
+        ),
         {"schema": "hire"},
     )
 
@@ -466,14 +493,25 @@ Index(
 )
 
 #: Лента входящих приглашений в кабинете кандидата
-Index("invitations_candidate_idx", Invitation.candidate_id, Invitation.status, Invitation.sent_at.desc())
+Index(
+    "invitations_candidate_idx",
+    Invitation.candidate_id,
+    Invitation.status,
+    Invitation.sent_at.desc(),
+)
 #: Отслеживание статусов в кабинете работодателя
-Index("invitations_company_idx", Invitation.company_id, Invitation.status, Invitation.sent_at.desc())
+Index(
+    "invitations_company_idx", Invitation.company_id, Invitation.status, Invitation.sent_at.desc()
+)
 Index("invitation_events_invitation_idx", InvitationEvent.invitation_id, InvitationEvent.created_at)
 
 Index("applications_candidate_idx", Application.candidate_id, Application.created_at.desc())
 Index("applications_vacancy_idx", Application.vacancy_id, Application.status)
-Index("application_events_application_idx", ApplicationEvent.application_id, ApplicationEvent.created_at)
+Index(
+    "application_events_application_idx",
+    ApplicationEvent.application_id,
+    ApplicationEvent.created_at,
+)
 
 #: Один действующий доступ к контактам на пару «кандидат — компания»
 Index(

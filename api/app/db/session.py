@@ -2,42 +2,32 @@
 
 from collections.abc import AsyncIterator
 
+from fastapi import Request
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
-    async_sessionmaker,
     create_async_engine,
 )
 
 from app.settings import get_settings
 
 
-def build_engine() -> AsyncEngine:
-    settings = get_settings()
+def build_engine(settings=None) -> AsyncEngine:
+    settings = settings or get_settings()
     return create_async_engine(
         settings.async_database_url,
         echo=settings.echo_sql,
+        hide_parameters=True,
         pool_pre_ping=True,
         pool_size=10,
         max_overflow=20,
     )
 
 
-engine: AsyncEngine = build_engine()
-
-SessionFactory = async_sessionmaker(
-    engine,
-    expire_on_commit=False,
-    autoflush=False,
-)
-
-
-async def get_session() -> AsyncIterator[AsyncSession]:
-    """Зависимость FastAPI: сессия на запрос, коммит на выходе без ошибок."""
-    async with SessionFactory() as session:
+async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
+    """Обработчик фиксирует изменения до формирования успешного ответа"""
+    async with request.app.state.sessionmaker() as session:
         try:
             yield session
-            await session.commit()
-        except Exception:
+        finally:
             await session.rollback()
-            raise

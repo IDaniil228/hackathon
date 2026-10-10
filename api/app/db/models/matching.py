@@ -233,11 +233,17 @@ class SearchResult(Base):
     __table_args__ = (
         UniqueConstraint("run_id", "rank", name="search_results_rank_uq"),
         CheckConstraint("rank IS NULL OR rank > 0", name="rank_positive"),
-        CheckConstraint("vector_score IS NULL OR vector_score BETWEEN -1 AND 1", name="vector_score_range"),
+        CheckConstraint(
+            "vector_score IS NULL OR vector_score BETWEEN -1 AND 1", name="vector_score_range"
+        ),
         CheckConstraint("llm_score IS NULL OR llm_score BETWEEN 0 AND 1", name="llm_score_range"),
-        CheckConstraint("final_score IS NULL OR final_score BETWEEN 0 AND 1", name="final_score_range"),
+        CheckConstraint(
+            "final_score IS NULL OR final_score BETWEEN 0 AND 1", name="final_score_range"
+        ),
         # дошёл до LLM — обязан иметь текстовое обоснование
-        CheckConstraint("stage <> 'llm' OR explanation IS NOT NULL", name="llm_stage_has_explanation"),
+        CheckConstraint(
+            "stage <> 'llm' OR explanation IS NOT NULL", name="llm_stage_has_explanation"
+        ),
         {"schema": "match"},
     )
 
@@ -259,7 +265,9 @@ class SearchResult(Base):
     #: и по нему фильтруется готовый прогон. Состав факторов задаёт сервис
     #: подбора, см. docs/matcher/matching-mechanics.md
     factors: Mapped[dict | None] = mapped_column(JSONB)
-    is_shown: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    is_shown: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -341,6 +349,11 @@ Index(
 )
 
 Index("search_runs_need_idx", SearchRun.need_id, SearchRun.created_at.desc())
-Index("search_results_top_idx", SearchResult.run_id, SearchResult.final_score.desc(), postgresql_where=text("is_shown"))
+Index(
+    "search_results_top_idx",
+    SearchResult.run_id,
+    SearchResult.final_score.desc(),
+    postgresql_where=text("is_shown"),
+)
 Index("chat_threads_need_idx", ChatThread.need_id, ChatThread.updated_at.desc())
 Index("chat_messages_thread_idx", ChatMessage.thread_id, ChatMessage.created_at)
