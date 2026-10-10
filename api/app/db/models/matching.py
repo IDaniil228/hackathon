@@ -39,7 +39,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import enums
 from app.db.base import Base
 
-#: Размерность под multilingual-e5-large / bge-m3 (русский + английский).
+#: Размерность под bge-m3. Модель задаёт настройка сервиса подбора
+#: ``llm.embedding`` (docs/matcher/generated/settings.md), а не api.
 #: Зашита в тип колонки, поэтому смена модели — это миграция, а не настройка.
 EMBEDDING_DIM = 1024
 
@@ -254,6 +255,10 @@ class SearchResult(Base):
     final_score: Mapped[Decimal | None] = mapped_column(Numeric(6, 5))
     #: краткая объяснимость выдачи — требование п. 2.1 ТЗ
     explanation: Mapped[str | None] = mapped_column(String(2000))
+    #: разложение по детерминированным факторам: из него пишется ``explanation``
+    #: и по нему фильтруется готовый прогон. Состав факторов задаёт сервис
+    #: подбора, см. docs/matcher/matching-mechanics.md
+    factors: Mapped[dict | None] = mapped_column(JSONB)
     is_shown: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

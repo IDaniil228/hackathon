@@ -11,11 +11,6 @@ class Settings(BaseSettings):
     # psycopg 3 обслуживает оба режима: sync для Alembic, async для FastAPI
     database_url: str = "postgresql+psycopg://fsp:change_me_locally@localhost:5432/fsp"
 
-    # Размерность эмбеддингов. Зашита в тип колонки vector(N), поэтому смена
-    # модели на модель с другой размерностью — это миграция, а не настройка.
-    embedding_dim: int = 1024
-    embedding_model: str = "multilingual-e5-large"
-
     echo_sql: bool = False
 
     @property

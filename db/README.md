@@ -137,7 +137,7 @@ ORDER BY embedding <=> (SELECT embedding FROM match.need_embeddings WHERE need_i
 LIMIT 40;
 ```
 
-Размерность зафиксирована: `vector(1024)` под multilingual-e5-large / bge-m3.
+Размерность зафиксирована: `vector(1024)` под bge-m3. Модель задаёт сервис подбора: [docs/matcher/generated/settings.md](../docs/matcher/generated/settings.md), настройка `llm.embedding`
 
 **Другая предметная область.** Чтобы запустить платформу вне ИТ, меняются
 только данные: строка в `ref.industries`, свои специализации, грейды, навыки и
