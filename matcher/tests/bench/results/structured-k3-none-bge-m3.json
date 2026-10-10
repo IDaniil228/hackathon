@@ -1,0 +1,642 @@
+{
+ "variant": "structured",
+ "fake": false,
+ "models": {
+  "embedding": "ollama/bge-m3",
+  "rewriter": null,
+  "ranker": null,
+  "checker": null
+ },
+ "wall_seconds": 2.9,
+ "usage": {
+  "calls": 0,
+  "prompt_tokens": 0,
+  "completion_tokens": 0,
+  "reasoning_tokens": 0
+ },
+ "settings": {
+  "top_k": 3,
+  "exploration": {
+   "fresh": 3,
+   "random": 3
+  },
+  "ranker_batch_size": 8,
+  "ndcg_k": 10,
+  "relevant_threshold": 2
+ },
+ "dataset": {
+  "needs": 6,
+  "candidates": 54,
+  "relevance": {
+   "ideal": 3,
+   "ideal_import": 2,
+   "no_nice_to_have": 2,
+   "no_required": 1,
+   "grade_lower": 1,
+   "violator": 0,
+   "stuffer": 0
+  },
+  "cut": [
+   "salary_above",
+   "other_specialization"
+  ],
+  "foreign_in_categories": 0
+ },
+ "repeats": 1,
+ "summary": {
+  "ndcg_at_10": 0.9183,
+  "ndcg_ceiling": 0.9655,
+  "recall_at_k": 0.7222,
+  "prefilter_ok": "6/6",
+  "violator_below_ideal": "6/6",
+  "stuffer_below_ideal": "6/6",
+  "runs_done": "6/6",
+  "llm_fallbacks": 0,
+  "vector_skipped": "0/6",
+  "explanations_checked": null,
+  "summaries_checked": null,
+  "seconds": 2.5
+ },
+ "repeat_summaries": [
+  {
+   "ndcg_at_10": 0.9183,
+   "ndcg_ceiling": 0.9655,
+   "recall_at_k": 0.7222,
+   "prefilter_ok": "6/6",
+   "violator_below_ideal": "6/6",
+   "stuffer_below_ideal": "6/6",
+   "runs_done": "6/6",
+   "llm_fallbacks": 0,
+   "vector_skipped": "0/6",
+   "explanations_checked": null,
+   "summaries_checked": null,
+   "seconds": 2.5
+  }
+ ],
+ "needs": [
+  {
+   "repeat": 1,
+   "need": "backend",
+   "origin": "demo",
+   "seconds": 0.5,
+   "status": "done",
+   "error": null,
+   "query_variant": "structured",
+   "llm_model": null,
+   "llm_fallback": null,
+   "rewriter_error": null,
+   "llm_error": null,
+   "pool_size": 7,
+   "foreign_in_pool": 0,
+   "vector_skipped": false,
+   "ndcg_at_10": 0.9203600459096715,
+   "ndcg_ceiling": 0.9654913637925913,
+   "recall_at_k": 0.6666666666666666,
+   "prefilter_ok": true,
+   "violator_below_ideal": true,
+   "stuffer_below_ideal": true,
+   "ranking": [
+    {
+     "rank": 1,
+     "kind": "ideal",
+     "relevance": 3,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.82561,
+     "llm_score": null,
+     "final_score": 0.75
+    },
+    {
+     "rank": 2,
+     "kind": "violator",
+     "relevance": 0,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.77957,
+     "llm_score": null,
+     "final_score": 0.75
+    },
+    {
+     "rank": 3,
+     "kind": "no_nice_to_have",
+     "relevance": 2,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.80081,
+     "llm_score": null,
+     "final_score": 0.72619
+    },
+    {
+     "rank": 4,
+     "kind": "no_required",
+     "relevance": 1,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.81583,
+     "llm_score": null,
+     "final_score": 0.70238
+    },
+    {
+     "rank": 5,
+     "kind": "grade_lower",
+     "relevance": 1,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.79163,
+     "llm_score": null,
+     "final_score": 0.66667
+    },
+    {
+     "rank": 6,
+     "kind": "stuffer",
+     "relevance": 0,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.77688,
+     "llm_score": null,
+     "final_score": 0.66667
+    },
+    {
+     "rank": 7,
+     "kind": "ideal_import",
+     "relevance": 2,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.83504,
+     "llm_score": null,
+     "final_score": 0.66667
+    }
+   ]
+  },
+  {
+   "repeat": 1,
+   "need": "ml_engineer",
+   "origin": "demo",
+   "seconds": 0.4,
+   "status": "done",
+   "error": null,
+   "query_variant": "structured",
+   "llm_model": null,
+   "llm_fallback": null,
+   "rewriter_error": null,
+   "llm_error": null,
+   "pool_size": 7,
+   "foreign_in_pool": 0,
+   "vector_skipped": false,
+   "ndcg_at_10": 0.9203600459096715,
+   "ndcg_ceiling": 0.9654913637925913,
+   "recall_at_k": 1.0,
+   "prefilter_ok": true,
+   "violator_below_ideal": true,
+   "stuffer_below_ideal": true,
+   "ranking": [
+    {
+     "rank": 1,
+     "kind": "ideal",
+     "relevance": 3,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.89764,
+     "llm_score": null,
+     "final_score": 0.75
+    },
+    {
+     "rank": 2,
+     "kind": "violator",
+     "relevance": 0,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.79999,
+     "llm_score": null,
+     "final_score": 0.75
+    },
+    {
+     "rank": 3,
+     "kind": "no_nice_to_have",
+     "relevance": 2,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.9091,
+     "llm_score": null,
+     "final_score": 0.73485
+    },
+    {
+     "rank": 4,
+     "kind": "no_required",
+     "relevance": 1,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.88887,
+     "llm_score": null,
+     "final_score": 0.7197
+    },
+    {
+     "rank": 5,
+     "kind": "grade_lower",
+     "relevance": 1,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.86782,
+     "llm_score": null,
+     "final_score": 0.66667
+    },
+    {
+     "rank": 6,
+     "kind": "stuffer",
+     "relevance": 0,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.77917,
+     "llm_score": null,
+     "final_score": 0.66667
+    },
+    {
+     "rank": 7,
+     "kind": "ideal_import",
+     "relevance": 2,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.93622,
+     "llm_score": null,
+     "final_score": 0.66667
+    }
+   ]
+  },
+  {
+   "repeat": 1,
+   "need": "frontend",
+   "origin": "synthetic",
+   "seconds": 0.4,
+   "status": "done",
+   "error": null,
+   "query_variant": "structured",
+   "llm_model": null,
+   "llm_fallback": null,
+   "rewriter_error": null,
+   "llm_error": null,
+   "pool_size": 7,
+   "foreign_in_pool": 0,
+   "vector_skipped": false,
+   "ndcg_at_10": 0.9203600459096715,
+   "ndcg_ceiling": 0.9654913637925913,
+   "recall_at_k": 0.6666666666666666,
+   "prefilter_ok": true,
+   "violator_below_ideal": true,
+   "stuffer_below_ideal": true,
+   "ranking": [
+    {
+     "rank": 1,
+     "kind": "ideal",
+     "relevance": 3,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.834,
+     "llm_score": null,
+     "final_score": 0.75
+    },
+    {
+     "rank": 2,
+     "kind": "violator",
+     "relevance": 0,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.79926,
+     "llm_score": null,
+     "final_score": 0.75
+    },
+    {
+     "rank": 3,
+     "kind": "no_nice_to_have",
+     "relevance": 2,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.80528,
+     "llm_score": null,
+     "final_score": 0.71667
+    },
+    {
+     "rank": 4,
+     "kind": "no_required",
+     "relevance": 1,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.81888,
+     "llm_score": null,
+     "final_score": 0.68333
+    },
+    {
+     "rank": 5,
+     "kind": "grade_lower",
+     "relevance": 1,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.80074,
+     "llm_score": null,
+     "final_score": 0.66667
+    },
+    {
+     "rank": 6,
+     "kind": "stuffer",
+     "relevance": 0,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.76155,
+     "llm_score": null,
+     "final_score": 0.66667
+    },
+    {
+     "rank": 7,
+     "kind": "ideal_import",
+     "relevance": 2,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.85623,
+     "llm_score": null,
+     "final_score": 0.66667
+    }
+   ]
+  },
+  {
+   "repeat": 1,
+   "need": "devops",
+   "origin": "synthetic",
+   "seconds": 0.4,
+   "status": "done",
+   "error": null,
+   "query_variant": "structured",
+   "llm_model": null,
+   "llm_fallback": null,
+   "rewriter_error": null,
+   "llm_error": null,
+   "pool_size": 7,
+   "foreign_in_pool": 0,
+   "vector_skipped": false,
+   "ndcg_at_10": 0.9079922543705999,
+   "ndcg_ceiling": 0.9654913637925913,
+   "recall_at_k": 0.6666666666666666,
+   "prefilter_ok": true,
+   "violator_below_ideal": true,
+   "stuffer_below_ideal": true,
+   "ranking": [
+    {
+     "rank": 1,
+     "kind": "ideal",
+     "relevance": 3,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.83115,
+     "llm_score": null,
+     "final_score": 0.75
+    },
+    {
+     "rank": 2,
+     "kind": "violator",
+     "relevance": 0,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.82895,
+     "llm_score": null,
+     "final_score": 0.75
+    },
+    {
+     "rank": 3,
+     "kind": "no_required",
+     "relevance": 1,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.82472,
+     "llm_score": null,
+     "final_score": 0.72619
+    },
+    {
+     "rank": 4,
+     "kind": "no_nice_to_have",
+     "relevance": 2,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.82637,
+     "llm_score": null,
+     "final_score": 0.70238
+    },
+    {
+     "rank": 5,
+     "kind": "grade_lower",
+     "relevance": 1,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.80406,
+     "llm_score": null,
+     "final_score": 0.66667
+    },
+    {
+     "rank": 6,
+     "kind": "stuffer",
+     "relevance": 0,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.76642,
+     "llm_score": null,
+     "final_score": 0.66667
+    },
+    {
+     "rank": 7,
+     "kind": "ideal_import",
+     "relevance": 2,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.84498,
+     "llm_score": null,
+     "final_score": 0.66667
+    }
+   ]
+  },
+  {
+   "repeat": 1,
+   "need": "qa",
+   "origin": "synthetic",
+   "seconds": 0.4,
+   "status": "done",
+   "error": null,
+   "query_variant": "structured",
+   "llm_model": null,
+   "llm_fallback": null,
+   "rewriter_error": null,
+   "llm_error": null,
+   "pool_size": 7,
+   "foreign_in_pool": 0,
+   "vector_skipped": false,
+   "ndcg_at_10": 0.9203600459096715,
+   "ndcg_ceiling": 0.9654913637925913,
+   "recall_at_k": 0.6666666666666666,
+   "prefilter_ok": true,
+   "violator_below_ideal": true,
+   "stuffer_below_ideal": true,
+   "ranking": [
+    {
+     "rank": 1,
+     "kind": "ideal",
+     "relevance": 3,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.81283,
+     "llm_score": null,
+     "final_score": 0.75
+    },
+    {
+     "rank": 2,
+     "kind": "violator",
+     "relevance": 0,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.78871,
+     "llm_score": null,
+     "final_score": 0.75
+    },
+    {
+     "rank": 3,
+     "kind": "no_nice_to_have",
+     "relevance": 2,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.80111,
+     "llm_score": null,
+     "final_score": 0.71667
+    },
+    {
+     "rank": 4,
+     "kind": "no_required",
+     "relevance": 1,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.80457,
+     "llm_score": null,
+     "final_score": 0.68333
+    },
+    {
+     "rank": 5,
+     "kind": "grade_lower",
+     "relevance": 1,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.78754,
+     "llm_score": null,
+     "final_score": 0.66667
+    },
+    {
+     "rank": 6,
+     "kind": "stuffer",
+     "relevance": 0,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.72215,
+     "llm_score": null,
+     "final_score": 0.66667
+    },
+    {
+     "rank": 7,
+     "kind": "ideal_import",
+     "relevance": 2,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.82414,
+     "llm_score": null,
+     "final_score": 0.66667
+    }
+   ]
+  },
+  {
+   "repeat": 1,
+   "need": "data_analyst",
+   "origin": "synthetic",
+   "seconds": 0.4,
+   "status": "done",
+   "error": null,
+   "query_variant": "structured",
+   "llm_model": null,
+   "llm_fallback": null,
+   "rewriter_error": null,
+   "llm_error": null,
+   "pool_size": 7,
+   "foreign_in_pool": 0,
+   "vector_skipped": false,
+   "ndcg_at_10": 0.9203600459096715,
+   "ndcg_ceiling": 0.9654913637925913,
+   "recall_at_k": 0.6666666666666666,
+   "prefilter_ok": true,
+   "violator_below_ideal": true,
+   "stuffer_below_ideal": true,
+   "ranking": [
+    {
+     "rank": 1,
+     "kind": "ideal",
+     "relevance": 3,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.9253,
+     "llm_score": null,
+     "final_score": 0.75
+    },
+    {
+     "rank": 2,
+     "kind": "violator",
+     "relevance": 0,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.87668,
+     "llm_score": null,
+     "final_score": 0.75
+    },
+    {
+     "rank": 3,
+     "kind": "no_nice_to_have",
+     "relevance": 2,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.843,
+     "llm_score": null,
+     "final_score": 0.71667
+    },
+    {
+     "rank": 4,
+     "kind": "no_required",
+     "relevance": 1,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.92216,
+     "llm_score": null,
+     "final_score": 0.68333
+    },
+    {
+     "rank": 5,
+     "kind": "grade_lower",
+     "relevance": 1,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.87848,
+     "llm_score": null,
+     "final_score": 0.66667
+    },
+    {
+     "rank": 6,
+     "kind": "stuffer",
+     "relevance": 0,
+     "stage": "vector",
+     "in_vector_top": false,
+     "vector_score": 0.81901,
+     "llm_score": null,
+     "final_score": 0.66667
+    },
+    {
+     "rank": 7,
+     "kind": "ideal_import",
+     "relevance": 2,
+     "stage": "vector",
+     "in_vector_top": true,
+     "vector_score": 0.94517,
+     "llm_score": null,
+     "final_score": 0.66667
+    }
+   ]
+  }
+ ]
+}
