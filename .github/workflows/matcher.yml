@@ -1,0 +1,78 @@
+# Гейт сервиса matcher: только проверки, которые зависят от одного репозитория.
+# Интеграционные тесты (метка integration) сюда не входят: им нужны Postgres и база api,
+# которую готовят миграции и seed api без lock-файла. Их красный цвет мог бы зависеть от
+# PyPI, а не от изменения в pull request. Их запускает matcher-integration.yml.
+# Путь taskgen/src/taskgen/** стоит в фильтре из-за копии LLM-слоя: matcher/scripts/sync_llm.py
+# берёт оттуда файлы, а tests/test_llm_sync.py падает, когда источник изменился. Путь
+# db/docker-compose.yml стоит из-за docs/matcher/generated/libraries.md: образы в нём.
+name: matcher
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "matcher/**"
+      - "docs/matcher/**"
+      - "taskgen/src/taskgen/**"
+      - "db/docker-compose.yml"
+      - ".github/workflows/matcher.yml"
+      - ".github/actions/**"
+  pull_request:
+    paths:
+      - "matcher/**"
+      - "docs/matcher/**"
+      - "taskgen/src/taskgen/**"
+      - "db/docker-compose.yml"
+      - ".github/workflows/matcher.yml"
+      - ".github/actions/**"
+  workflow_dispatch:
+  # Автоматизация проверяет ветку вызовом этого же workflow с ref, а не копией его команд.
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: matcher
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      # Python берётся из matcher/.python-version, пакеты, включая ruff, — из matcher/uv.lock.
+      - uses: ./.github/actions/setup-uv
+        with:
+          working-directory: matcher
+      - run: uv sync --locked
+      - run: uv run --locked ruff check .
+      - run: uv run --locked ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/setup-uv
+        with:
+          working-directory: matcher
+      - run: uv sync --locked
+      - name: Копия LLM-слоя совпадает с taskgen
+        run: uv run --locked pytest -q tests/test_llm_sync.py
+      - name: docs/matcher/generated собрана из текущего кода
+        run: uv run --locked pytest -q tests/test_docs_generated.py
+      - name: Тесты без Postgres и LLM
+        run: >-
+          uv run --locked pytest -q -m "not integration"
+          --deselect tests/test_llm_sync.py --deselect tests/test_docs_generated.py

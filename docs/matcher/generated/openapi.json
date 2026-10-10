@@ -1,0 +1,1036 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "matcher",
+    "summary": "Подбор кандидатов под потребность работодателя",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/keys": {
+      "post": {
+        "tags": [
+          "Ключи"
+        ],
+        "summary": "Выпустить сервисный ключ",
+        "description": "Ключ возвращается один раз; сервис хранит только его хэш",
+        "operationId": "issue_key_keys_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyIssued"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/needs/{need_id}/runs": {
+      "post": {
+        "tags": [
+          "Подбор"
+        ],
+        "summary": "Запустить подбор по потребности",
+        "description": "Создаёт прогон со статусом queued и исполняет его в фоне; статус и выдача — GET /runs/{run_id}",
+        "operationId": "start_run_needs__need_id__runs_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "need_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Need Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RunCreate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunAccepted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Потребности нет"
+          },
+          "409": {
+            "description": "Потребность закрыта"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "Подбор"
+        ],
+        "summary": "Статус прогона и выдача",
+        "operationId": "get_run_runs__run_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Прогона нет"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/results": {
+      "get": {
+        "tags": [
+          "Подбор"
+        ],
+        "summary": "Выдача готового прогона с фильтрами",
+        "description": "Сужает выдачу готового прогона без нового подбора и ничего не пишет. Все фильтры необязательны и действуют вместе",
+        "operationId": "get_results_runs__run_id__results_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Город кандидата, без учёта регистра",
+              "title": "City"
+            },
+            "description": "Город кандидата, без учёта регистра"
+          },
+          {
+            "name": "relocation",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Готовность к переезду",
+              "title": "Relocation"
+            },
+            "description": "Готовность к переезду"
+          },
+          {
+            "name": "work_format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "office",
+                    "hybrid",
+                    "remote"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Предпочтительный формат работы; кандидат без предпочтения проходит",
+              "title": "Work Format"
+            },
+            "description": "Предпочтительный формат работы; кандидат без предпочтения проходит"
+          },
+          {
+            "name": "grade_confirmed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Грейд подтверждён тестом",
+              "title": "Grade Confirmed"
+            },
+            "description": "Грейд подтверждён тестом"
+          },
+          {
+            "name": "skills",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Коды навыков ref.skills.code; нужны все, уровень не важен",
+              "default": [],
+              "title": "Skills"
+            },
+            "description": "Коды навыков ref.skills.code; нужны все, уровень не важен"
+          },
+          {
+            "name": "salary_max",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Бюджет: нижняя граница ожиданий кандидата не выше; ожидания в другой валюте или без ожиданий проходят",
+              "title": "Salary Max"
+            },
+            "description": "Бюджет: нижняя граница ожиданий кандидата не выше; ожидания в другой валюте или без ожиданий проходят"
+          },
+          {
+            "name": "min_score",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 1.0,
+                  "minimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Нижняя граница final_score",
+              "title": "Min Score"
+            },
+            "description": "Нижняя граница final_score"
+          },
+          {
+            "name": "view",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "full",
+                "brief"
+              ],
+              "type": "string",
+              "description": "brief — только candidate_id, rank и final_score",
+              "default": "full",
+              "title": "View"
+            },
+            "description": "brief — только candidate_id, rank и final_score"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultsOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Прогона нет"
+          },
+          "409": {
+            "description": "Прогон ещё не завершён"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/refine": {
+      "post": {
+        "tags": [
+          "Подбор"
+        ],
+        "summary": "Уточнить подбор сообщением работодателя",
+        "description": "Создаёт новый прогон с parent_run_id: переписчик запроса видит потребность и все уточнения цепочки. В тред чата потребности пишутся реплика работодателя и ответ сервиса с id нового прогона. Прежняя выдача не меняется",
+        "operationId": "refine_run_runs__run_id__refine_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefineIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunAccepted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Прогона нет"
+          },
+          "409": {
+            "description": "Прогон не завершён или потребность закрыта"
+          },
+          "422": {
+            "description": "У потребности нет треда чата и не известен его автор"
+          }
+        }
+      }
+    },
+    "/embeddings/refresh": {
+      "post": {
+        "tags": [
+          "Служебное"
+        ],
+        "summary": "Пересчитать устаревшие векторы карточек в фоне",
+        "description": "Досчитывает векторы кандидатов, карточки которых изменились с прошлого пересчёта; то же делает команда matcher embed",
+        "operationId": "refresh_embeddings_embeddings_refresh_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshAccepted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "409": {
+            "description": "Пересчёт уже идёт"
+          },
+          "503": {
+            "description": "Эмбеддер не настроен"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Служебное"
+        ],
+        "summary": "Проверка, что сервис запущен",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "KeyCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "role"
+        ],
+        "title": "KeyCreate"
+      },
+      "KeyIssued": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "role",
+          "key"
+        ],
+        "title": "KeyIssued"
+      },
+      "MatchStage": {
+        "type": "string",
+        "enum": [
+          "prefilter",
+          "vector",
+          "llm"
+        ],
+        "title": "MatchStage",
+        "description": "Значения типа match.match_stage: до какой стадии конвейера дошёл кандидат."
+      },
+      "RefineIn": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Message",
+            "description": "Уточнение работодателя"
+          },
+          "author_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author User Id",
+            "description": "Пользователь api, который уточняет подбор; без него тред чата, если его нет, создаётся от автора потребности"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "RefineIn"
+      },
+      "RefreshAccepted": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "accepted",
+            "title": "Status",
+            "default": "accepted"
+          }
+        },
+        "type": "object",
+        "title": "RefreshAccepted"
+      },
+      "ResultBrief": {
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Candidate Id"
+          },
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "final_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_id",
+          "rank",
+          "final_score"
+        ],
+        "title": "ResultBrief"
+      },
+      "ResultOut": {
+        "properties": {
+          "candidate_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Candidate Id"
+          },
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/MatchStage"
+          },
+          "vector_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vector Score"
+          },
+          "llm_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Score"
+          },
+          "final_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Score"
+          },
+          "explanation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Explanation"
+          },
+          "factors": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Factors",
+            "description": "grade_confirmed, factor_score и items: у каждого фактора value 0..1, line — строка объяснения, applicable — применим ли фактор к запросу, numbers — числа строки. llm — попадания в негативные промты от ранжировщика, если он оценил кандидата"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_id",
+          "rank",
+          "stage",
+          "vector_score",
+          "llm_score",
+          "final_score",
+          "explanation",
+          "factors"
+        ],
+        "title": "ResultOut"
+      },
+      "ResultsOut": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "description": "Сколько строк в выдаче прогона"
+          },
+          "matched": {
+            "type": "integer",
+            "title": "Matched",
+            "description": "Сколько из них прошли фильтры"
+          },
+          "results": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ResultOut"
+                },
+                "type": "array"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ResultBrief"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Results",
+            "description": "Строки, которые прошли фильтры, по возрастанию rank"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "matched",
+          "results"
+        ],
+        "title": "ResultsOut"
+      },
+      "Role": {
+        "type": "string",
+        "enum": [
+          "admin",
+          "client"
+        ],
+        "title": "Role"
+      },
+      "RunAccepted": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status"
+        ],
+        "title": "RunAccepted"
+      },
+      "RunCreate": {
+        "properties": {
+          "author_user_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author User Id",
+            "description": "Пользователь api, который запустил подбор"
+          }
+        },
+        "type": "object",
+        "title": "RunCreate"
+      },
+      "RunOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "need_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Need Id"
+          },
+          "parent_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Run Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "strategy": {
+            "type": "string",
+            "title": "Strategy"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          },
+          "pool_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pool Size"
+          },
+          "llm_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Model",
+            "description": "Модель ранжировщика; null — порядок по факторам"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary",
+            "description": "Обзор подборки для работодателя"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ResultOut"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Ранжированная выдача, по возрастанию rank"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "need_id",
+          "parent_run_id",
+          "status",
+          "strategy",
+          "params",
+          "pool_size",
+          "llm_model",
+          "summary",
+          "error_message",
+          "created_at",
+          "finished_at",
+          "results"
+        ],
+        "title": "RunOut"
+      },
+      "RunStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "done",
+          "failed"
+        ],
+        "title": "RunStatus",
+        "description": "Значения типа match.run_status из api/app/db/enums.py; сверку держит интеграционный\nтест test_enums_match_database."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

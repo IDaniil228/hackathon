@@ -1,0 +1,80 @@
+# Интеграционные тесты matcher (метка integration) на настоящем Postgres с базой api.
+# Это детектор, а не гейт pull request: у api нет lock-файла, и его зависимости для миграций
+# и seed ставятся из PyPI на момент запуска. Красный цвет здесь может означать перемену во
+# внешнем мире, а не ошибку в изменении. Гейт — matcher.yml.
+# Путь api/migrations/** и api/app/db/** стоит в фильтре, потому что matcher читает схему api
+# и роль matcher получает права на её таблицы: изменение схемы может сломать подбор.
+name: matcher-integration
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "matcher/**"
+      - "api/migrations/**"
+      - "api/app/db/**"
+      - "db/docker-compose.yml"
+      - ".env.example"
+      - ".github/workflows/matcher-integration.yml"
+      - ".github/actions/**"
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: matcher
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: ./.github/actions/setup-uv
+        with:
+          working-directory: matcher
+      - run: uv sync --locked
+      # Сервер Postgres поднимается из db/docker-compose.yml, а не service container'ом:
+      # образ и настройки описаны там один раз. Суперпользователя сервера и его базу задаёт
+      # корневой .env, адреса для api и для тестов собираются из тех же значений. Роль matcher
+      # и её пароль задаёт matcher/docker-compose.yml.
+      - name: Postgres и адреса баз
+        run: |
+          cp ../.env.example ../.env
+          docker compose up -d --wait postgres
+          value() { sed -n "s/^$1=//p" ../.env; }
+          server="localhost:$(value POSTGRES_PORT)/$(value POSTGRES_DB)"
+          owner="$(value POSTGRES_USER):$(value POSTGRES_PASSWORD)"
+          {
+            echo "DATABASE_URL=postgresql+psycopg://$owner@$server"
+            echo "MATCHER_TEST_OWNER_URL=postgresql+asyncpg://$owner@$server"
+            echo "MATCHER_DATABASE_URL=postgresql+asyncpg://matcher:matcher@$server"
+          } >> "$GITHUB_ENV"
+      # Порядок важен: роль matcher получает права на таблицы, которые уже создали миграции.
+      - name: Миграции и данные api
+        working-directory: api
+        run: |
+          uv run alembic upgrade head
+          uv run fspdb seed
+          uv run fspdb seed-demo
+          uv run fspdb relevance
+      - name: Роль matcher
+        run: docker compose run --rm matcher-db-init
+      - run: uv run --locked alembic upgrade head
+      - name: Интеграционные тесты
+        run: uv run --locked pytest -q -m integration
+      - name: Логи контейнеров
+        if: failure()
+        run: docker compose logs --no-color --tail 200 postgres
