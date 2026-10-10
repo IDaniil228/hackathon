@@ -1,12 +1,15 @@
 name: fsp-platform
 
 # Платформа собирается из сервисов, у каждого свой compose: база (db/), сервис заданий
-# (taskgen/). Каждый поднимается и отдельно, а отсюда вся платформа поднимается одной
-# командой в одной сети, где сервис доступен по имени: postgres:5432, taskgen:8000.
-# taskgen сам подключает db/, повторное подключение одного файла Compose объединяет.
+# (taskgen/), сервис подбора (matcher/). Каждый поднимается и отдельно, а отсюда вся
+# платформа поднимается одной командой в одной сети, где сервис доступен по имени:
+# postgres:5432, taskgen:8000, matcher:8000. taskgen и matcher сами подключают db/,
+# повторное подключение одного файла Compose объединяет. matcher работает в базе api и
+# ждёт её миграций: matcher/docker-compose.yml.
 include:
   - db/docker-compose.yml
   - taskgen/docker-compose.yml
+  - matcher/docker-compose.yml
 
 services:
   api:

@@ -1,0 +1,57 @@
+# Матчер работает в базе api: читает её схемы и пишет в match, а свои ключи держит в схеме
+# matcher. Поэтому init-контейнер ждёт, пока миграции api создадут схему match, и только
+# тогда выдаёт роли matcher права. Корневой docker-compose.yml подключает этот файл; порт на
+# хосте 8002, потому что 8000 занят api, а 8001 — taskgen.
+include:
+  - ../db/docker-compose.yml
+
+services:
+  # Роль и права для matcher: db-init.sql. Роль и пароль совпадают с адресом базы у сервиса
+  # matcher ниже. Без api схема match не появится, и контейнер завершится ошибкой по
+  # истечении MATCHER_WAIT_SECONDS.
+  matcher-db-init:
+    image: pgvector/pgvector:pg18
+    depends_on:
+      postgres: {condition: service_healthy}
+    # Суперпользователь сервера базы, он же владелец таблиц api.
+    env_file: ../.env
+    environment:
+      PGHOST: postgres
+      MATCHER_WAIT_SECONDS: ${MATCHER_WAIT_SECONDS:-600}
+    volumes: ["./db-init.sql:/db-init.sql:ro"]
+    command:
+      - sh
+      - -c
+      - >-
+        export PGUSER="$$POSTGRES_USER" PGPASSWORD="$$POSTGRES_PASSWORD";
+        deadline=$$(( $$(date +%s) + MATCHER_WAIT_SECONDS ));
+        until psql -d "$$POSTGRES_DB" -tAc "SELECT 1 FROM pg_namespace WHERE nspname = 'match'"
+        | grep -q 1; do
+        if [ "$$(date +%s)" -ge "$$deadline" ]; then
+        echo "схемы match нет: миграции api не выполнены" >&2; exit 1; fi;
+        sleep 2; done;
+        exec psql -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1
+        -v role=matcher -v password=matcher -v db="$$POSTGRES_DB" -v owner="$$POSTGRES_USER"
+        -f /db-init.sql
+
+  matcher:
+    build: .
+    depends_on:
+      matcher-db-init: {condition: service_completed_successfully}
+    ports: ["8002:8000"]
+    env_file: [{path: .env, required: false}]
+    environment:
+      MATCHER_DATABASE_URL: postgresql+asyncpg://matcher:matcher@postgres:5432/${POSTGRES_DB:-fsp}
+      # Без taskgen в той же сети карточки собираются без machine summary.
+      MATCHER_TASKGEN__BASE_URL: ${MATCHER_TASKGEN__BASE_URL:-http://taskgen:8000}
+      MATCHER_LLM__PROVIDERS__OLLAMA__BASE_URL: >-
+        ${MATCHER_LLM__PROVIDERS__OLLAMA__BASE_URL:-http://host.docker.internal:11434/v1}
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    # Без проверки docker compose up --wait считает здоровым и контейнер, который падает
+    # в цикле.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
