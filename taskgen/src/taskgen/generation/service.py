@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from taskgen.bank.selector import (
@@ -37,7 +37,7 @@ from taskgen.contracts import (
     SessionStatus,
     TaskStatus,
 )
-from taskgen.db import AreaSkill, Skill, Task, Template, TestSession
+from taskgen.db import AreaSkill, SessionRequest, Skill, Task, Template, TestSession
 from taskgen.evaluation.quotes import EmbeddingCache, state_embedding_cache
 from taskgen.generation import pool
 from taskgen.generation.instance import (
@@ -105,6 +105,9 @@ class SessionSpec:
     selection_override: dict[str, Any] | None = None
     profile: CandidateProfile | None = None
     early_start: bool = False
+    request_ref: uuid.UUID | None = None
+    client_hash: str | None = None
+    fingerprint: str | None = None
 
 
 @dataclass
@@ -161,6 +164,9 @@ async def create_session(gen: Generator, spec: SessionSpec) -> uuid.UUID:
     seed = spec.seed if spec.seed is not None else secrets.randbits(SEED_BITS)
     rng = random.Random(seed)
     async with gen.sessionmaker() as db:
+        existing = await _existing_request(db, spec)
+        if existing is not None:
+            return existing
         try:
             result = await select_templates(
                 db,
@@ -205,6 +211,17 @@ async def _check_skills(db: AsyncSession, area: str, skills: list[str]) -> None:
         raise InvalidRequestError(f"Навыки не относятся к области {area}: {', '.join(foreign)}")
 
 
+async def _existing_request(db, spec):
+    if spec.request_ref is None:
+        return None
+    row = await db.get(SessionRequest, (spec.client_hash, spec.request_ref))
+    if row is None:
+        return None
+    if row.fingerprint != spec.fingerprint:
+        raise ConflictError("Идентификатор запроса использован с другими параметрами")
+    return row.session_id
+
+
 async def _insert_session(
     gen: Generator,
     spec: SessionSpec,
@@ -213,6 +230,14 @@ async def _insert_session(
     task_seeds: list[int],
 ) -> uuid.UUID:
     async with gen.sessionmaker() as db, db.begin():
+        if spec.request_ref is not None:
+            await db.execute(
+                text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                {"key": f"taskgen:{spec.client_hash}:{spec.request_ref}"},
+            )
+            existing = await _existing_request(db, spec)
+            if existing is not None:
+                return existing
         row = TestSession(
             candidate_ref=spec.candidate_ref,
             area_code=spec.area,
@@ -227,6 +252,15 @@ async def _insert_session(
         )
         db.add(row)
         await db.flush()
+        if spec.request_ref is not None:
+            db.add(
+                SessionRequest(
+                    client_hash=spec.client_hash,
+                    request_ref=spec.request_ref,
+                    fingerprint=spec.fingerprint,
+                    session_id=row.id,
+                )
+            )
         tasks = [
             Task(
                 session_id=row.id,

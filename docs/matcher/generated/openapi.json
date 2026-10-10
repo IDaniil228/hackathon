@@ -466,6 +466,63 @@
         }
       }
     },
+    "/requests/{request_ref}/run": {
+      "get": {
+        "tags": [
+          "Подбор"
+        ],
+        "summary": "Найти прогон по операции текущего клиента",
+        "operationId": "request_run_requests__request_ref__run_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Ref"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestRunOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Запрос текущего клиента не найден"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/embeddings/refresh": {
       "post": {
         "tags": [
@@ -602,6 +659,19 @@
       },
       "RefineIn": {
         "properties": {
+          "request_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Ref",
+            "description": "Идентификатор операции api, защищает от повторного создания прогона и реплик"
+          },
           "message": {
             "type": "string",
             "maxLength": 20000,
@@ -640,6 +710,20 @@
         },
         "type": "object",
         "title": "RefreshAccepted"
+      },
+      "RequestRunOut": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id"
+        ],
+        "title": "RequestRunOut"
       },
       "ResultBrief": {
         "properties": {
@@ -824,6 +908,19 @@
       },
       "RunCreate": {
         "properties": {
+          "request_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Ref",
+            "description": "Идентификатор операции api; одинаковый запрос возвращает прежний прогон"
+          },
           "author_user_id": {
             "anyOf": [
               {

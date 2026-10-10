@@ -20,6 +20,29 @@ from tests.generation.world import ADMIN, ModelStub, World, fake_world
 pytestmark = pytest.mark.integration
 
 
+def test_request_reference_replays_session_and_is_scoped_to_client(world, client_headers):
+    world.add_templates(world.code(), world.essay())
+    reference = str(uuid.uuid4())
+    first = world.create(headers=client_headers, request_ref=reference, seed=42)
+    assert first.status_code == 201, first.text
+    replay = world.create(headers=client_headers, request_ref=reference, seed=42)
+    assert replay.status_code == 201, replay.text
+    assert replay.json()["id"] == first.json()["id"]
+    lookup = world.client.get(f"/requests/{reference}/session", headers=client_headers)
+    assert lookup.status_code == 200 and lookup.json()["session_id"] == first.json()["id"]
+    conflict = world.create(headers=client_headers, request_ref=reference, seed=43)
+    assert conflict.status_code == 409
+    other = world.client.post(
+        "/keys", json={"name": "other-client", "role": "client"}, headers=ADMIN
+    ).json()["key"]
+    assert (
+        world.client.get(
+            f"/requests/{reference}/session", headers={"Authorization": f"Bearer {other}"}
+        ).status_code
+        == 404
+    )
+
+
 def _secrets(task: Task) -> list[str]:
     """Значения скрытых кейсов, которых нет среди публичных примеров, в виде из ответа API."""
     hidden = HiddenPayload.model_validate(task.hidden_payload)

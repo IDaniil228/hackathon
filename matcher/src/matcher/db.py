@@ -7,10 +7,12 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import BigInteger, DateTime, MetaData, String, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -55,8 +57,16 @@ class ApiKey(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class RunRequest(Base):
+    __tablename__ = "run_requests"
+    client_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    request_ref: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+
+
 # Схема по умолчанию — public, как в taskgen: иначе роль matcher со своей схемой matcher
-# увидела бы её первой в search_path, а autogenerate получил бы объекты без схемы.
+# увидела бы её первой в search_path, а autogenerate получил бы объекты без схемы
 CONNECT_ARGS = {"server_settings": {"search_path": "public"}}
 
 

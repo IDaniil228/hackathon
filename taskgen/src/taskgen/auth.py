@@ -39,6 +39,7 @@ async def current_role(
     if credentials is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Нужен заголовок Authorization: Bearer")
     key = credentials.credentials
+    request.state.client_hash = hash_key(key)
     settings = request.app.state.settings
     if settings.bootstrap_admin_key and secrets.compare_digest(key, settings.bootstrap_admin_key):
         return Role.ADMIN

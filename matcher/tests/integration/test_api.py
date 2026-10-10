@@ -111,3 +111,27 @@ def test_unknown_need_and_run_are_404(client: TestClient) -> None:
     key = _client_key(client)
     assert client.post(f"/needs/{uuid.uuid4()}/runs", headers=_headers(key)).status_code == 404
     assert client.get(f"/runs/{uuid.uuid4()}", headers=_headers(key)).status_code == 404
+
+
+def test_request_reference_replays_run_and_is_scoped_to_client(client):
+    key = _client_key(client)
+    reference = str(uuid.uuid4())
+    first = client.post(
+        f"/needs/{DEMO_NEED}/runs", headers=_headers(key), json={"request_ref": reference}
+    )
+    assert first.status_code == 202, first.text
+    client.created_runs.append(first.json()["run_id"])
+    replay = client.post(
+        f"/needs/{DEMO_NEED}/runs", headers=_headers(key), json={"request_ref": reference}
+    )
+    assert replay.status_code == 202 and replay.json()["run_id"] == first.json()["run_id"]
+    lookup = client.get(f"/requests/{reference}/run", headers=_headers(key))
+    assert lookup.status_code == 200 and lookup.json()["run_id"] == first.json()["run_id"]
+    assert (
+        client.post(
+            f"/needs/{uuid.uuid4()}/runs", headers=_headers(key), json={"request_ref": reference}
+        ).status_code
+        == 409
+    )
+    other = _client_key(client)
+    assert client.get(f"/requests/{reference}/run", headers=_headers(other)).status_code == 404

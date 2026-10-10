@@ -202,6 +202,16 @@ class TestSession(Base):
         return None
 
 
+class SessionRequest(Base):
+    __tablename__ = "session_requests"
+    client_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    request_ref: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("test_sessions.id", ondelete="CASCADE")
+    )
+
+
 class Task(Base):
     """Задание сессии. Строка появляется при создании сессии со статусом pending, а условие
     и скрытые данные получает, когда генерация переводит её в ready."""

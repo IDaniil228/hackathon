@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
 from datetime import datetime
 from typing import Annotated, Any
@@ -16,7 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from taskgen.auth import AUTH_ERRORS, Role, require
 from taskgen.bank.selection import Slot
 from taskgen.contracts import SessionStatus, TaskKind, TaskStatus
-from taskgen.db import Task
+from taskgen.db import SessionRequest, Task
 from taskgen.generation import service
 from taskgen.generation.instance import (
     LLMUnavailableError,
@@ -81,6 +83,10 @@ class SessionCreate(BaseModel):
     candidate_ref: str = Field(
         min_length=1, max_length=100, description="Идентификатор кандидата в основном бэкенде"
     )
+    request_ref: uuid.UUID | None = Field(
+        default=None,
+        description="Идентификатор операции api; одинаковый запрос возвращает прежнюю сессию",
+    )
     area: str = Field(description="Код области")
     claimed_grade: str = Field(description="Код грейда, на который претендует кандидат")
     skills: list[str] = Field(description="Коды навыков кандидата из справочника области")
@@ -100,6 +106,10 @@ class SessionCreate(BaseModel):
         "остаётся только хэш",
     )
     early_start: bool = Field(default=False, description=EARLY_START_RISK)
+
+
+class RequestSessionOut(BaseModel):
+    session_id: uuid.UUID
 
 
 class ProfileCheck(BaseModel):
@@ -318,6 +328,11 @@ async def create_session(
         else None,
         profile=body.profile,
         early_start=body.early_start,
+        request_ref=body.request_ref,
+        client_hash=request.state.client_hash,
+        fingerprint=hashlib.sha256(
+            json.dumps(body.model_dump(mode="json"), sort_keys=True).encode()
+        ).hexdigest(),
     )
     try:
         session_id = await service.create_session(gen, spec)
@@ -326,10 +341,11 @@ async def create_session(
     except service.ConflictError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
     worker = _worker(request)
-    if not body.early_start:
+    view = await service.get_session(gen, session_id)
+    if not body.early_start and view.session.status == SessionStatus.GENERATING:
         # Генерация на локальной модели идёт минуты: столько HTTP-запрос не ждёт.
         worker.schedule(session_id)
-    else:
+    elif body.early_start and view.session.status == SessionStatus.GENERATING:
         try:
             await worker.start(session_id)
         except service.SessionFailedError as error:
@@ -338,6 +354,21 @@ async def create_session(
             raise HTTPException(code, detail) from error
     response.headers["Location"] = f"/sessions/{session_id}"
     return SessionOut.of(await service.get_session(gen, session_id))
+
+
+@router.get(
+    "/requests/{request_ref}/session",
+    response_model=RequestSessionOut,
+    summary="Найти сессию по операции текущего клиента",
+    responses={404: {"description": "Запрос текущего клиента не найден"}},
+    dependencies=[Depends(require(Role.CLIENT))],
+)
+async def request_session(request_ref: uuid.UUID, request: Request):
+    async with request.app.state.sessionmaker() as db:
+        row = await db.get(SessionRequest, (request.state.client_hash, request_ref))
+        if row is None:
+            raise HTTPException(404, "Запрос клиента не найден")
+        return {"session_id": row.session_id}
 
 
 @router.get(

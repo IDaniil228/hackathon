@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import uuid
@@ -23,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from matcher import embeddings, repository
 from matcher.config import Settings
-from matcher.db import MatchStage, RunStatus
+from matcher.db import MatchStage, RunRequest, RunStatus
 from matcher.explain import explanation_facts, run_facts, template_summary
 from matcher.factors import compute_factors, factor_score
 from matcher.llm.contracts import Embedder
@@ -46,6 +47,10 @@ EMBED_CHUNK = 200
 
 class RunError(Exception):
     """Прогон не может завершиться; текст уходит в search_runs.error_message."""
+
+
+class RequestConflictError(ValueError):
+    pass
 
 
 class NeedNotFoundError(LookupError):
@@ -148,14 +153,55 @@ class RunService:
     async def create_run(
         self, need_id: uuid.UUID, *, author_user_id: uuid.UUID | None = None
     ) -> uuid.UUID:
+        return (await self.create_run_once(need_id, author_user_id=author_user_id))[0]
+
+    async def _request(self, session, reference, client_hash, payload):
+        if reference is None:
+            return None, None
+        fingerprint = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, default=str).encode()
+        ).hexdigest()
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+            {"key": f"matcher:{client_hash}:{reference}"},
+        )
+        row = await session.get(RunRequest, (client_hash, reference))
+        if row is not None and row.fingerprint != fingerprint:
+            raise RequestConflictError("Идентификатор запроса использован с другими параметрами")
+        return row.run_id if row else None, fingerprint
+
+    def _remember_request(self, session, reference, client_hash, fingerprint, run_id):
+        if reference is not None:
+            session.add(
+                RunRequest(
+                    client_hash=client_hash,
+                    request_ref=reference,
+                    fingerprint=fingerprint,
+                    run_id=run_id,
+                )
+            )
+
+    async def create_run_once(
+        self, need_id, *, author_user_id=None, request_ref=None, client_hash=None
+    ):
         """Строка прогона со статусом queued; исполняет её execute."""
         async with self._sessionmaker() as session, session.begin():
+            existing, fingerprint = await self._request(
+                session,
+                request_ref,
+                client_hash,
+                {"kind": "create", "need_id": need_id, "author": author_user_id},
+            )
+            if existing is not None:
+                return existing, False
             need = await repository.load_need(session, need_id)
             if need is None:
                 raise NeedNotFoundError(f"потребности {need_id} нет")
             if not need.is_active:
                 raise NeedInactiveError(f"потребность {need_id} закрыта")
-            return await self._insert_run(session, need_id, author_user_id, None, [])
+            run_id = await self._insert_run(session, need_id, author_user_id, None, [])
+            self._remember_request(session, request_ref, client_hash, fingerprint, run_id)
+            return run_id, True
 
     async def _insert_run(
         self,
@@ -182,6 +228,11 @@ class RunService:
     async def refine(
         self, run_id: uuid.UUID, message: str, *, author_user_id: uuid.UUID | None = None
     ) -> uuid.UUID:
+        return (await self.refine_once(run_id, message, author_user_id=author_user_id))[0]
+
+    async def refine_once(
+        self, run_id, message, *, author_user_id=None, request_ref=None, client_hash=None
+    ):
         """Новый прогон с parent_run_id и уточнениями цепочки, плюс две реплики чата.
 
         Реплика работодателя пишется без run_id, ответ сервиса — с id нового прогона, в тред
@@ -189,6 +240,14 @@ class RunService:
         Исполняет новый прогон execute.
         """
         async with self._sessionmaker() as session, session.begin():
+            existing, fingerprint = await self._request(
+                session,
+                request_ref,
+                client_hash,
+                {"kind": "refine", "run_id": run_id, "message": message, "author": author_user_id},
+            )
+            if existing is not None:
+                return existing, False
             parent = (
                 (
                     await session.execute(
@@ -252,7 +311,8 @@ class RunService:
                 text("UPDATE match.chat_threads SET updated_at = now() WHERE id = :id"),
                 {"id": thread},
             )
-            return new_id
+            self._remember_request(session, request_ref, client_hash, fingerprint, new_id)
+            return new_id, True
 
     async def pending_runs(self) -> list[uuid.UUID]:
         """Прогоны, которые остались в queued или running, например после перезапуска.

@@ -489,6 +489,63 @@
         ]
       }
     },
+    "/requests/{request_ref}/session": {
+      "get": {
+        "tags": [
+          "Тестовые сессии"
+        ],
+        "summary": "Найти сессию по операции текущего клиента",
+        "operationId": "request_session_requests__request_ref__session_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_ref",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Request Ref"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestSessionOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "404": {
+            "description": "Запрос текущего клиента не найден"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/sessions/{session_id}": {
       "get": {
         "tags": [
@@ -1701,6 +1758,20 @@
         ],
         "title": "ReplacementOut"
       },
+      "RequestSessionOut": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Session Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id"
+        ],
+        "title": "RequestSessionOut"
+      },
       "Role": {
         "type": "string",
         "enum": [
@@ -1945,6 +2016,19 @@
             "minLength": 1,
             "title": "Candidate Ref",
             "description": "Идентификатор кандидата в основном бэкенде"
+          },
+          "request_ref": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Ref",
+            "description": "Идентификатор операции api; одинаковый запрос возвращает прежнюю сессию"
           },
           "area": {
             "type": "string",

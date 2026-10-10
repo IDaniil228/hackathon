@@ -15,11 +15,12 @@ from sqlalchemy import text
 
 from matcher import repository
 from matcher.auth import AUTH_ERRORS, Role, require
-from matcher.db import MatchStage, RunStatus
+from matcher.db import MatchStage, RunRequest, RunStatus
 from matcher.runs import (
     ChatAuthorMissingError,
     NeedInactiveError,
     NeedNotFoundError,
+    RequestConflictError,
     RunNotFinishedError,
     RunNotFoundError,
     RunService,
@@ -46,6 +47,10 @@ def spawn(app: FastAPI, work: Coroutine[Any, Any, Any]) -> asyncio.Task:
 
 
 class RunCreate(BaseModel):
+    request_ref: uuid.UUID | None = Field(
+        default=None,
+        description="Идентификатор операции api; одинаковый запрос возвращает прежний прогон",
+    )
     author_user_id: uuid.UUID | None = Field(
         default=None, description="Пользователь api, который запустил подбор"
     )
@@ -54,6 +59,10 @@ class RunCreate(BaseModel):
 class RunAccepted(BaseModel):
     run_id: uuid.UUID
     status: RunStatus
+
+
+class RequestRunOut(BaseModel):
+    run_id: uuid.UUID
 
 
 class ResultOut(BaseModel):
@@ -102,6 +111,10 @@ class ResultsOut(BaseModel):
 
 
 class RefineIn(BaseModel):
+    request_ref: uuid.UUID | None = Field(
+        default=None,
+        description="Идентификатор операции api, защищает от повторного создания прогона и реплик",
+    )
     message: str = Field(min_length=1, max_length=20000, description="Уточнение работодателя")
     author_user_id: uuid.UUID | None = Field(
         default=None,
@@ -131,14 +144,20 @@ async def start_run(
 ) -> RunAccepted:
     service = _service(request)
     try:
-        run_id = await service.create_run(
-            need_id, author_user_id=body.author_user_id if body else None
+        run_id, created = await service.create_run_once(
+            need_id,
+            author_user_id=body.author_user_id if body else None,
+            request_ref=body.request_ref if body else None,
+            client_hash=request.state.client_hash,
         )
     except NeedNotFoundError as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
     except NeedInactiveError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
-    spawn(request.app, service.execute(run_id))
+    except RequestConflictError as error:
+        raise HTTPException(409, str(error)) from error
+    if created:
+        spawn(request.app, service.execute(run_id))
     return RunAccepted(run_id=run_id, status=RunStatus.QUEUED)
 
 
@@ -246,15 +265,38 @@ async def get_results(
 async def refine_run(run_id: uuid.UUID, body: RefineIn, request: Request) -> RunAccepted:
     service = _service(request)
     try:
-        new_id = await service.refine(run_id, body.message, author_user_id=body.author_user_id)
+        new_id, created = await service.refine_once(
+            run_id,
+            body.message,
+            author_user_id=body.author_user_id,
+            request_ref=body.request_ref,
+            client_hash=request.state.client_hash,
+        )
     except RunNotFoundError as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(error)) from error
     except (RunNotFinishedError, NeedInactiveError) as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
     except ChatAuthorMissingError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
-    spawn(request.app, service.execute(new_id))
+    except RequestConflictError as error:
+        raise HTTPException(409, str(error)) from error
+    if created:
+        spawn(request.app, service.execute(new_id))
     return RunAccepted(run_id=new_id, status=RunStatus.QUEUED)
+
+
+@router.get(
+    "/requests/{request_ref}/run",
+    response_model=RequestRunOut,
+    summary="Найти прогон по операции текущего клиента",
+    responses={404: {"description": "Запрос текущего клиента не найден"}},
+)
+async def request_run(request_ref: uuid.UUID, request: Request):
+    async with request.app.state.sessionmaker() as session:
+        row = await session.get(RunRequest, (request.state.client_hash, request_ref))
+        if row is None:
+            raise HTTPException(404, "Запрос клиента не найден")
+        return {"run_id": row.run_id}
 
 
 class RefreshAccepted(BaseModel):
