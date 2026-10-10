@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from taskgen.config import LLMSettings, provider_key_variable
+from taskgen.config import LLMSettings
 from taskgen.llm import ProviderRouter
 
 
@@ -17,7 +17,7 @@ async def live_router(settings: LLMSettings, roles: tuple[str, ...]) -> Provider
     for name in sorted({settings.roles()[role].provider for role in roles}):
         provider = settings.providers[name]
         if provider.requires_key and provider.api_key is None:
-            pytest.skip(f"у провайдера {name} нет ключа {provider_key_variable(name)}")
+            pytest.skip(f"у провайдера {name} нет ключа {settings.key_variable(name)}")
         headers = {}
         if provider.api_key is not None:
             headers["Authorization"] = f"Bearer {provider.api_key.get_secret_value()}"

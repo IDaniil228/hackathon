@@ -6,9 +6,9 @@ import httpx
 import pytest
 
 from taskgen.config import EvidenceSettings
+from taskgen.evaluation.factcheck import fact_lines
 from taskgen.evaluation.summary import (
     SessionFacts,
-    fact_lines,
     fallback_text,
     summary_data,
     summary_problems,

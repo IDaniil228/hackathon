@@ -3,11 +3,12 @@
 import asyncio
 from types import SimpleNamespace
 
-from taskgen.config import LLMSettings, ProviderSettings, Settings
+from taskgen.config import LLMSettings, Settings
 from taskgen.contracts import ChatMessage
 from taskgen.evaluation.service import Evaluator
 from taskgen.generation.service import Generator
 from taskgen.llm import LimitedLLM, ProviderRouter, limited_llm
+from taskgen.llm_config import ProviderSettings
 
 
 class SlowLLM:

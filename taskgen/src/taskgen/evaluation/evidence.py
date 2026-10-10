@@ -17,8 +17,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from taskgen.config import EvidenceSettings
 from taskgen.evaluation.quotes import quote_in_answer
+from taskgen.llm_config import EvidenceSettings
 from taskgen.markdown import fences, lines
 
 _SENTENCE_END = re.compile(r"(?<=[.!?…])\s+")

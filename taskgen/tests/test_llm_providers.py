@@ -8,9 +8,10 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from taskgen.config import ChatRole, LLMSettings, ProviderSettings, Settings
+from taskgen.config import ChatRole, LLMSettings, Settings
 from taskgen.contracts import ChatMessage
 from taskgen.llm import MissingAPIKeyError, OpenAICompatibleClient, ProviderRouter
+from taskgen.llm_config import LLMSettingsBase, ModelRole, ProviderSettings
 
 MESSAGES = [ChatMessage(role="user", content="Привет")]
 SECRET = "sk-test-secret-value"
@@ -170,7 +171,11 @@ def _recording_client(provider: ProviderSettings, status: int = 200):
         return httpx.Response(200, json={"choices": [{"message": {"content": "ок"}}]})
 
     transport = httpx.MockTransport(handler)
-    return OpenAICompatibleClient(provider, name="deepseek", transport=transport), requests
+    variable = LLMSettings().key_variable("deepseek")
+    client = OpenAICompatibleClient(
+        provider, name="deepseek", key_variable=variable, transport=transport
+    )
+    return client, requests
 
 
 async def test_client_sends_the_key_only_when_it_is_set():
@@ -218,6 +223,36 @@ async def test_router_from_settings_warns_about_a_missing_key_and_still_starts(c
         await router.aclose()
 
 
+class _OtherService(LLMSettingsBase):
+    """Настройки LLM другого сервиса: свой префикс, роли без генератора."""
+
+    env_prefix = "OTHER_"
+
+    ranker: ChatRole = ChatRole(model="deepseek/deepseek-flash")
+    embedding: ModelRole = ModelRole(model="ollama/bge-m3")
+
+
+async def test_key_variable_follows_the_prefix_of_the_service(caplog):
+    settings = _OtherService()
+    with caplog.at_level("WARNING", logger="taskgen.llm"):
+        router = ProviderRouter.from_settings(settings)
+    try:
+        messages = " ".join(r.getMessage() for r in caplog.records if r.name == "taskgen.llm")
+        assert "OTHER_LLM__PROVIDERS__DEEPSEEK__API_KEY" in messages
+        assert "TASKGEN_" not in messages
+        with pytest.raises(MissingAPIKeyError, match="OTHER_LLM__PROVIDERS__DEEPSEEK__API_KEY"):
+            await router.complete(MESSAGES, model=settings.ranker.model)
+    finally:
+        await router.aclose()
+
+
+async def test_call_without_a_model_fails_when_the_service_has_no_default_model():
+    router = ProviderRouter(_OtherService(), {"ollama": SlowLLM(), "deepseek": SlowLLM()})
+    with pytest.raises(ValueError, match="без модели"):
+        await router.complete(MESSAGES)
+    assert await router.complete(MESSAGES, model="ollama/m") == "ok"
+
+
 async def test_router_from_settings_builds_clients_only_for_used_providers():
     settings = LLMSettings(
         providers={"spare": ProviderSettings(base_url="http://spare")},
@@ -241,7 +276,10 @@ async def test_router_embeds_through_the_embedding_provider():
 
     settings = LLMSettings()
     client = OpenAICompatibleClient(
-        settings.providers["ollama"], name="ollama", transport=httpx.MockTransport(handler)
+        settings.providers["ollama"],
+        name="ollama",
+        key_variable=settings.key_variable("ollama"),
+        transport=httpx.MockTransport(handler),
     )
     router = ProviderRouter(settings, {"ollama": client, "deepseek": SlowLLM()})
     assert router.model_name == "bge-m3"

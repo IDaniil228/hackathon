@@ -5,11 +5,12 @@ from types import SimpleNamespace
 
 import httpx
 
-from taskgen.config import ChatRole, LLMSettings, ProviderSettings, Settings
+from taskgen.config import ChatRole, LLMSettings, Settings
 from taskgen.contracts import ChatMessage, JudgeRequest, RubricItem, TaskKind
 from taskgen.evaluation.service import Evaluator
 from taskgen.generation.service import Generator
 from taskgen.llm import LimitedLLM, OpenAICompatibleClient
+from taskgen.llm_config import ProviderSettings
 from tests.evaluation.fakes import FakeLLM
 
 MESSAGES = [ChatMessage(role="user", content="Привет")]
@@ -27,7 +28,10 @@ def _client(content):
 
 def _over(transport: httpx.MockTransport) -> OpenAICompatibleClient:
     return OpenAICompatibleClient(
-        ProviderSettings(base_url="http://llm"), name="llm", transport=transport
+        ProviderSettings(base_url="http://llm"),
+        name="llm",
+        key_variable="TASKGEN_LLM__PROVIDERS__LLM__API_KEY",
+        transport=transport,
     )
 
 

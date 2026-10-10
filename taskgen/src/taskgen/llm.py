@@ -14,13 +14,6 @@ from typing import Any
 
 import httpx
 
-from taskgen.config import (
-    LLMSettings,
-    ProviderSettings,
-    Settings,
-    provider_key_variable,
-    split_model,
-)
 from taskgen.contracts import (
     ChatMessage,
     Embedder,
@@ -28,6 +21,7 @@ from taskgen.contracts import (
     ReasoningEffort,
     StructuredOutput,
 )
+from taskgen.llm_config import LLMSettingsBase, ProviderSettings, split_model
 
 logger = logging.getLogger(__name__)
 
@@ -74,14 +68,14 @@ class ProviderRouter:
     """LLMClient и Embedder над провайдерами ролей.
 
     Модель вызова — строка провайдер/модель: вызов уходит провайдеру из префикса, а сам
-    провайдер получает имя модели без префикса. Без модели вызов идёт модели генератора. У
-    каждого провайдера свой лимит одновременных вызовов: облако и локальная модель — разные
-    ресурсы. Эмбеддинги идут провайдеру роли embedding без лимита, как и до разделения
-    провайдеров.
+    провайдер получает имя модели без префикса. Без модели вызов идёт модели
+    settings.default_model(), а если её нет, это ошибка. У каждого провайдера свой лимит
+    одновременных вызовов: облако и локальная модель — разные ресурсы. Эмбеддинги идут
+    провайдеру роли embedding без лимита, как и до разделения провайдеров.
     """
 
     def __init__(
-        self, settings: LLMSettings, clients: Mapping[str, Any], *, owned: bool = False
+        self, settings: LLMSettingsBase, clients: Mapping[str, Any], *, owned: bool = False
     ) -> None:
         self._settings = settings
         self._clients = dict(clients)
@@ -91,11 +85,11 @@ class ProviderRouter:
         }
         self._owned = owned
         # Векторы в БД помечены именем модели без провайдера: см. описание llm.embedding.
-        self.model_name = settings.embedding.provider_model
+        self.model_name = settings.roles()["embedding"].provider_model
 
     @classmethod
     def from_settings(
-        cls, settings: LLMSettings, *, roles: Collection[str] | None = None
+        cls, settings: LLMSettingsBase, *, roles: Collection[str] | None = None
     ) -> ProviderRouter:
         """Свой клиент на каждого провайдера, которого называет хотя бы одна из ролей roles.
 
@@ -115,10 +109,13 @@ class ProviderRouter:
                     "У провайдера %s не задан ключ: вызовы его ролей будут завершаться ошибкой. "
                     "Задайте %s или переназначьте роли на другого провайдера",
                     name,
-                    provider_key_variable(name),
+                    settings.key_variable(name),
                 )
         clients = {
-            name: OpenAICompatibleClient(settings.providers[name], name=name) for name in used
+            name: OpenAICompatibleClient(
+                settings.providers[name], name=name, key_variable=settings.key_variable(name)
+            )
+            for name in used
         }
         return cls(settings, clients, owned=True)
 
@@ -134,7 +131,7 @@ class ProviderRouter:
         json_schema: dict[str, Any] | None = None,
         reasoning_effort: ReasoningEffort | None = None,
     ) -> str:
-        provider, name = self._route(model or self._settings.generator.model)
+        provider, name = self._route(self._model(model))
         return await self._limited[provider].complete(
             messages,
             model=name,
@@ -145,8 +142,14 @@ class ProviderRouter:
 
     def structured_output(self, model: str | None) -> StructuredOutput:
         """Режим ответа по схеме у провайдера модели; его читает evaluation.jsonout."""
-        provider, _ = self._route(model or self._settings.generator.model)
+        provider, _ = self._route(self._model(model))
         return self._settings.providers[provider].structured_output
+
+    def _model(self, model: str | None) -> str:
+        chosen = model or self._settings.default_model()
+        if chosen is None:
+            raise ValueError("вызов LLM без модели, а модели по умолчанию в настройках нет")
+        return chosen
 
     def _route(self, model: str) -> tuple[str, str]:
         provider, name = split_model(model)
@@ -158,7 +161,7 @@ class ProviderRouter:
         return provider, name
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        provider, name = self._route(self._settings.embedding.model)
+        provider, name = self._route(self._settings.roles()["embedding"].model)
         return await self._clients[provider].embed(texts, model=name)
 
     async def aclose(self) -> None:
@@ -178,8 +181,8 @@ def limited_llm(state: Any) -> ProviderRouter:
         return state.llm
     router = getattr(state, "limited_llm", None)
     if router is None or getattr(state, "limited_llm_inner", None) is not state.llm:
-        settings: Settings = state.settings
-        router = ProviderRouter(settings.llm, dict.fromkeys(settings.llm.providers, state.llm))
+        settings: LLMSettingsBase = state.settings.llm
+        router = ProviderRouter(settings, dict.fromkeys(settings.providers, state.llm))
         state.limited_llm = router
         state.limited_llm_inner = state.llm
     return router
@@ -198,17 +201,22 @@ def state_embedder(state: Any) -> Embedder | None:
 
 
 class OpenAICompatibleClient:
-    """Клиент одного провайдера; модель называет каждый вызов."""
+    """Клиент одного провайдера; модель называет каждый вызов.
+
+    key_variable — переменная окружения ключа: её называет ошибка о ключе.
+    """
 
     def __init__(
         self,
         provider: ProviderSettings,
         *,
         name: str,
+        key_variable: str,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._provider = provider
         self._name = name
+        self._key_variable = key_variable
         headers = {}
         if provider.api_key is not None:
             headers["Authorization"] = f"Bearer {provider.api_key.get_secret_value()}"
@@ -264,7 +272,7 @@ class OpenAICompatibleClient:
         return [item["embedding"] for item in sorted(data["data"], key=lambda i: i["index"])]
 
     async def _post(self, path: str, body: dict[str, Any]) -> Any:
-        variable = provider_key_variable(self._name)
+        variable = self._key_variable
         if self._provider.requires_key and self._provider.api_key is None:
             message = f"У провайдера {self._name} не задан ключ: задайте {variable}"
             logger.error(message)
