@@ -18,6 +18,7 @@ from sqlalchemy import text
 from matcher.app import create_app
 from matcher.config import Settings, VectorSettings
 from matcher.db import MatchStage, RunStatus, make_engine, make_sessionmaker
+from matcher.llm_stage import llm_stages
 from matcher.runs import RunService
 from tests.conftest import (
     CHECKER,
@@ -408,3 +409,68 @@ def test_embeddings_refresh_is_admin_only_and_runs_in_background(
             break
         time.sleep(0.05)
     assert asyncio.run(_scalar(database_url, query, m=FakeEmbedder().model_name)) > 0
+
+
+def test_no_connection_is_held_while_models_and_taskgen_answer(database_url: str) -> None:
+    """Ответа модели на локальном железе ждут минутами. Соединение, занятое на это время,
+    при десятке одновременных подборов исчерпывает пул и общий лимит Postgres."""
+
+    async def scenario() -> tuple[RunStatus, list[tuple[str, int]]]:
+        engine = make_engine(database_url)
+        held: list[tuple[str, int]] = []
+
+        def watch(role: str, responder: Callable) -> Callable:
+            def answer(messages, schema) -> str:
+                held.append((role, engine.pool.checkedout()))
+                return responder(messages, schema)
+
+            return answer
+
+        class WatchedEmbedder(FakeEmbedder):
+            async def embed(self, texts: list[str]) -> list[list[float]]:
+                held.append(("embedding", engine.pool.checkedout()))
+                return await super().embed(texts)
+
+        class WatchedSummaries:
+            async def summary(self, candidate_ref: str) -> str | None:
+                held.append(("summary", engine.pool.checkedout()))
+                return None
+
+        llm = FakeLLM(
+            {
+                REWRITER: watch("rewriter", rewriter),
+                RANKER: watch("ranker", ranker),
+                CHECKER: watch("checker", honest_checker),
+            }
+        )
+        settings = llm_settings(database_url=database_url, vector=VectorSettings(top_k=1))
+        embedder = WatchedEmbedder(model="fake-watched")
+        service = RunService(
+            make_sessionmaker(engine),
+            settings,
+            embedder=embedder,
+            summaries=WatchedSummaries(),
+            stages=llm_stages(llm, settings),
+        )
+        run_id = await service.create_run(uuid.UUID(DEMO_NEED))
+        try:
+            status = await service.execute(run_id)
+        finally:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text("DELETE FROM match.search_runs WHERE id = :id"), {"id": run_id}
+                )
+                await purge_embeddings(connection, embedder.model_name)
+            await engine.dispose()
+        return status, held
+
+    status, held = asyncio.run(scenario())
+    assert status == RunStatus.DONE
+    assert {role for role, _ in held} == {
+        "rewriter",
+        "ranker",
+        "checker",
+        "embedding",
+        "summary",
+    }
+    assert [(role, busy) for role, busy in held if busy] == []

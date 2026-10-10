@@ -81,14 +81,18 @@ class _Outcome:
 
 
 async def candidate_cards(
-    session: AsyncSession,
+    sessionmaker: async_sessionmaker[AsyncSession],
     ids: list[uuid.UUID],
     summaries: SummarySource | None,
     *,
     concurrency: int,
 ) -> dict[uuid.UUID, Card]:
-    """Карточки кандидатов из БД вместе с machine summary из taskgen."""
-    data = await repository.candidates(session, ids)
+    """Карточки кандидатов из БД вместе с machine summary из taskgen.
+
+    Соединение возвращается в пул до запросов к taskgen.
+    """
+    async with sessionmaker() as session:
+        data = await repository.candidates(session, ids)
     texts = await summaries_for(summaries, ids, concurrency=concurrency)
     return {cid: replace(item.card, summary=texts.get(cid)) for cid, item in data.items()}
 
@@ -272,7 +276,7 @@ class RunService:
         """Исполняет прогон и пишет итог; ошибку любого вида пишет в error_message."""
         await self._set_status(run_id, RunStatus.RUNNING)
         try:
-            async with self._sessionmaker() as session, session.begin():
+            async with self._sessionmaker() as session:
                 run = (
                     (
                         await session.execute(
@@ -283,8 +287,9 @@ class RunService:
                     .mappings()
                     .one()
                 )
-                refinements = (run["params"] or {}).get("refinements", [])
-                outcome = await self._pipeline(session, run_id, run["need_id"], refinements)
+            refinements = (run["params"] or {}).get("refinements", [])
+            outcome = await self._pipeline(run_id, run["need_id"], refinements)
+            async with self._sessionmaker() as session, session.begin():
                 await self._store(session, run_id, outcome)
         except Exception as error:
             logger.exception("Прогон %s не удался", run_id)
@@ -316,18 +321,18 @@ class RunService:
             )
 
     async def _pipeline(
-        self,
-        session: AsyncSession,
-        run_id: uuid.UUID,
-        need_id: uuid.UUID,
-        refinements: list[str],
+        self, run_id: uuid.UUID, need_id: uuid.UUID, refinements: list[str]
     ) -> _Outcome:
-        need = await repository.load_need(session, need_id)
-        if need is None:
-            raise RunError(f"потребности {need_id} больше нет")
-        facts = await repository.need_facts(session, need)
+        """Каждое обращение к БД идёт своей короткой сессией, а модели, эмбеддер и taskgen
+        отвечают, когда соединение уже вернулось в пул: ответа локальной модели ждут минутами,
+        и занятое на это время соединение при десятке подборов исчерпало бы пул."""
+        async with self._sessionmaker() as session:
+            need = await repository.load_need(session, need_id)
+            if need is None:
+                raise RunError(f"потребности {need_id} больше нет")
+            facts = await repository.need_facts(session, need)
+            pool = await repository.prefilter(session, need_id)
         structured = repository.need_card(need, facts)
-        pool = await repository.prefilter(session, need_id)
         top_k = self._settings.vector.top_k
         stages = self._stages
         params: dict[str, Any] = {
@@ -343,7 +348,7 @@ class RunService:
         query = structured
         scores: dict[uuid.UUID, float] | None = None
         if needs_vectors(len(pool), top_k=top_k) or stages.ranker is not None:
-            cards = await self._cards(session, list(pool))
+            cards = await self._cards(list(pool))
         if stages.rewriter is not None:
             try:
                 query = await stages.rewriter.rewrite(need, structured, refinements)
@@ -359,12 +364,18 @@ class RunService:
                     "без векторной стадии короткий список не собрать"
                 )
             await embeddings.refresh_candidates(
-                session, self._embedder, cards, batch_size=self._settings.embeddings.batch_size
+                self._sessionmaker,
+                self._embedder,
+                cards,
+                batch_size=self._settings.embeddings.batch_size,
             )
-            vector, digest = await embeddings.need_vector(session, self._embedder, need_id, query)
-            scores = await embeddings.vector_scores(
-                session, self._embedder.model_name, vector, list(pool)
+            vector, digest = await embeddings.need_vector(
+                self._sessionmaker, self._embedder, need_id, query
             )
+            async with self._sessionmaker() as session:
+                scores = await embeddings.vector_scores(
+                    session, self._embedder.model_name, vector, list(pool)
+                )
             params |= {"embedding_model": self._embedder.model_name, "query_hash": digest}
 
         picked = shortlist(
@@ -381,7 +392,8 @@ class RunService:
             "random": [str(cid) for cid in picked.exploration.random],
         }
 
-        data = await repository.candidates(session, picked.ranked)
+        async with self._sessionmaker() as session:
+            data = await repository.candidates(session, picked.ranked)
         now = self._clock()
         ranked = []
         for cid in picked.ranked:
@@ -437,9 +449,9 @@ class RunService:
             stage=stage,
         )
 
-    async def _cards(self, session: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, Card]:
+    async def _cards(self, ids: list[uuid.UUID]) -> dict[uuid.UUID, Card]:
         return await candidate_cards(
-            session, ids, self._summaries, concurrency=self._settings.taskgen.concurrency
+            self._sessionmaker, ids, self._summaries, concurrency=self._settings.taskgen.concurrency
         )
 
     async def refresh_embeddings(self) -> tuple[int, int]:
@@ -454,11 +466,13 @@ class RunService:
         written = 0
         for start in range(0, len(ids), EMBED_CHUNK):
             chunk = ids[start : start + EMBED_CHUNK]
-            async with self._sessionmaker() as session, session.begin():
-                cards = await self._cards(session, chunk)
-                written += await embeddings.refresh_candidates(
-                    session, self._embedder, cards, batch_size=self._settings.embeddings.batch_size
-                )
+            cards = await self._cards(chunk)
+            written += await embeddings.refresh_candidates(
+                self._sessionmaker,
+                self._embedder,
+                cards,
+                batch_size=self._settings.embeddings.batch_size,
+            )
         return len(ids), written
 
     async def _store(self, session: AsyncSession, run_id: uuid.UUID, outcome: _Outcome) -> None:

@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from matcher import embeddings, repository
 from matcher.config import ExplorationSettings, Settings, VectorSettings
@@ -81,12 +81,15 @@ async def test_embedding_cache_skips_unchanged_cards(matcher_session: AsyncSessi
     embedder = FakeEmbedder(model=f"fake-{uuid.uuid4().hex[:8]}")
     data = await repository.candidates(matcher_session, [KIRILL, ALINA])
     cards = {cid: item.card for cid, item in data.items()}
-    assert await embeddings.refresh_candidates(matcher_session, embedder, cards, batch_size=1) == 2
-    assert await embeddings.refresh_candidates(matcher_session, embedder, cards, batch_size=8) == 0
-    changed = {KIRILL: cards[KIRILL], ALINA: Card(about="другой текст")}
-    assert (
-        await embeddings.refresh_candidates(matcher_session, embedder, changed, batch_size=8) == 1
+    # Фабрика на соединении фикстуры: короткие транзакции функции становятся точками
+    # сохранения внешней транзакции и откатываются вместе с ней.
+    sessions = async_sessionmaker(
+        bind=matcher_session.bind, join_transaction_mode="create_savepoint"
     )
+    assert await embeddings.refresh_candidates(sessions, embedder, cards, batch_size=1) == 2
+    assert await embeddings.refresh_candidates(sessions, embedder, cards, batch_size=8) == 0
+    changed = {KIRILL: cards[KIRILL], ALINA: Card(about="другой текст")}
+    assert await embeddings.refresh_candidates(sessions, embedder, changed, batch_size=8) == 1
     stored = await matcher_session.scalar(
         text(
             "SELECT count(*) FROM match.candidate_embeddings "
