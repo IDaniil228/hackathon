@@ -1,5 +1,6 @@
 import asyncio
 import smtplib
+import ssl
 from datetime import timedelta
 from email.message import EmailMessage
 from urllib.parse import urlencode
@@ -49,7 +50,7 @@ def send_email(settings, email, token, purpose):
     )
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
         if settings.smtp_starttls:
-            smtp.starttls()
+            smtp.starttls(context=ssl.create_default_context())
         if settings.smtp_user:
             smtp.login(settings.smtp_user, settings.smtp_password)
         smtp.send_message(message)
@@ -106,13 +107,16 @@ async def request_verification(
 
 async def consume(session, token, purpose):
     row = await session.scalar(
-        select(EmailToken)
-        .where(EmailToken.token_hash == hash_token(token), EmailToken.purpose == purpose)
-        .with_for_update()
+        select(EmailToken).where(
+            EmailToken.token_hash == hash_token(token), EmailToken.purpose == purpose
+        )
     )
     if row is None or row.used_at or row.expires_at <= now():
         raise HTTPException(422, "Токен недействителен или истёк")
     user = await session.get(User, row.user_id, with_for_update=True)
+    await session.refresh(row, with_for_update=True)
+    if row.used_at or row.expires_at <= now():
+        raise HTTPException(422, "Токен недействителен или истёк")
     if user.status == UserStatus.BLOCKED:
         raise HTTPException(403, "Аккаунт заблокирован")
     row.used_at = now()

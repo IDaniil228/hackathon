@@ -22,6 +22,7 @@ from app.handlers import (
     fsp,
     hiring,
     matching,
+    messaging,
     profiles,
 )
 from app.llm.llm import ProviderRouter
@@ -146,6 +147,7 @@ def create_app(settings: Settings | None = None):
     for router in (
         auth.router,
         profiles.router,
+        messaging.router,
         hiring.router,
         matching.router,
         assessment.router,

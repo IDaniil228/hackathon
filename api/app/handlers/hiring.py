@@ -104,13 +104,15 @@ class InvitationInput(Input):
     currency: Literal["RUB"] = "RUB"
     salary_basis: Literal["gross"] = "gross"
     salary_period: Literal["month"] = "month"
-    contact_method: Literal["email", "phone", "telegram"]
-    contact_value: str = Field(min_length=1, max_length=120)
+    contact_method: Literal["email", "phone", "telegram", "platform"]
+    contact_value: str | None = Field(default=None, min_length=1, max_length=120)
 
     @model_validator(mode="after")
     def salary(self):
         if self.salary_max < self.salary_min:
             raise ValueError("Верхняя граница зарплаты ниже нижней")
+        if self.contact_method != "platform" and not self.contact_value:
+            raise ValueError("Для внешнего способа связи требуется контакт")
         return self
 
 

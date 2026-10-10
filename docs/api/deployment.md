@@ -28,6 +28,16 @@
 
 Общий Compose использует фиксированное имя контейнера Postgres и имя тома из `db/docker-compose.yml`. Один `-p` не изолирует второй стенд: для параллельной проверки используйте отдельную тестовую БД и запускайте только новый API с отдельным портом
 
+## Локальная проверка почты
+
+`docker compose --profile mail up -d mailpit` запускает SMTP-приёмник без отправки писем наружу. Его интерфейс доступен по `http://localhost:18025`, SMTP на хосте — `localhost:11025`
+
+Для API внутри Compose задайте `SMTP_HOST=mailpit`, `SMTP_PORT=1025`, `SMTP_STARTTLS=false`, `SMTP_SENDER=noreply@fsp.example` и `DEMO_EMAIL_TOKENS=false`. Для API на хосте используйте `SMTP_HOST=127.0.0.1` и `SMTP_PORT=11025`. После изменения окружения пересоздайте контейнер API
+
+Из `api/`: `API_TEST_DATABASE_URL=<URL отдельной runtime-БД> API_TEST_MAILPIT_URL=http://127.0.0.1:18025 API_TEST_SMTP_PORT=11025 uv run pytest tests/test_smtp.py`. Тест получает реальные письма по SMTP, использует ссылки, проверяет одноразовость токенов, замену пароля и отзыв старых сессий
+
+Локальная проверка доказывает передачу письма SMTP-серверу и корректность ссылок, не доставку во внешний ящик. Для внешнего провайдера нужны его адрес, порт, учётные данные и разрешённый адрес отправителя в окружении; TLS проверяет сертификат сервера
+
 ## Локальный процесс
 
 Из `api/`: `uv sync --frozen --group dev`, затем `DATABASE_URL=<URL владельца тестовой БД> uv run alembic upgrade head`. Для runtime запуска задайте URL ограниченной роли API и выполните `uv run --env-file ../.env uvicorn app.main:app --host 127.0.0.1 --port 18000`. Нужен Python из требования `api/pyproject.toml`
