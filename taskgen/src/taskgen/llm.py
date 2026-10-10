@@ -84,8 +84,13 @@ class ProviderRouter:
             for name, client in self._clients.items()
         }
         self._owned = owned
-        # Векторы в БД помечены именем модели без провайдера: см. описание llm.embedding.
-        self.model_name = settings.roles()["embedding"].provider_model
+
+    @property
+    def model_name(self) -> str:
+        role = self._settings.roles().get("embedding")
+        if role is None:
+            raise ValueError("для эмбеддингов не объявлена роль embedding")
+        return role.provider_model
 
     @classmethod
     def from_settings(
@@ -161,7 +166,10 @@ class ProviderRouter:
         return provider, name
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        provider, name = self._route(self._settings.roles()["embedding"].model)
+        role = self._settings.roles().get("embedding")
+        if role is None:
+            raise ValueError("для эмбеддингов не объявлена роль embedding")
+        provider, name = self._route(role.model)
         return await self._clients[provider].embed(texts, model=name)
 
     async def aclose(self) -> None:

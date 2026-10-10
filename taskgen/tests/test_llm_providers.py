@@ -285,3 +285,15 @@ async def test_router_embeds_through_the_embedding_provider():
     assert router.model_name == "bge-m3"
     assert await router.embed(["текст"]) == [[1.0, 0.0]]
     assert bodies == [{"model": "bge-m3", "input": ["текст"]}]
+
+
+class _ChatOnlyService(LLMSettingsBase):
+    env_prefix = "CHAT_"
+    parser: ChatRole = ChatRole(model="ollama/m")
+
+
+async def test_chat_service_does_not_need_embedding_configuration():
+    router = ProviderRouter(_ChatOnlyService(), {"ollama": SlowLLM()})
+    assert await router.complete(MESSAGES, model="ollama/m") == "ok"
+    with pytest.raises(ValueError, match="embedding"):
+        await router.embed(["текст"])

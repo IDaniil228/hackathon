@@ -40,8 +40,8 @@ _IMPORT = re.compile(r"^(\s*(?:from|import)\s+)taskgen(?=[.\s])", re.MULTILINE)
 _IMPORTED = re.compile(r"^\s*(?:from|import)\s+taskgen((?:\.\w+)*)(?:\s+import\s+(.+))?", re.M)
 
 
-def _header(relative: str) -> str:
-    return f"# Копия taskgen/src/taskgen/{relative} от {SCRIPT}, не править\n"
+def _header(relative: str, script: str = SCRIPT) -> str:
+    return f"# Копия taskgen/src/taskgen/{relative} от {script}, не править\n"
 
 
 def _dependencies(relative: str, text: str) -> set[str]:
@@ -74,17 +74,21 @@ def closure(roots: tuple[str, ...] = ROOTS) -> list[str]:
     return sorted(seen)
 
 
-def render() -> dict[str, str]:
+def render(
+    *, package: str = "matcher.llm", script: str = SCRIPT, roots: tuple[str, ...] = ROOTS
+) -> dict[str, str]:
     """Содержимое копии: путь от TARGET → текст файла."""
     files: dict[str, str] = {}
-    for relative in closure():
+    for relative in closure(roots):
         text = (SOURCE / relative).read_text(encoding="utf-8")
-        files[relative] = _header(relative) + _IMPORT.sub(r"\1matcher.llm", text)
+        files[relative] = _header(relative, script) + _IMPORT.sub(
+            lambda match: match.group(1) + package, text
+        )
     packages = {str(Path(relative).parent) for relative in files} | {"."}
     for package in packages:
         init = "__init__.py" if package == "." else f"{package}/__init__.py"
         files[init] = (
-            f"# Создан {SCRIPT}, не править\n"
+            f"# Создан {script}, не править\n"
             '"""Копия части LLM-слоя taskgen; источник правды — taskgen/src/taskgen."""\n'
         )
     return dict(sorted(files.items()))
