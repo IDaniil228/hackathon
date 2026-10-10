@@ -1,5 +1,7 @@
 """Маппинг RunRequest в запрос Piston и разбор ответа, без реального Piston."""
 
+import json
+
 import httpx
 import pytest
 
@@ -72,6 +74,30 @@ async def test_compiled_runtime_limits_compiler_memory():
 
     assert sent[0]["language"] == "c++"
     assert sent[0]["compile_memory_limit"] > 0
+
+
+async def test_compile_limits_come_from_settings_and_cover_the_http_wait():
+    sent: list[dict] = []
+    waits: list[float] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        waits.append(request.extensions["timeout"]["read"])
+        return ok(stage(), compile_stage=stage())
+
+    http = httpx.AsyncClient(base_url="http://piston.test", transport=httpx.MockTransport(handler))
+    settings = SandboxSettings(piston_url="http://piston.test", compile_timeout_ms=45_000)
+    runner = PistonRunner(settings, http=http)
+
+    await runner.run(RunRequest(runtime="cpp", files={"main.cpp": ""}, limits=LIMITS))
+
+    # Без своего лимита Piston даёт компиляции 10 с, и на загруженной машине g++ в них
+    # не укладывался даже на эталонном решении. CPU-лимит тоже нужен: иначе Piston подставит
+    # свои 10 с процессорного времени.
+    assert sent[0]["compile_timeout"] == 45_000
+    assert sent[0]["compile_cpu_time"] == 45_000
+    # Клиент ждёт ответа дольше, чем могут занять компиляция и запуск вместе.
+    assert waits[0] > (45_000 + LIMITS.timeout_ms) / 1000
 
 
 async def test_successful_run_is_parsed():

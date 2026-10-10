@@ -18,7 +18,7 @@ from taskgen.sandbox import cases
 from taskgen.sandbox.errors import SandboxServiceError
 from taskgen.sandbox.registry import RuntimeRegistry, RuntimeSpec
 
-# Запас к лимиту запуска на компиляцию по умолчанию у Piston (10 с) и на очередь задач.
+# Запас к лимитам компиляции и запуска на очередь задач Piston.
 HTTP_MARGIN_SECONDS = 30.0
 
 
@@ -33,6 +33,7 @@ class PistonRunner:
         self._http = http or httpx.AsyncClient(base_url=settings.piston_url.rstrip("/"))
         self._registry = registry or RuntimeRegistry.load()
         self._stdio_concurrency = settings.stdio_concurrency
+        self._compile_timeout_ms = settings.compile_timeout_ms
 
     async def run(self, request: RunRequest) -> RunResult:
         spec = self._registry.get(request.runtime)
@@ -78,6 +79,10 @@ class PistonRunner:
             # меньше запрошенного лимита по стенным часам.
             "run_cpu_time": limits.timeout_ms,
             "run_memory_limit": limits.memory_bytes,
+            # Без своих лимитов Piston даёт компиляции 10 с по стенным часам и по процессорному
+            # времени. Окружение без компиляции их не использует.
+            "compile_timeout": self._compile_timeout_ms,
+            "compile_cpu_time": self._compile_timeout_ms,
         }
         if spec.compile_memory_bytes is not None:
             body["compile_memory_limit"] = spec.compile_memory_bytes
@@ -85,7 +90,7 @@ class PistonRunner:
             response = await self._http.post(
                 "/api/v2/execute",
                 json=body,
-                timeout=limits.timeout_ms / 1000 + HTTP_MARGIN_SECONDS,
+                timeout=(self._compile_timeout_ms + limits.timeout_ms) / 1000 + HTTP_MARGIN_SECONDS,
             )
         except httpx.HTTPError as error:
             raise SandboxServiceError(f"Piston недоступен: {error!r}") from error

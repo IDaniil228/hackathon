@@ -38,6 +38,10 @@ services:
       # запуска сервис передаёт сам, и без потолка выше 3 с запрос отклоняется.
       PISTON_RUN_TIMEOUT: 60000
       PISTON_RUN_CPU_TIME: 60000
+      # То же для компиляции: сервис передаёт sandbox.compile_timeout_ms, а без потолка выше
+      # 10 с Piston отклоняет запрос.
+      PISTON_COMPILE_TIMEOUT: 60000
+      PISTON_COMPILE_CPU_TIME: 60000
     ports: ["2000:2000"]
     volumes: [piston-packages:/piston/packages]
     tmpfs: [/tmp:exec]

@@ -128,6 +128,7 @@
 |---|---|---|---|---|
 | `sandbox.piston_url` | `TASKGEN_SANDBOX__PISTON_URL` | string | `"http://localhost:2000"` | Адрес Piston API |
 | `sandbox.run_timeout_ms` | `TASKGEN_SANDBOX__RUN_TIMEOUT_MS` | integer | `3000` | Лимит времени одного запуска, миллисекунды; окружение может поднять его до своего минимума |
+| `sandbox.compile_timeout_ms` | `TASKGEN_SANDBOX__COMPILE_TIMEOUT_MS` | integer, ≥ 1 | `30000` | Лимит времени компиляции одного запуска, миллисекунды, по стенным часам и по процессорному времени. Без него Piston даёт компиляции 10 с, и на загруженной машине g++ не укладывался в них даже на эталонном решении. Потолок Piston PISTON_COMPILE_TIMEOUT и PISTON_COMPILE_CPU_TIME должен быть не меньше |
 | `sandbox.run_memory_limit_bytes` | `TASKGEN_SANDBOX__RUN_MEMORY_LIMIT_BYTES` | integer | `268435456` | Лимит памяти одного запуска, байты; окружение может поднять его до своего минимума |
 | `sandbox.stdio_concurrency` | `TASKGEN_SANDBOX__STDIO_CONCURRENCY` | integer, ≥ 1 | `4` | Сколько кейсов задачи stdio исполняется одновременно: программа кандидата запускается на каждом кейсе отдельно. Меньшее значение снижает нагрузку на Piston, большее ускоряет прогон |
 
