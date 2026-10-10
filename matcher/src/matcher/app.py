@@ -61,7 +61,9 @@ def create_app(
         active_stages = stages or (
             llm_stages(llm or own_router, settings) if settings.llm_stage.enabled else RunStages()
         )
-        await _check_dimension(sessionmaker, active_embedder)
+        await _check_dimension(
+            sessionmaker, active_embedder, settings.embeddings.startup_check_seconds
+        )
 
         app.state.settings = settings
         app.state.sessionmaker = sessionmaker
@@ -103,7 +105,7 @@ def create_app(
     return app
 
 
-async def _check_dimension(sessionmaker, embedder: Embedder | None) -> None:
+async def _check_dimension(sessionmaker, embedder: Embedder | None, timeout: float) -> None:
     """Неверная размерность останавливает старт; недоступная модель — только предупреждение.
 
     Без модели сервис отвечает, а прогоны с векторной стадией завершаются ошибкой.
@@ -112,8 +114,8 @@ async def _check_dimension(sessionmaker, embedder: Embedder | None) -> None:
         return
     try:
         async with sessionmaker() as session:
-            await check_dimension(session, embedder)
+            await asyncio.wait_for(check_dimension(session, embedder), timeout)
     except DimensionMismatchError:
         raise
     except Exception as error:
-        logger.warning("Размерность вектора не проверена, эмбеддер недоступен: %s", error)
+        logger.warning("Размерность вектора не проверена, эмбеддер недоступен: %r", error)

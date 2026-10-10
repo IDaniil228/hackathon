@@ -138,6 +138,13 @@ class EmbeddingSettings(Section):
     batch_size: int = Field(
         default=32, ge=1, description="Сколько карточек уходит в один запрос к эмбеддеру"
     )
+    startup_check_seconds: float = Field(
+        default=10.0,
+        gt=0,
+        description="Сколько секунд старт ждёт пробный вектор для сверки размерности. Таймаут "
+        "провайдера рассчитан на генерацию и намного длиннее; без своего предела недоступный "
+        "эмбеддер держал бы старт, и healthcheck считал бы сервис мёртвым",
+    )
 
 
 class ResultsSettings(Section):
