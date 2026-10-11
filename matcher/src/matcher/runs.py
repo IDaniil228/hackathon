@@ -22,7 +22,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from matcher import embeddings, repository
+from matcher import embeddings, geometry, repository
 from matcher.config import Settings
 from matcher.db import MatchStage, RunRequest, RunStatus
 from matcher.explain import explanation_facts, run_facts, template_summary
@@ -407,6 +407,8 @@ class RunService:
         cards: dict[uuid.UUID, Card] = {}
         query = structured
         scores: dict[uuid.UUID, float] | None = None
+        async with self._sessionmaker() as session:
+            map_revisions = await geometry.revisions(session, list(pool))
         if needs_vectors(len(pool), top_k=top_k) or stages.ranker is not None:
             cards = await self._cards(list(pool))
         if stages.rewriter is not None:
@@ -451,6 +453,34 @@ class RunService:
             "fresh": [str(cid) for cid in picked.exploration.fresh],
             "random": [str(cid) for cid in picked.exploration.random],
         }
+
+        if self._embedder is not None and pool:
+            try:
+                if not cards:
+                    cards = await self._cards(list(pool))
+                if scores is None:
+                    await embeddings.refresh_candidates(
+                        self._sessionmaker,
+                        self._embedder,
+                        cards,
+                        batch_size=self._settings.embeddings.batch_size,
+                    )
+                    map_query, _ = await embeddings.need_vector(
+                        self._sessionmaker, self._embedder, need_id, query
+                    )
+                else:
+                    map_query = vector
+                await geometry.capture(
+                    self._sessionmaker,
+                    run_id,
+                    self._embedder.model_name,
+                    map_query,
+                    cards,
+                    map_revisions,
+                    params["exploration"],
+                )
+            except Exception:
+                logger.exception("Геометрия прогона %s недоступна; подбор продолжается", run_id)
 
         async with self._sessionmaker() as session:
             data = await repository.candidates(session, picked.ranked)

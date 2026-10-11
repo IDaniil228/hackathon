@@ -1,14 +1,15 @@
 from datetime import date
 from typing import Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import Field
-from sqlalchemy import select
+from sqlalchemy import exists, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common import Input, assign, found, record
 from app.db import enums
+from app.db.models.assess import GradeAssignment
 from app.db.models.backend import ConsentEvent
 from app.db.models.core import User, UserConsent
 from app.db.models.profile import (
@@ -20,11 +21,30 @@ from app.db.models.profile import (
 )
 from app.db.models.ref import Category, Grade, Industry, Skill, SkillArea, Specialization
 from app.db.session import get_session
+from app.operations import queue_operation
 from app.schemas import CandidateCard, CandidateList
 from app.security import current_user, employer_for, now, require_role
 from app.visibility import card, has_consent
 
 router = APIRouter(tags=["Профили и справочники"])
+
+
+@router.get("/me/disclosures", summary="Компании с действующим доступом к контактам")
+async def disclosures(
+    user: User = Depends(current_user), session: AsyncSession = Depends(get_session)
+):
+    from app.db.models.hire import Company, ContactDisclosure
+
+    rows = (
+        await session.execute(
+            select(ContactDisclosure, Company.name)
+            .join(Company)
+            .where(
+                ContactDisclosure.candidate_id == user.id, ContactDisclosure.revoked_at.is_(None)
+            )
+        )
+    ).all()
+    return [{**record(row), "company_name": company_name} for row, company_name in rows]
 
 
 class ProfileUpdate(Input):
@@ -104,6 +124,19 @@ async def references(
         "skills": Skill,
         "skill_areas": SkillArea,
     }[name]
+    if name == "categories":
+        rows = (
+            await session.execute(
+                select(Category, Specialization.name, Grade.name)
+                .join(Specialization)
+                .join(Grade)
+                .order_by(Category.id)
+            )
+        ).all()
+        return [
+            {**record(row), "name": f"{specialization} · {grade}"}
+            for row, specialization, grade in rows
+        ]
     return [record(row) for row in (await session.scalars(select(model).order_by(model.id))).all()]
 
 
@@ -181,6 +214,7 @@ async def privacy(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    await session.execute(text("SELECT profile.lock_candidate(:id)"), {"id": user.id})
     await candidate_for(session, user)
     row = await found(session, CandidatePrivacy, user.id, lock=True)
     if body.is_searchable and (
@@ -225,6 +259,7 @@ async def consents(
 async def consent(
     body: Consent, user: User = Depends(current_user), session: AsyncSession = Depends(get_session)
 ):
+    await session.execute(text("SELECT profile.lock_candidate(:id)"), {"id": user.id})
     await session.refresh(user, with_for_update=True)
     rows = (
         await session.scalars(
@@ -253,8 +288,26 @@ async def consent(
                 privacy.show_fsp = False
             else:
                 privacy.is_searchable = False
+    cleanup = None
+    if not body.granted and body.kind == enums.ConsentKind.PD_PROCESSING:
+        cleanup = await queue_operation(
+            session,
+            user,
+            "map_forget",
+            f"forget-{uuid4()}",
+            {
+                "service": "matcher",
+                "path": f"/candidates/{user.id}/maps/revoke",
+                "body": {"before": now().isoformat()},
+            },
+            user.id,
+        )
     await session.commit()
-    return {"kind": body.kind, "granted": body.granted}
+    return {
+        "kind": body.kind,
+        "granted": body.granted,
+        "cleanup_operation_id": cleanup.id if cleanup else None,
+    }
 
 
 @router.put("/me/skills", summary="Заявить навыки без самостоятельного подтверждения")
@@ -333,15 +386,48 @@ async def candidates(
     session: AsyncSession = Depends(get_session),
 ):
     employer = await employer_for(session, user)
-    query = select(Candidate).outerjoin(Category, Candidate.current_category_id == Category.id)
+    eligible_status = [enums.UserStatus.ACTIVE]
+    if request.app.state.settings.demo_auth_allow_unverified:
+        eligible_status.append(enums.UserStatus.PENDING)
+    query = (
+        select(Candidate)
+        .outerjoin(Category, Candidate.current_category_id == Category.id)
+        .join(CandidatePrivacy, CandidatePrivacy.candidate_id == Candidate.user_id)
+        .join(User, User.id == Candidate.user_id)
+        .where(
+            CandidatePrivacy.is_searchable,
+            Candidate.is_open_to_offers,
+            User.status.in_(eligible_status),
+        )
+    )
+    for kind in (enums.ConsentKind.PD_PROCESSING, enums.ConsentKind.PROFILE_PUBLICATION):
+        query = query.where(
+            exists().where(
+                UserConsent.user_id == Candidate.user_id,
+                UserConsent.kind == kind,
+                UserConsent.revoked_at.is_(None),
+            )
+        )
+    if grade_confirmed is not None:
+        confirmed = exists().where(
+            GradeAssignment.candidate_id == Candidate.user_id,
+            GradeAssignment.is_current,
+            GradeAssignment.source == enums.GradeSource.TEST,
+        )
+        query = query.where(confirmed if grade_confirmed else ~confirmed)
     if category_id:
         query = query.where(Candidate.current_category_id == category_id)
     if specialization_id:
         query = query.where(Category.specialization_id == specialization_id)
     if grade_id:
         query = query.where(Category.grade_id == grade_id)
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
     rows = (
-        await session.scalars(query.order_by(Candidate.profile_strength.desc(), Candidate.user_id))
+        await session.scalars(
+            query.order_by(Candidate.profile_strength.desc(), Candidate.user_id)
+            .offset(offset)
+            .limit(limit)
+        )
     ).all()
     results = []
     for candidate in rows:
@@ -355,4 +441,4 @@ async def candidates(
             continue
         if grade_confirmed is None or value["grade_confirmed"] == grade_confirmed:
             results.append(value)
-    return {"total": len(results), "results": results[offset : offset + limit]}
+    return {"total": total, "results": results}

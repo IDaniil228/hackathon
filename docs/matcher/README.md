@@ -1,4 +1,8 @@
+<picture><source media="(prefers-color-scheme: dark)" srcset="../../brand/assets/logo/logo-short-on-dark.svg"><img src="../../brand/assets/logo/logo-short-on-light.svg" width="120" alt="ФСП"></picture>
+
 # Документация сервиса matcher
+
+[![assets](https://img.shields.io/badge/docs-assets-555?style=flat)](../../brand/ASSETS.md)
 
 matcher — сервис платформы, который по потребности работодателя подбирает кандидатов, ранжирует их и объясняет, почему каждый стоит на своём месте. Код сервиса лежит в [`matcher/`](../../matcher), условие задачи и перечень документации — в [разборе ТЗ](../qa-summary-fsp-2026.md#7-сдача-репозиторий-документация)
 
@@ -16,3 +20,7 @@ matcher — сервис платформы, который по потребн�
 Схем интеграции с FSP ID у matcher нет: он не аутентифицирует пользователей и не ходит во внешние службы платформы, кроме taskgen и провайдеров LLM. Результаты ФСП он читает из профиля кандидата в базе api
 
 Файлы в [`generated/`](generated) собирает из кода `uv run python scripts/gen_docs.py` в каталоге `matcher/`; тест `tests/test_docs_generated.py` падает, если они отстали от кода
+
+[Карты кандидатов в Сцепке](../frontend/architecture.md#карты-кандидатов) дополняют выдачу; их геометрия и ограничения описаны отдельно
+
+![Радиальная карта](../frontend/screenshots/search-radial-dark.png)

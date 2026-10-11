@@ -28,7 +28,7 @@ offer_fields = {
     "salary_basis": (Literal["gross"], "gross"),
     "salary_period": (Literal["month"], "month"),
 }
-CompanyOut = entity_schema(Company, "CompanyOut")
+CompanyOut = entity_schema(Company, "CompanyOut", extra={"full_name": (str | None, None)})
 NeedOut = entity_schema(EmployerNeed, "NeedOut", extra={**offer_fields, "skills": (list[dict], [])})
 VacancyOut = entity_schema(
     Vacancy, "VacancyOut", ["search_vector"], {**offer_fields, "skills": (list[dict], [])}
@@ -60,6 +60,7 @@ class RegistrationOut(BaseModel):
 
 class CandidateCard(BaseModel):
     user_id: UUID
+    demo: bool = False
     category: dict | None = None
     grade_confirmed: bool = False
     profile_strength: float = 0
@@ -101,6 +102,28 @@ class MatchResults(BaseModel):
     summary: str
 
 
+class MapCoordinate(BaseModel):
+    x: float
+    y: float
+
+
+class MapPoint(MapCoordinate):
+    candidate_id: UUID
+    cosine: float
+    cluster: int
+    rank: int | None = None
+    exploration: Literal["fresh", "random"] | None = None
+    candidate: CandidateCard
+
+
+class MapOut(BaseModel):
+    state: Literal["ready", "unavailable", "stale"]
+    phase: Literal["preview", "final"] | None = None
+    algorithm: Literal["pca"] | None = None
+    query: MapCoordinate | None = None
+    points: list[MapPoint] = []
+
+
 class PublicTask(BaseModel):
     id: UUID
     position: int | None = None
@@ -108,6 +131,7 @@ class PublicTask(BaseModel):
     status: str
     statement: str | None = None
     public: dict | None = None
+    failure: str | None = None
 
 
 TestOut = entity_schema(
@@ -115,6 +139,7 @@ TestOut = entity_schema(
     "TestOut",
     extra={
         "service_state": (str, ...),
+        "failure": (str | None, None),
         "tasks_issued": (bool, False),
         "tasks": (list[PublicTask], []),
         "result_applied": (bool, False),

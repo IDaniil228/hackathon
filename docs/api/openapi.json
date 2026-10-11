@@ -170,6 +170,30 @@
         ]
       }
     },
+    "/me/disclosures": {
+      "get": {
+        "tags": [
+          "Профили и справочники"
+        ],
+        "summary": "Компании с действующим доступом к контактам",
+        "operationId": "disclosures_me_disclosures_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/references/{name}": {
       "get": {
         "tags": [
@@ -2637,6 +2661,54 @@
         }
       }
     },
+    "/runs/{run_id}/map": {
+      "get": {
+        "tags": [
+          "Подбор"
+        ],
+        "summary": "Карта рассматривавшихся кандидатов с текущими правами",
+        "operationId": "run_map_runs__run_id__map_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/surveys": {
       "get": {
         "tags": [
@@ -3233,6 +3305,52 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/me/resumes/{document_id}/parse": {
+      "get": {
+        "tags": [
+          "Резюме и PDF"
+        ],
+        "summary": "Сохранённое распознавание собственного резюме",
+        "operationId": "resume_parse_me_resumes__document_id__parse_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/me/resumes/{document_id}": {
@@ -4274,6 +4392,11 @@
             "format": "uuid",
             "title": "User Id"
           },
+          "demo": {
+            "type": "boolean",
+            "title": "Demo",
+            "default": false
+          },
           "category": {
             "anyOf": [
               {
@@ -4679,6 +4802,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
           }
         },
         "type": "object",
@@ -5304,6 +5438,151 @@
           "password"
         ],
         "title": "Login"
+      },
+      "MapCoordinate": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "title": "Y"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "MapCoordinate"
+      },
+      "MapOut": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "unavailable",
+              "stale"
+            ],
+            "title": "State"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "preview",
+                  "final"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "algorithm": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "pca"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Algorithm"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapCoordinate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/MapPoint"
+            },
+            "type": "array",
+            "title": "Points",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "MapOut"
+      },
+      "MapPoint": {
+        "properties": {
+          "x": {
+            "type": "number",
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "title": "Y"
+          },
+          "candidate_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Candidate Id"
+          },
+          "cosine": {
+            "type": "number",
+            "title": "Cosine"
+          },
+          "cluster": {
+            "type": "integer",
+            "title": "Cluster"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "exploration": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fresh",
+                  "random"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exploration"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/CandidateCard"
+          }
+        },
+        "type": "object",
+        "required": [
+          "x",
+          "y",
+          "candidate_id",
+          "cosine",
+          "cluster",
+          "candidate"
+        ],
+        "title": "MapPoint"
       },
       "MatchResult": {
         "properties": {
@@ -6276,6 +6555,17 @@
               }
             ],
             "title": "Public"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure"
           }
         },
         "type": "object",
@@ -6861,6 +7151,17 @@
           "service_state": {
             "type": "string",
             "title": "Service State"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure"
           },
           "tasks_issued": {
             "type": "boolean",

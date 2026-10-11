@@ -1,6 +1,12 @@
+<picture><source media="(prefers-color-scheme: dark)" srcset="../../brand/assets/logo/logo-short-on-dark.svg"><img src="../../brand/assets/logo/logo-short-on-light.svg" width="120" alt="ФСП"></picture>
+
 # Документация сервиса taskgen
 
+[![assets](https://img.shields.io/badge/docs-assets-555?style=flat)](../../brand/ASSETS.md)
+
 taskgen — сервис платформы, который генерирует задания теста на грейд ИТ-кандидата, проверяет их до выдачи и оценивает ответы. Код сервиса лежит в [`taskgen/`](../../taskgen), краткое описание и запуск — в его [README](../../taskgen/README.md)
+
+![Опрос в кабинете кандидата](../frontend/screenshots/assessment-light.png)
 
 Разделы идут в порядке требований к сопроводительной документации из раздела 3.4 ТЗ. Сборка в один файл берёт разделы в порядке ссылок этого списка
 

@@ -455,13 +455,17 @@ async def test(
         local.started_at = now()
     await session.commit()
     tasks = [
-        {key: item.get(key) for key in ("id", "position", "kind", "status", "statement", "public")}
+        {
+            key: item.get(key)
+            for key in ("id", "position", "kind", "status", "statement", "public", "failure")
+        }
         for item in remote.get("tasks", [])
     ]
     return {
         **record(local),
         "service_state": bridge.state,
         "tasks_issued": remote.get("tasks_issued", False),
+        "failure": remote.get("failure"),
         "tasks": tasks,
     }
 

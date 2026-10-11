@@ -101,7 +101,10 @@ async def process_operation(app, operation_id):
                 row.state, row.error = "uncertain", "client_key_changed"
                 await session.commit()
                 return
-            metadata.update(credential_hash=credential_hash, protocol="request_ref")
+            metadata.update(
+                credential_hash=credential_hash,
+                protocol="repeat_safe" if row.kind == "map_forget" else "request_ref",
+            )
             row.response = metadata
         row.state, row.updated_at = "running", now()
         await session.commit()
@@ -126,7 +129,7 @@ async def process_operation(app, operation_id):
                 )
         else:
             result = None
-            if reconcile:
+            if reconcile and row.kind != "map_forget":
                 suffix = "session" if row.kind == "test_create" else "run"
                 try:
                     receipt = await call_service(
@@ -162,7 +165,7 @@ async def process_operation(app, operation_id):
                 current.remote_id = bridge.remote_id
             elif row.kind == "test_score":
                 await apply_result(session, row.resource_id, result)
-            else:
+            elif row.kind != "map_forget":
                 current.remote_id = UUID(result["run_id"])
             current.state, current.updated_at = "succeeded", now()
             current.error = None
@@ -229,6 +232,11 @@ async def worker_loop(app):
             update(ServiceOperation)
             .where(ServiceOperation.kind == "test_score", ServiceOperation.state == "uncertain")
             .values(state="waiting_external")
+        )
+        await session.execute(
+            update(ServiceOperation)
+            .where(ServiceOperation.kind == "map_forget", ServiceOperation.state == "uncertain")
+            .values(state="reconciling")
         )
         await session.execute(
             update(ServiceOperation)

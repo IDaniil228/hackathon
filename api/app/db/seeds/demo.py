@@ -508,6 +508,62 @@ async def clear_demo(session: AsyncSession) -> None:
     await session.execute(delete(profile.FspEvent))
 
 
+async def entry_survey(session, it_id, specs, skills):
+    survey = await session.scalar(
+        select(assess.SurveyTemplate).where(assess.SurveyTemplate.code == "it_intro_v1")
+    )
+    if survey:
+        rows = (
+            await session.execute(
+                select(assess.SurveyOption, assess.SurveyQuestion.order_no)
+                .join(assess.SurveyQuestion)
+                .where(assess.SurveyQuestion.survey_id == survey.id)
+            )
+        ).all()
+        return survey, {(question_no, option.order_no): option for option, question_no in rows}
+    survey = assess.SurveyTemplate(
+        industry_id=it_id, code="it_intro_v1", title="Входной опрос: отрасль и специализация"
+    )
+    session.add(survey)
+    await session.flush()
+    questions = []
+    for order, fmt, qtext in [
+        (1, "single_choice", "Чем вы занимаетесь большую часть рабочего времени?"),
+        (2, "multi_choice", "С какими инструментами работали в последний год?"),
+        (3, "single_choice", "На какой грейд вы претендуете?"),
+    ]:
+        question = assess.SurveyQuestion(
+            survey_id=survey.id, order_no=order, format=fmt, text=qtext
+        )
+        session.add(question)
+        questions.append(question)
+    await session.flush()
+    options = {}
+    for q_no, order, label, spec, skill in [
+        (1, 1, "Серверная логика и API", "backend", None),
+        (1, 2, "Интерфейсы в браузере", "frontend", None),
+        (1, 3, "Модели и данные", "ml_engineer", None),
+        (1, 4, "Инфраструктура и релизы", "devops", None),
+        (2, 1, "PostgreSQL", None, "postgresql"),
+        (2, 2, "Docker", None, "docker"),
+        (2, 3, "Kubernetes", None, "kubernetes"),
+        (3, 1, "Junior", None, None),
+        (3, 2, "Middle", None, None),
+        (3, 3, "Senior", None, None),
+    ]:
+        option = assess.SurveyOption(
+            question_id=questions[q_no - 1].id,
+            order_no=order,
+            label=label,
+            specialization_id=specs[spec] if spec else None,
+            skill_id=skills[skill] if skill else None,
+        )
+        session.add(option)
+        options[(q_no, order)] = option
+    await session.flush()
+    return survey, options
+
+
 async def _seed_pool(
     session: AsyncSession,
     now: datetime,
@@ -1072,46 +1128,7 @@ async def seed_demo(session: AsyncSession) -> dict[str, int]:
         )
 
     # --- опрос ---------------------------------------------------------------
-    survey = assess.SurveyTemplate(
-        industry_id=it_id, code="it_intro_v1", title="Входной опрос: отрасль и специализация"
-    )
-    session.add(survey)
-    await session.flush()
-
-    questions = []
-    for order, fmt, qtext in [
-        (1, "single_choice", "Чем вы занимаетесь большую часть рабочего времени?"),
-        (2, "multi_choice", "С какими инструментами работали в последний год?"),
-        (3, "single_choice", "На какой грейд вы претендуете?"),
-    ]:
-        q = assess.SurveyQuestion(survey_id=survey.id, order_no=order, format=fmt, text=qtext)
-        session.add(q)
-        questions.append(q)
-    await session.flush()
-
-    options = {}
-    for q_no, order, label, spec, skill in [
-        (1, 1, "Серверная логика и API", "backend", None),
-        (1, 2, "Интерфейсы в браузере", "frontend", None),
-        (1, 3, "Модели и данные", "ml_engineer", None),
-        (1, 4, "Инфраструктура и релизы", "devops", None),
-        (2, 1, "PostgreSQL", None, "postgresql"),
-        (2, 2, "Docker", None, "docker"),
-        (2, 3, "Kubernetes", None, "kubernetes"),
-        (3, 1, "Junior", None, None),
-        (3, 2, "Middle", None, None),
-        (3, 3, "Senior", None, None),
-    ]:
-        o = assess.SurveyOption(
-            question_id=questions[q_no - 1].id,
-            order_no=order,
-            label=label,
-            specialization_id=specs[spec] if spec else None,
-            skill_id=skills[skill] if skill else None,
-        )
-        session.add(o)
-        options[(q_no, order)] = o
-    await session.flush()
+    survey, options = await entry_survey(session, it_id, specs, skills)
 
     session.add(
         assess.SurveySession(

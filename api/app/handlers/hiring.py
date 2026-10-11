@@ -167,7 +167,10 @@ async def my_company(
     user: User = Depends(current_user), session: AsyncSession = Depends(get_session)
 ):
     employer = await employer_for(session, user)
-    return record(await found(session, Company, employer.company_id))
+    return {
+        **record(await found(session, Company, employer.company_id)),
+        "full_name": employer.full_name,
+    }
 
 
 @router.put("/me/company", response_model=CompanyOut, summary="Изменить собственную компанию")

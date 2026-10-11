@@ -59,6 +59,182 @@
         ]
       }
     },
+    "/candidates/{candidate_id}/maps/revoke": {
+      "post": {
+        "tags": [
+          "Подбор"
+        ],
+        "summary": "Очистить прежние векторы после отзыва обработки",
+        "operationId": "forget_maps_candidates__candidate_id__maps_revoke_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "candidate_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Candidate Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MapForget"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/map-members": {
+      "get": {
+        "tags": [
+          "Подбор"
+        ],
+        "summary": "Источники точек для проверки прав основным API",
+        "operationId": "map_members_runs__run_id__map_members_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/map": {
+      "post": {
+        "tags": [
+          "Подбор"
+        ],
+        "summary": "Геометрия разрешённого подмножества без выдачи векторов",
+        "operationId": "run_map_runs__run_id__map_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MapVisible"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Нет ключа или ключ отозван"
+          },
+          "403": {
+            "description": "Ключ не имеет нужной роли"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/needs/{need_id}/runs": {
       "post": {
         "tags": [
@@ -646,6 +822,38 @@
           "key"
         ],
         "title": "KeyIssued"
+      },
+      "MapForget": {
+        "properties": {
+          "before": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Before"
+          }
+        },
+        "type": "object",
+        "required": [
+          "before"
+        ],
+        "title": "MapForget"
+      },
+      "MapVisible": {
+        "properties": {
+          "candidate_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 10000,
+            "title": "Candidate Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "candidate_ids"
+        ],
+        "title": "MapVisible"
       },
       "MatchStage": {
         "type": "string",

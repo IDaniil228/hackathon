@@ -112,18 +112,38 @@ async def refresh_candidates(
         batch = pending[start : start + batch_size]
         vectors = await _embed(embedder, [texts[cid] for cid in batch])
         async with sessionmaker() as session, session.begin():
-            await session.execute(
-                _UPSERT_CANDIDATE,
-                [
-                    {
-                        "entity_id": cid,
-                        "model": embedder.model_name,
-                        "embedding": vector_literal(vector),
-                        "source_hash": source_hash(texts[cid]),
-                    }
-                    for cid, vector in zip(batch, vectors, strict=True)
-                ],
+            for candidate_id in sorted(batch):
+                await session.execute(
+                    text("SELECT profile.lock_candidate(:id)"), {"id": candidate_id}
+                )
+            visible = set(
+                (
+                    await session.execute(
+                        text(
+                            "SELECT candidate_id FROM profile.candidate_privacy "
+                            "WHERE candidate_id=ANY(:ids) AND is_searchable"
+                        ),
+                        {"ids": batch},
+                    )
+                )
+                .scalars()
+                .all()
             )
+            values = [
+                {
+                    "entity_id": cid,
+                    "model": embedder.model_name,
+                    "embedding": vector_literal(vector),
+                    "source_hash": source_hash(texts[cid]),
+                }
+                for cid, vector in zip(batch, vectors, strict=True)
+                if cid in visible
+            ]
+            if values:
+                await session.execute(
+                    _UPSERT_CANDIDATE,
+                    values,
+                )
     if pending:
         logger.info("Векторы карточек: записано %d, модель %s", len(pending), embedder.model_name)
     return len(pending)

@@ -15,7 +15,7 @@ from app.db.models.profile import (
     FspAchievement,
     FspEvent,
 )
-from app.db.models.ref import Category, Skill
+from app.db.models.ref import Category, Grade, Skill, Specialization
 from app.security import eligible
 
 
@@ -95,9 +95,15 @@ async def card(session, candidate_id, settings, company_id=None, owner=False, re
         if candidate.current_category_id
         else None
     )
+    category_data = record(category) if category else None
+    if category:
+        specialization = await session.get(Specialization, category.specialization_id)
+        category_grade = await session.get(Grade, category.grade_id)
+        category_data["name"] = f"{specialization.name} · {category_grade.name}"
     result = {
         "user_id": candidate.user_id,
-        "category": record(category) if category else None,
+        "demo": (await session.get(User, candidate_id)).email.endswith("@scepka.example"),
+        "category": category_data,
         "grade_confirmed": bool(grade and grade.source == GradeSource.TEST),
         "profile_strength": candidate.profile_strength,
     }

@@ -20,8 +20,7 @@ flowchart LR
 - matcher читает потребности, профили и грейды прямо из базы api, а machine summary кандидата берёт у [taskgen](../taskgen/architecture.md) по HTTP. `candidate_ref` в taskgen равен `profile.candidates.user_id`: так считают оба сервиса
 - LLM нужен переписчику, ранжировщику и проверяльщику, а эмбеддер — отдельная роль. Провайдера и модель каждой роли задаёт настройка `llm` ([generated/settings.md](generated/settings.md#llm)). Без LLM подбор работает, см. [matching-mechanics.md](matching-mechanics.md#что-происходит-без-части-служб)
 
-> [!NOTE]
-> В текущем коде основного бэкенда (`api/`) вызовов matcher ещё нет. Контракт между ними — API matcher
+Подключение matcher к кабинетам описано в [архитектуре API](../api/architecture.md); геометрия карт — в [архитектуре интерфейса](../frontend/architecture.md#карты-кандидатов)
 
 ## Данные: одна база с api
 

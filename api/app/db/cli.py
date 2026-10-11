@@ -57,9 +57,14 @@ async def cmd_seed() -> None:
     print(f"шаблонов заданий: {templates}")
 
 
-async def cmd_seed_demo() -> None:
+async def cmd_seed_demo(count=0, seed=20261011, as_of=None) -> None:
     async with SessionFactory() as session:
-        counts = await seed_demo(session)
+        if count:
+            from app.db.seeds.synthetic import seed_synthetic
+
+            counts = await seed_synthetic(session, count=count, seed=seed, as_of=as_of)
+        else:
+            counts = await seed_demo(session)
         await session.commit()
     print(f"демо-данные: {counts}")
 
@@ -274,7 +279,20 @@ COMMANDS = {
 def main() -> int:
     parser = argparse.ArgumentParser(prog="fspdb", description="Работа с БД платформы ФСП")
     parser.add_argument("command", choices=sorted(COMMANDS), help="что сделать")
+    parser.add_argument(
+        "--count", type=int, default=0, help="Число синтетических профилей для seed-demo"
+    )
+    parser.add_argument("--seed", type=int, default=20261011, help="Seed синтетического набора")
+    parser.add_argument(
+        "--as-of", type=dt.datetime.fromisoformat, help="Базовая дата с часовым поясом"
+    )
     args = parser.parse_args()
+
+    if args.count < 0 or args.count > 10000:
+        parser.error("--count должен быть от 0 до 10000")
+    if args.command == "seed-demo" and args.count:
+        asyncio.run(_run(lambda: cmd_seed_demo(args.count, args.seed, args.as_of)))
+        return 0
 
     handler = COMMANDS[args.command]
     if asyncio.iscoroutinefunction(handler):

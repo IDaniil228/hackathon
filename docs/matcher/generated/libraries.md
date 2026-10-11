@@ -15,7 +15,9 @@
 | `httpx` | `0.28.1` | любая |
 | `markdown-it-py` | `4.2.0` | `>=4.2.0` |
 | `mdit-py-plugins` | `0.6.1` | `>=0.6.1` |
+| `numpy` | `2.5.4` | `>=2.2,<3` |
 | `pydantic-settings` | `2.15.0` | любая |
+| `scikit-learn` | `1.9.1` | `>=1.7,<2` |
 | `sqlalchemy` | `2.1.4` | любая |
 | `uvicorn` | `0.54.0` | любая |
 
@@ -38,6 +40,7 @@
 | `anyio` | `4.15.1` |
 | `certifi` | `2026.7.22` |
 | `click` | `8.5.0` |
+| `cloudpickle` | `3.1.2` |
 | `colorama` | `0.4.6` |
 | `greenlet` | `3.5.6` |
 | `h11` | `0.16.0` |
@@ -45,9 +48,11 @@
 | `httptools` | `0.9.0` |
 | `idna` | `3.20` |
 | `iniconfig` | `2.3.1` |
+| `joblib` | `1.6.0` |
 | `mako` | `1.4.3` |
 | `markupsafe` | `3.0.4` |
 | `mdurl` | `0.1.2` |
+| `narwhals` | `2.27.1` |
 | `opentelemetry-api` | `1.45.1` |
 | `packaging` | `26.3` |
 | `pluggy` | `1.6.0` |
@@ -56,7 +61,9 @@
 | `pygments` | `2.21.0` |
 | `python-dotenv` | `1.2.4` |
 | `pyyaml` | `6.0.3` |
+| `scipy` | `1.18.1` |
 | `starlette` | `1.7.0` |
+| `threadpoolctl` | `3.7.0` |
 | `typing-extensions` | `4.16.0` |
 | `typing-inspection` | `0.4.4` |
 | `uvloop` | `0.23.0` |

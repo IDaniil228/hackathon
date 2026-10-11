@@ -12,5 +12,10 @@
 api/tests
 taskgen
 matcher
-docs
+docs/*.pdf
 db
+frontend/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+frontend/*.tsbuildinfo

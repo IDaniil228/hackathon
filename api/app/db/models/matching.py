@@ -45,6 +45,19 @@ from app.db.base import Base
 EMBEDDING_DIM = 1024
 
 
+class RunMapSnapshot(Base):
+    __tablename__ = "run_map_snapshots"
+    __table_args__ = {"schema": "match"}
+
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("match.search_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class SkillRelevance(Base):
     """Вес навыка в специализации — **вычисляемый**, а не проставленный руками.
 

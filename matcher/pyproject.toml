@@ -11,6 +11,8 @@ dependencies = [
     "asyncpg",
     "alembic",
     "httpx",
+    "numpy>=2.2,<3",
+    "scikit-learn>=1.7,<2",
     # Нужны копии модулей taskgen в src/matcher/llm: markdown.py разбирает ответы моделей.
     "markdown-it-py>=4.2.0",
     "mdit-py-plugins>=0.6.1",

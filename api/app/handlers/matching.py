@@ -13,7 +13,7 @@ from app.db.models.hire import EmployerNeed
 from app.db.models.matching import SearchResult, SearchRun
 from app.db.session import get_session
 from app.operations import call_service, operation_out, queue_operation, require_service
-from app.schemas import MatchResults, OperationOut, RunOut
+from app.schemas import MapOut, MatchResults, OperationOut, RunOut
 from app.security import current_user, employer_for
 from app.visibility import card, safe_match_result
 
@@ -225,3 +225,58 @@ async def results(
         "results": visible,
         "summary": "Выдача учитывает текущую видимость профилей. Оценки относятся к моменту прогона",
     }
+
+
+@router.get(
+    "/runs/{run_id}/map",
+    response_model=MapOut,
+    summary="Карта рассматривавшихся кандидатов с текущими правами",
+)
+async def run_map(
+    run_id: UUID,
+    request: Request,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    _, employer = await own_run(session, user, run_id)
+    company_id = employer.company_id
+    await session.commit()
+    manifest = await call_service(request.app, "matcher", "GET", f"/runs/{run_id}/map-members")
+    cards = {}
+    for member in manifest["members"]:
+        try:
+            value = await card(
+                session, UUID(member["candidate_id"]), request.app.state.settings, company_id
+            )
+        except HTTPException as error:
+            if error.status_code != 404:
+                raise
+            continue
+        allowed = True
+        for field in member["requires"]:
+            if field == "private_preferences":
+                allowed = False
+            elif field == "github":
+                allowed &= any(link["kind"] == "github" for link in value.get("links", []))
+            else:
+                allowed &= field in value
+        if allowed:
+            cards[member["candidate_id"]] = value
+    await session.commit()
+    result = await call_service(
+        request.app, "matcher", "POST", f"/runs/{run_id}/map", json={"candidate_ids": list(cards)}
+    )
+    points = []
+    for point in result["points"]:
+        value = await card(
+            session, UUID(point["candidate_id"]), request.app.state.settings, company_id
+        )
+        if value != cards[point["candidate_id"]]:
+            raise HTTPException(409, "Права или профиль изменились; обновите карту")
+        points.append({**point, "candidate": value})
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        MapOut(**{**result, "points": points}).model_dump(mode="json", exclude_unset=True),
+        headers={"Cache-Control": "private, no-store"},
+    )

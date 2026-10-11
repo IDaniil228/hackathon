@@ -106,15 +106,21 @@ async def assignments(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    query = select(RegularAssignment)
+    query = (
+        select(RegularAssignment, TaskTemplate.title)
+        .join(Task, RegularAssignment.task_id == Task.id)
+        .join(TaskTemplate, Task.template_id == TaskTemplate.id)
+    )
     if cabinet == "candidate":
         query = query.where(RegularAssignment.candidate_id == user.id)
     else:
         employer = await employer_for(session, user)
         query = query.where(RegularAssignment.company_id == employer.company_id)
     return [
-        record(row)
-        for row in (await session.scalars(query.order_by(RegularAssignment.issued_at.desc()))).all()
+        {**record(row), "title": title}
+        for row, title in (
+            await session.execute(query.order_by(RegularAssignment.issued_at.desc()))
+        ).all()
     ]
 
 
@@ -127,7 +133,13 @@ async def assignment(
     row = await owned_assignment(session, user, assignment_id)
     task = await found(session, Task, row.task_id)
     owner = await found(session, EmployerTask, task.template_id)
-    return {**record(row), "statement": task.statement, "feedback": owner.feedback}
+    template = await found(session, TaskTemplate, task.template_id)
+    return {
+        **record(row),
+        "title": template.title,
+        "statement": task.statement,
+        "feedback": owner.feedback,
+    }
 
 
 @router.post(

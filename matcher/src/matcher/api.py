@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, 
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from matcher import repository
+from matcher import geometry, repository
 from matcher.auth import AUTH_ERRORS, Role, require
 from matcher.db import MatchStage, RunRequest, RunStatus
 from matcher.runs import (
@@ -121,6 +121,83 @@ class RefineIn(BaseModel):
         description="Пользователь api, который уточняет подбор; без него тред чата, если его "
         "нет, создаётся от автора потребности",
     )
+
+
+class MapVisible(BaseModel):
+    candidate_ids: list[uuid.UUID] = Field(max_length=10000)
+
+
+class MapForget(BaseModel):
+    before: datetime
+
+
+@router.post(
+    "/candidates/{candidate_id}/maps/revoke",
+    summary="Очистить прежние векторы после отзыва обработки",
+)
+async def forget_maps(candidate_id: uuid.UUID, body: MapForget, request: Request):
+    if body.before.tzinfo is None:
+        raise HTTPException(422, "Нужен момент с часовым поясом")
+    async with request.app.state.sessionmaker() as session, session.begin():
+        await geometry.forget_before(session, candidate_id, body.before)
+    return {"status": "done"}
+
+
+@router.get("/runs/{run_id}/map-members", summary="Источники точек для проверки прав основным API")
+async def map_members(run_id: uuid.UUID, request: Request):
+    async with request.app.state.sessionmaker() as session:
+        await _load_run(session, run_id)
+        payload = await geometry.snapshot(session, run_id)
+    if payload is None:
+        return {"state": "unavailable", "members": []}
+    return {
+        "state": "ready",
+        "members": [
+            {"candidate_id": key, "requires": value["requires"]}
+            for key, value in payload["candidates"].items()
+        ],
+    }
+
+
+@router.post(
+    "/runs/{run_id}/map", summary="Геометрия разрешённого подмножества без выдачи векторов"
+)
+async def run_map(run_id: uuid.UUID, body: MapVisible, request: Request):
+    async with request.app.state.sessionmaker() as session:
+        run = await _load_run(session, run_id)
+        payload = await geometry.snapshot(session, run_id)
+        if payload is None:
+            return {"state": "unavailable", "points": []}
+        current = await geometry.revisions(session, body.candidate_ids)
+        vectors = {
+            str(key): payload["candidates"][str(key)]["vector"]
+            for key in body.candidate_ids
+            if str(key) in payload["candidates"]
+            and current.get(str(key)) == payload["candidates"][str(key)]["revision"]
+        }
+        ranks = dict(
+            (
+                await session.execute(
+                    text(
+                        "SELECT candidate_id, rank FROM match.search_results "
+                        "WHERE run_id=:id AND rank IS NOT NULL"
+                    ),
+                    {"id": run_id},
+                )
+            ).all()
+        )
+    result = await asyncio.to_thread(geometry.project_vectors, vectors, payload["query"])
+    for point in result["points"]:
+        key = point["candidate_id"]
+        point["rank"] = ranks.get(uuid.UUID(key)) if run["status"] == "done" else None
+        point["exploration"] = (
+            "fresh"
+            if key in payload["exploration"]["fresh"]
+            else "random"
+            if key in payload["exploration"]["random"]
+            else None
+        )
+    return {**result, "state": "ready", "phase": "final" if run["status"] == "done" else "preview"}
 
 
 def _service(request: Request) -> RunService:

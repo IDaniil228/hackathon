@@ -1,6 +1,10 @@
-# taskgen
+<picture><source media="(prefers-color-scheme: dark)" srcset="../brand/assets/logo/logo-short-on-dark.svg"><img src="../brand/assets/logo/logo-short-on-light.svg" width="120" alt="ФСП"></picture>
 
-Сервис платформы ФСП, который проверяет ИТ-кандидата тестом на заявленный грейд. Он собирает каждому кандидату свой набор заданий, проверяет задания до выдачи, оценивает ответы и присваивает грейд
+# Тестирование кандидатов Сцепки
+
+[![assets](https://img.shields.io/badge/docs-assets-555?style=flat)](../brand/ASSETS.md)
+
+taskgen проверяет ИТ-кандидата тестом на заявленный грейд. Он собирает индивидуальный набор, проверяет задания до выдачи и оценивает ответы; API платформы применяет результат к категории кандидата
 
 ## Что умеет
 
@@ -15,17 +19,7 @@
 
 ## Запуск
 
-Нужны Docker с Compose и [uv](https://docs.astral.sh/uv/)
-
-```sh
-cd taskgen
-echo "TASKGEN_BOOTSTRAP_ADMIN_KEY=$(openssl rand -hex 32)" > .env
-docker compose up -d --build
-sandbox/piston-packages.sh install
-docker compose exec taskgen taskgen import seed/templates
-```
-
-Модель LLM, ключи и проверка запуска — в [инструкции по развёртыванию](../docs/taskgen/deployment.md). Запущенный сервис отдаёт Swagger UI по `/docs`
+Модель LLM, ключи, подготовка песочницы и проверка запуска — в [инструкции по развёртыванию](../docs/taskgen/deployment.md). Запущенный сервис отдаёт Swagger UI по `/docs`
 
 ## Разработка
 
@@ -36,4 +30,8 @@ uv run pytest -q -m "not integration"
 uv run ruff check . && uv run ruff format --check .
 ```
 
-Тесты с меткой `integration` нужны Postgres и Piston из `docker-compose.yml`. Справочники API, настроек, библиотек и банка шаблонов в `docs/taskgen/generated` собирает `uv run python scripts/gen_docs.py`; формат шаблона задания — [TEMPLATE_FORMAT.md](TEMPLATE_FORMAT.md)
+Тестам с меткой `integration` нужны Postgres и Piston из `docker-compose.yml`. Справочники API, настроек, библиотек и банка шаблонов в `docs/taskgen/generated` собирает `uv run python scripts/gen_docs.py`; формат шаблона задания — [TEMPLATE_FORMAT.md](TEMPLATE_FORMAT.md)
+
+Кандидат проходит опрос и тест в [интерфейсе Сцепки](../frontend/README.md). Ошибка генерации, недостаточный набор и провал теста показываются как разные исходы
+
+![Входной опрос](../docs/frontend/screenshots/assessment-light.png)

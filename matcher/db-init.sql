@@ -27,7 +27,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE :"owner" IN SCHEMA profile, assess, hire
     REVOKE SELECT ON TABLES FROM :"role";
 GRANT SELECT (user_id, city, relocation, work_format, experience_months, about,
               current_category_id,
-              is_open_to_offers, profile_strength, profile_refreshed_at, created_at)
+              is_open_to_offers, profile_strength, profile_refreshed_at, created_at, updated_at)
     ON profile.candidates TO :"role";
 GRANT SELECT ON profile.candidate_preferences, profile.candidate_privacy,
                 profile.candidate_skills, profile.fsp_achievements, profile.fsp_events,

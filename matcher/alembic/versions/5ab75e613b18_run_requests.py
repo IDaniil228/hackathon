@@ -1,7 +1,7 @@
 """Атомарная корреляция прогонов с запросами клиентов"""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "5ab75e613b18"
 down_revision = "31638889b41c"

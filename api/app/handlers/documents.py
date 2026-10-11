@@ -140,6 +140,25 @@ async def resumes(user: User = Depends(current_user), session: AsyncSession = De
     ]
 
 
+@router.get(
+    "/me/resumes/{document_id}/parse", summary="Сохранённое распознавание собственного резюме"
+)
+async def resume_parse(
+    document_id: UUID,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    document = await found(session, ResumeDocument, document_id)
+    if document.candidate_id != user.id:
+        raise HTTPException(404, "Документ не найден")
+    parsed = await session.scalar(
+        select(ResumeParseResult).where(ResumeParseResult.document_id == document_id)
+    )
+    if parsed is None:
+        raise HTTPException(404, "Распознавание не найдено")
+    return record(parsed)
+
+
 @router.get("/me/resumes/{document_id}", summary="Скачать собственное исходное резюме")
 async def download(
     document_id: UUID,
