@@ -292,7 +292,7 @@ const candidateNav = [
 ] as const;
 const employerNav = [
   ["", "Обзор", LayoutDashboard],
-  ["/needs", "Потребности команды", Search],
+  ["/needs", "Поиск сотрудников", Search],
   ["/candidates", "Банк кандидатов", CircleUserRound],
   ["/invitations", "Предложения", BriefcaseBusiness],
   ["/conversations", "Сообщения", MessageSquare],

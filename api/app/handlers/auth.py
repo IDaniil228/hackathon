@@ -16,7 +16,7 @@ from app.db.models.profile import Candidate, CandidatePreferences, CandidatePriv
 from app.db.session import get_session
 from app.schemas import RegistrationOut, TokenOut
 from app.security import (
-    current_user,
+    authenticated_user,
     encode_access,
     hash_token,
     hasher,
@@ -197,7 +197,7 @@ async def logout(
 @router.get("/me", summary="Текущий аккаунт и доступные кабинеты")
 async def me(
     request: Request,
-    user: User = Depends(current_user),
+    user: User = Depends(authenticated_user),
     session: AsyncSession = Depends(get_session),
 ):
     roles = (

@@ -16,7 +16,7 @@ export type Field = {
   label: string;
   type?: string;
   required?: boolean;
-  options?: { value: string | number; label: string }[];
+  options?: { value: string | number; label: string; disabled?: boolean }[];
   hint?: string;
   min?: number;
   max?: number;
@@ -239,18 +239,23 @@ export function Form({
   submit,
   label = "Сохранить",
   children,
+  disabled = false,
+  onChange,
 }: {
   fields: Field[];
   initial?: Row;
   submit: (value: Row) => Promise<unknown>;
   label?: string;
   children?: ReactNode;
+  disabled?: boolean;
+  onChange?: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const [ok, setOk] = useState(false);
   async function handle(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (disabled) return;
     const data = new FormData(event.currentTarget);
     const values: Row = {};
     fields.forEach((f) => {
@@ -276,7 +281,7 @@ export function Form({
     }
   }
   return (
-    <form onSubmit={handle} className="form">
+    <form onSubmit={handle} onChange={onChange} className="form">
       <div className="field-grid">
         {fields.map((f) => (
           <label
@@ -318,7 +323,7 @@ export function Form({
                   </option>
                 )}
                 {f.options.map((o) => (
-                  <option key={o.value} value={o.value}>
+                  <option key={o.value} value={o.value} disabled={o.disabled}>
                     {o.label}
                   </option>
                 ))}
@@ -358,7 +363,7 @@ export function Form({
       {children}
       <ErrorBox error={error} />
       <div className="form-footer">
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy || disabled}>
           {busy ? <LoaderCircle className="spin" size={16} /> : null}
           {label}
           <ArrowRight size={16} />
@@ -414,6 +419,7 @@ export function RefSelect(
     options: rows.map((r) => ({
       value: r.id,
       label: r.name || r.title || r.code || r.slug,
+      disabled: !!r.disabled,
     })),
   };
 }

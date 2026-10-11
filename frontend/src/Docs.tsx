@@ -20,6 +20,7 @@ const assets = import.meta.glob<string>(
     "../../docs/frontend/screenshots/*.png",
     "../../brand/assets/logo/*.svg",
     "../../brand/dist/fonts/*OFL.txt",
+    "../../docs/{api,matcher,taskgen}/**/openapi.json",
   ],
   { query: "?url", import: "default", eager: true },
 );
@@ -38,7 +39,7 @@ const names: Record<string, string> = {
   api: "API",
   settings: "Настройки",
 };
-export default function Docs() {
+export default function Docs({ standalone = false }: { standalone?: boolean }) {
   const [params, setParams] = useSearchParams();
   const current = params.get("file") || "../../docs/api/architecture.md";
   const all = params.get("print") === "all";
@@ -81,9 +82,11 @@ export default function Docs() {
       `https://scepka.invalid/${path.replace("../../", "")}`,
     );
     const key = "../../" + decodeURIComponent(url.pathname.slice(1));
-    if (sources[key]) return `/docs?file=${encodeURIComponent(key)}${url.hash}`;
+    if (sources[key])
+      return `${import.meta.env.BASE_URL}${standalone ? "" : "docs"}?file=${encodeURIComponent(key)}${url.hash}`;
+    if (!standalone && key === "../../docs/api/openapi.json")
+      return "/api/openapi.json";
     if (assets[key]) return assets[key];
-    if (key === "../../docs/api/openapi.json") return "/api/openapi.json";
     return `https://github.com/IDaniil228/hackathon/blob/master/${url.pathname.slice(1)}${url.hash}`;
   }
   return (
@@ -92,7 +95,18 @@ export default function Docs() {
         <Brand />
         <div className="nav-links">
           <Theme />
-          <Go to="/">На главную</Go>
+          {standalone ? (
+            <a
+              href={
+                import.meta.env.VITE_PROTOTYPE_URL ||
+                "https://scepka.rokokol.art"
+              }
+            >
+              Прототип
+            </a>
+          ) : (
+            <Go to="/">На главную</Go>
+          )}
         </div>
       </nav>
       <main className="docs-layout">

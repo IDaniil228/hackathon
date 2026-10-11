@@ -6,6 +6,7 @@ import "../..//brand/dist/tokens.css";
 import "../..//brand/dist/base.css";
 import "./style.css";
 import { App } from "./App";
+import Docs from "./Docs";
 
 export const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 10000 } },
@@ -13,8 +14,8 @@ export const queryClient = new QueryClient({
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
+        {import.meta.env.MODE === "docs" ? <Docs standalone /> : <App />}
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>,

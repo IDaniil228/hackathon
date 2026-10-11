@@ -42,7 +42,7 @@ def send_email(settings, email, token, purpose):
     )
     path = "/verify-email" if purpose == TokenPurpose.VERIFY_EMAIL else "/reset-password"
     message.set_content(
-        "Откройте ссылку: "
+        "Письмо для адреса " + email + "\n\nОткройте ссылку: "
         + settings.frontend_url.rstrip("/")
         + path
         + "?"

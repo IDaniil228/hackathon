@@ -37,3 +37,30 @@ jobs:
       - run: npx --no-install playwright install --with-deps chromium
       - name: Проверки интерфейса без внешних сервисов
         run: npx --no-install playwright test --project=ui --forbid-only --fail-on-flaky-tests --retries 0
+      - name: Статическая документация
+        run: npm run build:docs -- --base /hackathon/
+      - run: npm run test:docs
+      - name: Сборка для собственного домена
+        run: npm run build:docs -- --base /
+      - run: DOCS_BASE_PATH=/ npm run test:docs
+      - uses: actions/upload-pages-artifact@v4
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        with:
+          path: frontend/dist-docs
+  docs:
+    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

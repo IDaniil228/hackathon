@@ -200,11 +200,12 @@ export function Needs() {
     <>
       <Heading
         eyebrow="Поиск для команды"
-        title="Ваши потребности"
-        action={<AddLink to="/employer/needs/new">Новая потребность</AddLink>}
+        title="Поиск сотрудников"
+        action={<AddLink to="/employer/needs/new">Новый поиск</AddLink>}
       >
-        Сохраните описание команды и требований. Подборку можно уточнять, не
-        теряя историю
+        Откройте сохранённый поиск или опишите нового сотрудника. Семантический
+        подбор использует эмбеддинги профилей и требований; результаты можно
+        уточнять, сохраняя историю
       </Heading>
       <Panel>
         <Data query={q}>
@@ -216,7 +217,9 @@ export function Needs() {
                   title={r.title}
                   subtitle={`${salary(r)} · ${r.is_active ? "Поиск открыт" : "Поиск закрыт"}`}
                   to={`/employer/needs/${r.id}`}
-                />
+                >
+                  <Go to={`/employer/needs/${r.id}`}>Подобрать кандидатов</Go>
+                </ListRow>
               ))
             ) : (
               <Empty title="Кого ищет ваша команда?">
@@ -275,6 +278,35 @@ export function NeedEditor() {
         Город и формат поиска берутся из связанной вакансии. Зарплата — за месяц
         до НДФЛ
       </Heading>
+      {id && (
+        <Panel>
+          <div className="split">
+            <div>
+              <h3>Семантический поиск кандидатов</h3>
+              <p>
+                Проверим обязательные условия, отберём близкие профили по
+                эмбеддингам и откроем подборку с картой кандидатов
+              </p>
+            </div>
+            <Action
+              disabled={!q.data?.is_active}
+              run={async () => {
+                const r = await submitAction(`/needs/${id}/runs`);
+                setOperation(r.id);
+              }}
+            >
+              <Search size={17} />
+              Начать подбор
+            </Action>
+          </div>
+          {operation && (
+            <Operation
+              id={operation}
+              done={(r) => navigate(`/employer/runs/${r.remote_id}`)}
+            />
+          )}
+        </Panel>
+      )}
       <Panel>
         {id && q.isPending ? (
           <Loading />
@@ -302,32 +334,6 @@ export function NeedEditor() {
       </Panel>
       {id && (
         <>
-          <Panel>
-            <div className="split">
-              <div>
-                <h3>Подбор кандидатов</h3>
-                <p>
-                  Сначала требования, затем смысловая близость и оценка
-                  соответствия
-                </p>
-              </div>
-              <Action
-                run={async () => {
-                  const r = await submitAction(`/needs/${id}/runs`);
-                  setOperation(r.id);
-                }}
-              >
-                <Search size={17} />
-                Начать подбор
-              </Action>
-            </div>
-            {operation && (
-              <Operation
-                id={operation}
-                done={(r) => navigate(`/employer/runs/${r.remote_id}`)}
-              />
-            )}
-          </Panel>
           <Panel>
             <h3>История поиска</h3>
             <Data query={history}>

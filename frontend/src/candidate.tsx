@@ -1,5 +1,5 @@
 import { useState, lazy, Suspense, useEffect } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { useNavigate, useParams, useLocation, Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -56,6 +56,7 @@ export function useReferences() {
 export function Auth({ mode }: { mode: string }) {
   const session = useSession();
   const navigate = useNavigate();
+  const location = useLocation();
   const [role, setRole] = useState(
     new URLSearchParams(location.search).get("role") || "candidate",
   );
@@ -160,7 +161,9 @@ export function Auth({ mode }: { mode: string }) {
             fields={fields}
             initial={{
               token:
-                demoToken || new URLSearchParams(location.search).get("token"),
+                demoToken ||
+                location.state?.generatedToken ||
+                new URLSearchParams(location.search).get("token"),
             }}
             label={
               mode === "login"
@@ -182,7 +185,22 @@ export function Auth({ mode }: { mode: string }) {
                   roles: role === "both" ? ["candidate", "employer"] : [role],
                 });
                 await session.login(v.email, v.password);
-                navigate("/verify-email");
+                let deliveryNotice = "Письмо отправлено. Проверьте входящие";
+                let generatedToken = "";
+                try {
+                  const delivery = await send("/auth/email/request");
+                  if (delivery.demo) {
+                    deliveryNotice =
+                      "Демонстрационный код: письмо наружу не отправлено";
+                    generatedToken = delivery.token;
+                  }
+                } catch {
+                  deliveryNotice =
+                    "Аккаунт создан, но письмо не отправлено. Запросите его повторно на этой странице";
+                }
+                navigate("/verify-email", {
+                  state: { deliveryNotice, generatedToken },
+                });
               } else if (mode === "verify-email") {
                 await send("/auth/email/verify", v);
                 await session.reload();
@@ -198,9 +216,10 @@ export function Auth({ mode }: { mode: string }) {
               }
             }}
           />
-          {notice && (
+          {(notice ||
+            (mode === "verify-email" && location.state?.deliveryNotice)) && (
             <p role="status" className="notice">
-              {notice}
+              {notice || location.state?.deliveryNotice}
             </p>
           )}
           {mode === "verify-email" && (
@@ -291,7 +310,10 @@ export function Dashboard({ role }: { role: "candidate" | "employer" }) {
         <GitBranch className="banner-glyph" size={150} />
       </div>
       <div className="three-grid metrics">
-        <Panel>
+        <Link
+          className="panel"
+          to={`/${role}/${role === "candidate" ? "assessment" : "needs"}`}
+        >
           <span className="metric-label">
             {role === "candidate" ? "Моя категория" : "Потребности команды"}
           </span>
@@ -307,19 +329,19 @@ export function Dashboard({ role }: { role: "candidate" | "employer" }) {
                 : "Пройдите опрос и тестирование"
               : "Сохранённые направления поиска"}
           </p>
-        </Panel>
-        <Panel>
+        </Link>
+        <Link className="panel" to={`/${role}/invitations`}>
           <span className="metric-label">Предложения</span>
           <strong className="metric figure">
             {invitations.data?.length ?? "—"}
           </strong>
           <p>Условия и зарплата до начала общения</p>
-        </Panel>
-        <Panel>
+        </Link>
+        <Link className="panel" to={`/${role}/conversations`}>
           <span className="metric-label">Непрочитанные сообщения</span>
           <strong className="metric figure">{unread}</strong>
           <p>Каждый разговор начинается с предложения</p>
-        </Panel>
+        </Link>
       </div>
       <div className="two-grid">
         <Panel>
@@ -868,6 +890,7 @@ export function Documents() {
 }
 export function Fsp() {
   const q = useData("/me/fsp");
+  const profile = useData("/me/profile");
   const qc = useQueryClient();
   const [code, setCode] = useState("");
   return (
@@ -965,6 +988,42 @@ export function Fsp() {
           </Link>
         </p>
       </Panel>
+      <Panel>
+        <h3>Достижения в профиле</h3>
+        <Data query={profile}>
+          {(r) =>
+            r.fsp_achievements?.length ? (
+              r.fsp_achievements.map((achievement: Row) => (
+                <article className="list-row" key={achievement.id}>
+                  <div>
+                    <h4>{achievement.event_title}</h4>
+                    <p>
+                      Место: {achievement.place ?? "Не указано"} · Участников:{" "}
+                      {achievement.participants ?? "Не указано"}
+                    </p>
+                    {achievement.team_name && (
+                      <p>Команда: {achievement.team_name}</p>
+                    )}
+                    {achievement.demo && (
+                      <p className="notice">Демонстрационное достижение</p>
+                    )}
+                  </div>
+                </article>
+              ))
+            ) : (
+              <Empty title="Достижений пока нет">
+                После привязки профиля и синхронизации здесь появится полученная
+                история
+              </Empty>
+            )
+          }
+        </Data>
+        <p>
+          Работодатель увидит разрешённые достижения в вашей карточке. Они
+          учитываются как фактор ФСП при подборе; грейд подтверждается
+          тестированием
+        </p>
+      </Panel>
     </>
   );
 }
@@ -1018,6 +1077,20 @@ export function Assessment() {
   const [operation, setOperation] = useState("");
   const [skillMode, setSkillMode] = useState("all");
   const [chosen, setChosen] = useState<number[]>([]);
+  const [testSurveyId, setTestSurveyId] = useState("");
+  const available = (row: Row) => {
+    const specialization = refs.specs.find(
+      (s) => s.id === row.specialization_id,
+    )?.code;
+    const grade = refs.grades.find((g) => g.id === row.claimed_grade_id)?.code;
+    return !!caps.data?.coverage?.some(
+      (c: Row) =>
+        c.specialization === specialization &&
+        c.grade === grade &&
+        c.has_templates,
+    );
+  };
+  const testSurvey = history.data?.find((r: Row) => r.id === testSurveyId);
   const navigate = useNavigate();
   const qc = useQueryClient();
   useEffect(() => {
@@ -1077,7 +1150,7 @@ export function Assessment() {
               ]}
               label="Сохранить опрос"
               submit={async (v) => {
-                await send(`/surveys/${r.id}/submit`, {
+                const saved = await send(`/surveys/${r.id}/submit`, {
                   ...v,
                   answers: r.questions.map((q: Row) => ({
                     question_id: q.id,
@@ -1089,6 +1162,7 @@ export function Assessment() {
                   })),
                 });
                 await invalidate(qc);
+                setTestSurveyId(saved.id);
               }}
             >
               {r.questions.map((q: Row) => (
@@ -1186,13 +1260,25 @@ export function Assessment() {
             );
           })}
         <Form
+          key={testSurveyId}
+          initial={{ survey_session_id: testSurveyId }}
+          disabled={!testSurvey || !available(testSurvey)}
+          onChange={(event) =>
+            setTestSurveyId(
+              String(
+                new FormData(event.currentTarget).get("survey_session_id") ||
+                  "",
+              ),
+            )
+          }
           fields={[
             RefSelect(
               "survey_session_id",
               "Завершённый опрос",
               (history.data || []).map((r: Row) => ({
                 id: r.id,
-                name: `${date(r.finished_at)} · ${refs.specs.find((s) => s.id === r.specialization_id)?.name || ""}`,
+                name: `${date(r.finished_at)} · ${refs.specs.find((s) => s.id === r.specialization_id)?.name || ""}${available(r) ? "" : " · банк не подключён"}`,
+                disabled: !available(r),
               })),
               true,
             ),
@@ -1211,6 +1297,19 @@ export function Assessment() {
             setOperation(result.id);
           }}
         />
+        {caps.data && !testSurvey && (
+          <p className="muted">
+            Выберите завершённый опрос с подключённым банком. Недоступные
+            направления отмечены в списке
+          </p>
+        )}
+        {testSurvey && !available(testSurvey) && (
+          <p className="notice">
+            Опрос сохранён, но для выбранного направления и грейда банк тестов
+            пока не подключён. Выберите поддерживаемое направление во входном
+            опросе
+          </p>
+        )}
         {operation && (
           <Operation
             id={operation}

@@ -29,19 +29,25 @@ async def test_real_smtp_verification_and_password_reset(client):
             "Для проверки SMTP задайте API_TEST_MAILPIT_URL и API_TEST_SMTP_PORT локального Mailpit"
         )
     settings = client.app.state.settings
+    settings.demo_auth_allow_unverified = False
     settings.demo_email_tokens = False
     settings.smtp_host = "127.0.0.1"
     settings.smtp_port = int(os.environ["API_TEST_SMTP_PORT"])
     settings.smtp_sender = "noreply@fsp.example"
     settings.smtp_starttls = False
     headers, _ = await account(client)
-    recipient = (await client.get("/me", headers=headers)).json()["email"]
+    identity = await client.get("/me", headers=headers)
+    assert identity.status_code == 200, identity.text
+    assert identity.json()["email_verified"] is False
+    assert (await client.get("/me/profile", headers=headers)).status_code == 403
+    recipient = identity.json()["email"]
     verification = await client.post("/auth/email/request", headers=headers)
     assert verification.status_code == 202, verification.text
     assert "token" not in verification.json()
     token = await received_token(recipient, "Подтверждение почты ФСП")
     assert (await client.post("/auth/email/verify", json={"token": token})).status_code == 200
     assert (await client.get("/me", headers=headers)).json()["email_verified"] is True
+    assert (await client.get("/me/profile", headers=headers)).status_code == 200
     assert (await client.post("/auth/email/verify", json={"token": token})).status_code == 422
     assert (
         await client.post("/auth/password/request", json={"email": recipient})

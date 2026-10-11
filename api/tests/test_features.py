@@ -42,9 +42,13 @@ async def test_email_token_is_single_use_and_activates_ordinary_mode(client):
     assert response.status_code == 202, response.text
     token = response.json()["token"]
     client.app.state.settings.demo_auth_allow_unverified = False
-    assert (await client.get("/me", headers=headers)).status_code == 403
+    identity = await client.get("/me", headers=headers)
+    assert identity.status_code == 200
+    assert identity.json()["email_verified"] is False
+    assert (await client.get("/me/profile", headers=headers)).status_code == 403
     assert (await client.post("/auth/email/verify", json={"token": token})).status_code == 200
     assert (await client.get("/me", headers=headers)).status_code == 200
+    assert (await client.get("/me/profile", headers=headers)).status_code == 200
     assert (await client.post("/auth/email/verify", json={"token": token})).status_code == 422
 
 
